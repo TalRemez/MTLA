@@ -56,15 +56,55 @@ This loads a small bundled fixture of pre-extracted attention (InternVL3.5-8B on
 
 ## Use it on your own predictions
 
+**What MTLA consumes.** For one prediction, the only input is a `[L, H]` attention array —
+the attention its tokens pay to the input, summed over the modality tokens **inside** its
+proposed region, per transformer layer `L` and head `H`. `reduce_band` collapses that to one
+scalar (mean over heads, sum over the layer band). You produce these arrays with the extract
+stage (`run.py --stage extract`); see [`mtla/extract.py`](mtla/extract.py) for the hook.
+
+**Score a single prediction.** `>` means more grounded.
+
+```python
+import numpy as np
+from mtla import reduce_band
+
+# [L, H] attention: layers x heads. Here L=36, H=32 (e.g. InternVL3.5-8B).
+inside = my_record["image_inside_sum"]   # attention restricted to patches INSIDE the box -> MTLA
+glob   = my_record["image_sum"]          # attention over ALL image tokens         -> SVAR baseline
+
+mtla = reduce_band(inside)               # default band L8-21; pass band=None for all layers
+svar = reduce_band(glob)
+print(f"MTLA={mtla:.3f}  SVAR={svar:.3f}")
+```
+
+**Score a list and flag hallucinations.** `reduce_band` is vectorized over a leading axis,
+and `auroc` measures how well the score separates grounded from hallucinated predictions.
+
 ```python
 from mtla import reduce_band, auroc
 
-# `record` comes from the extraction step: record[slot][stat] is a [L, H] attention array.
-mtla = reduce_band(record["attn_coord_mean"]["image_inside_sum"])  # inside-region (ours)
-svar = reduce_band(record["attn_coord_mean"]["image_sum"])         # global (baseline)
+inside = np.stack([r["image_inside_sum"] for r in records])  # [N, L, H]
+scores = reduce_band(inside)                                  # [N]  (one MTLA score each)
 
-print(auroc(mtla_scores, is_hallucinated))   # how well it flags hallucinations
+labels = [r["is_hallucinated"] for r in records]             # your IoU>=0.5 ground-truth flags
+print(f"AUROC = {auroc(scores, labels):.3f}")                # how well MTLA flags hallucinations
 ```
+
+**Try it now** on the bundled fixture — no GPU, no data download:
+
+```python
+import torch
+from mtla import reduce_band, auroc
+
+data = torch.load("fixtures/coco_demo.pt", weights_only=False)["scoring"]  # ~800 InternVL preds
+scores = [reduce_band(r["attn_coord_mean"]["image_inside_sum"]) for r in data]
+labels = [r["is_hallucinated"] for r in data]
+print(f"MTLA AUROC = {auroc(scores, labels):.3f}")           # ~0.87
+```
+
+Have raw boxes but no attention yet? `mtla.mask` turns a region into the inside-token indices
+the extractor needs: `bbox_to_patch_indices` / `bbox_to_internvl_token_indices` (images),
+`span_to_token_indices` (video/audio).
 
 The package is small and modular:
 
