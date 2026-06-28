@@ -2,6 +2,7 @@
 # (or `pip install -e ".[demo,coco]"` for the same set via pyproject extras).
 numpy>=1.24
 scikit-learn>=1.2
+pyyaml>=6.0
 torch>=2.1
 matplotlib>=3.6
 scipy>=1.10

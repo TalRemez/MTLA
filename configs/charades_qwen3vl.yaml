@@ -1,0 +1,26 @@
+# Charades-STA single-span temporal grounding with Qwen3-VL-8B.
+# Reproduces: R@1@0.3 76.3, R@1@0.5 55.4, R@1@0.7 29.4, mIoU 0.508 (SVAR R@1@0.5 43.8).
+model: qwen3vl
+dataset: charades
+
+paths:
+  data: /path/to/charades_sta_test.parquet         # Charades-STA test split
+  video_dir: /path/to/Charades_v1_480              # {video_id}.mp4 clips
+  predictions: runs/charades/predictions
+  features: runs/charades/features                  # seed{K}/shard*.pt
+
+generate:
+  engine: hf
+  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  temperature: 0.0
+  extra: {fps: 2.0, max_pixels_factor: 128}         # Charades sampling (denser, shorter clips)
+
+extract:
+  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+score:
+  n_rollouts: 16
+  agg: max                                          # single-span: max-MTLA selection
+  slot: first_digit                                 # REQUIRED: first timestamp-digit token
+
+band: [8, 21]

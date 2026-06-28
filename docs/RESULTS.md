@@ -17,8 +17,8 @@ How well the score separates grounded from hallucinated predictions.
 | Charades-STA | Qwen3-VL-8B | **0.684** | 0.512 |
 | AudioSet-Strong | Audio Flamingo 3 | **0.813** | 0.608 |
 
-The COCO example (`examples/coco_detection/score.py`) reproduces the InternVL row
-(0.873 / 0.803); the CPU demo (`examples/demo.py`) reproduces it on an 800-prediction
+`run.py --config configs/coco_internvl.yaml --stage score` reproduces the InternVL row
+(0.873 / 0.779); the CPU demo (`examples/demo.py`) reproduces it on an 800-prediction
 subsample (≈0.87 / ≈0.79).
 
 ## Task metrics after MTLA re-ranking / self-consistency voting
