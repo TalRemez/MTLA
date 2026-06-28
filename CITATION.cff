@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use MTLA, please cite the paper."
+title: "MTLA: Multi-Token Localized Attention for VLM Grounding Verification"
+abstract: >-
+  A training-free, post-hoc confidence score that detects hallucinated grounding
+  predictions from multimodal LLMs by measuring how strongly a prediction's output
+  tokens attend to evidence inside its own proposal region.
+# TODO: confirm the full author list and order before release.
+authors:
+  - family-names: "Shalam"
+    given-names: "Daniel"
+  - family-names: "Remez"
+    given-names: "Tal"
+type: software
+# Paper / arXiv link to be added on release.
+url: "https://github.com/TalRemez/MTLA"

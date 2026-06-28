@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Bulk research artifacts — never commit (features are ~1 TB, predictions ~27 GB)
+features/
+predictions/
+artifacts/
+checkpoints*/
+outputs/
+results*/
+*.safetensors
+*.bin
+*.pth
+
+# Datasets (download separately; see docs/DATA.md)
+datasets/
+data/
+
+# Attention/feature shards anywhere — EXCEPT the small committed demo fixture
+*.pt
+!fixtures/*.pt
+
+# Generated heatmaps / scratch output from the demo
+examples/output/
+*.tmp
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp

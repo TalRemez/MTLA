@@ -1,0 +1,12 @@
+# Core scoring + CPU demo. Install with: pip install -r requirements.txt
+# (or `pip install -e ".[demo,coco]"` for the same set via pyproject extras).
+numpy>=1.24
+scikit-learn>=1.2
+torch>=2.1
+matplotlib>=3.6
+scipy>=1.10
+pillow>=9.0
+pycocotools>=2.0
+
+# Full GPU reproduction additionally needs (see examples/*/README.md for exact pins):
+#   transformers>=4.57   vllm>=0.19   qwen-vl-utils   decord   accelerate
