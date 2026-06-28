@@ -40,9 +40,3 @@ scripts at it with the `--dataset` / `--ann` / `--video_dir` / `--coco_gt` flags
 - **AudioSet-Strong** (sound-event detection): audio grounding with Audio Flamingo 3, scored
   by PSDS1 (DCASE Task 4). All-layers reduction (28-layer model). Headline numbers in
   [`RESULTS.md`](RESULTS.md); the audio extraction maps time→token at a fixed 25 Hz.
-
-## Disk note
-
-The intermediate attention features are large (hundreds of GB at full scale across all
-seeds). They are **not** committed and `.gitignore` excludes `*.pt` except the small demo
-fixture in `fixtures/`. Generate them locally per the example READMEs.
