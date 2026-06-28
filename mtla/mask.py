@@ -15,9 +15,6 @@ from __future__ import annotations
 
 import numpy as np
 
-PATCH_GRID = 16  # InternVL: 16x16 patches per 448px tile after pixel-shuffle 0.5
-NUM_IMAGE_TOKEN_PER_TILE = PATCH_GRID * PATCH_GRID  # 256
-
 
 def bbox_to_patch_indices(bbox, grid_h: int, grid_w: int):
     """Indices of patches overlapping ``bbox`` on a fixed ``grid_h x grid_w`` row-major grid.
@@ -43,20 +40,26 @@ def bbox_to_patch_indices(bbox, grid_h: int, grid_w: int):
     return inside, outside
 
 
-def bbox_to_internvl_token_indices(bbox, tile_grid, has_thumb: bool):
+def bbox_to_internvl_token_indices(bbox, tile_grid, has_thumb: bool, patch_grid: int = 16):
     """Indices of image tokens overlapping ``bbox`` under InternVL dynamic tiling.
 
-    InternVL splits an image into ``n_cols x n_rows`` tiles plus an optional thumbnail.
-    The image-token sequence is ``tile_0[0..255], tile_1[0..255], ..., [thumbnail[0..255]]``,
-    each tile a 16x16 row-major patch grid. ``tile_grid`` is ``(n_cols, n_rows)``.
+    InternVL splits an image into ``n_cols x n_rows`` tiles plus an optional thumbnail. The
+    image-token sequence is ``tile_0[0..G-1], tile_1[0..G-1], ..., [thumbnail[0..G-1]]``, each
+    tile a ``patch_grid x patch_grid`` row-major grid of ``G = patch_grid**2`` tokens.
+    ``tile_grid`` is ``(n_cols, n_rows)``; ``patch_grid`` is the per-tile side (16 for
+    InternVL3.5, i.e. 16x16=256 tokens per 448px tile after pixel-shuffle 0.5).
     ``bbox`` is ``[x1,y1,x2,y2]`` in ``[0, 1000]``. Returns ``(inside, outside)``.
     """
     x1, y1, x2, y2 = bbox
     n_cols, n_rows = tile_grid
     n_tiles = n_cols * n_rows
-    total = n_tiles * NUM_IMAGE_TOKEN_PER_TILE + (NUM_IMAGE_TOKEN_PER_TILE if has_thumb else 0)
+    per_tile = patch_grid * patch_grid
+    total = n_tiles * per_tile + (per_tile if has_thumb else 0)
     if x2 <= x1 or y2 <= y1:
         return [], list(range(total))
+
+    def clamp(v):
+        return max(0, min(patch_grid - 1, v))
 
     bx1, by1, bx2, by2 = x1 / 1000.0, y1 / 1000.0, x2 / 1000.0, y2 / 1000.0
     inside = []
@@ -71,23 +74,23 @@ def bbox_to_internvl_token_indices(bbox, tile_grid, has_thumb: bool):
         lx1 = min(1.0, (bx2 - tx0) / (tx1 - tx0))
         ly0 = max(0.0, (by1 - ty0) / (ty1 - ty0))
         ly1 = min(1.0, (by2 - ty0) / (ty1 - ty0))
-        col_min = max(0, min(PATCH_GRID - 1, int(np.floor(lx0 * PATCH_GRID))))
-        col_max = max(0, min(PATCH_GRID - 1, int(np.floor((lx1 - 1e-6) * PATCH_GRID))))
-        row_min = max(0, min(PATCH_GRID - 1, int(np.floor(ly0 * PATCH_GRID))))
-        row_max = max(0, min(PATCH_GRID - 1, int(np.floor((ly1 - 1e-6) * PATCH_GRID))))
-        off = tile_idx * NUM_IMAGE_TOKEN_PER_TILE
+        col_min = clamp(int(np.floor(lx0 * patch_grid)))
+        col_max = clamp(int(np.floor((lx1 - 1e-6) * patch_grid)))
+        row_min = clamp(int(np.floor(ly0 * patch_grid)))
+        row_max = clamp(int(np.floor((ly1 - 1e-6) * patch_grid)))
+        off = tile_idx * per_tile
         for pr in range(row_min, row_max + 1):
             for pc in range(col_min, col_max + 1):
-                inside.append(off + pr * PATCH_GRID + pc)
+                inside.append(off + pr * patch_grid + pc)
     if has_thumb:
-        col_min = max(0, min(PATCH_GRID - 1, int(np.floor(bx1 * PATCH_GRID))))
-        col_max = max(0, min(PATCH_GRID - 1, int(np.floor((bx2 - 1e-6) * PATCH_GRID))))
-        row_min = max(0, min(PATCH_GRID - 1, int(np.floor(by1 * PATCH_GRID))))
-        row_max = max(0, min(PATCH_GRID - 1, int(np.floor((by2 - 1e-6) * PATCH_GRID))))
-        off = n_tiles * NUM_IMAGE_TOKEN_PER_TILE
+        col_min = clamp(int(np.floor(bx1 * patch_grid)))
+        col_max = clamp(int(np.floor((bx2 - 1e-6) * patch_grid)))
+        row_min = clamp(int(np.floor(by1 * patch_grid)))
+        row_max = clamp(int(np.floor((by2 - 1e-6) * patch_grid)))
+        off = n_tiles * per_tile
         for pr in range(row_min, row_max + 1):
             for pc in range(col_min, col_max + 1):
-                inside.append(off + pr * PATCH_GRID + pc)
+                inside.append(off + pr * patch_grid + pc)
     inside_set = set(inside)
     outside = [i for i in range(total) if i not in inside_set]
     return inside, outside
