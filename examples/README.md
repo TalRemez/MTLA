@@ -41,9 +41,3 @@ multiple seeds), then `score --n 16`.
   needed to reproduce the metrics.
 
 Expected numbers per benchmark are in [`../docs/RESULTS.md`](../docs/RESULTS.md).
-
-## Audio
-
-AudioSet-Strong / Audio Flamingo 3 lives under [`../cascade/`](../cascade/) — a separate,
-documented multi-stage pipeline (it uses an external Bedrock normalization step that doesn't
-fit the unified flow).
