@@ -10,11 +10,11 @@ claim?* Grounded predictions do; hallucinations attend elsewhere. The result is 
 no labels — just one forward pass of the model you already have.
 
 <p align="center">
-  <img src="docs/assets/teaser_grounded.png" width="45%" alt="grounded: attention inside the box"/>
-  <img src="docs/assets/teaser_hallucination.png" width="45%" alt="hallucination: attention scattered"/>
+  <img src="docs/assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects; MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
 </p>
-<p align="center"><em>Left: a grounded prediction concentrates attention inside its box.
-Right: a hallucinated one scatters it across the scene.</em></p>
+<p align="center"><em>An MLLM emits box+label predictions; MTLA reads the decoder's attention from
+each prediction's tokens, restricts it to the patches inside the proposed region, and scores the
+prediction by how much attention falls inside — high when grounded, low when hallucinated.</em></p>
 
 ## Why it works
 
