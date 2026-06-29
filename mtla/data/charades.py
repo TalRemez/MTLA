@@ -71,13 +71,18 @@ class CharadesDataset(DatasetAdapter):
     def _run(self, cfg, seed):
         import os
         from ..stages import run_stage
-        run_stage("qwen3vl_charades.py", [
+        args = [
             "--data", cfg.path("data"),
             "--video_dir", cfg.path("video_dir"),
             "--out_dir", os.path.join(cfg.path("features"), f"seed{seed}"),
             "--pred_dir", os.path.join(cfg.path("predictions"), f"seed{seed}"),
             "--gpus", *[str(g) for g in (cfg.extract.gpus or cfg.generate.gpus)],
-        ] + (["--seed", str(seed)] if seed else []))
+        ]
+        if cfg.extract.n_items:
+            args += ["--limit", str(cfg.extract.n_items)]
+        if seed:
+            args += ["--seed", str(seed)]
+        run_stage("qwen3vl_charades.py", args)
 
     def score(self, cfg) -> dict:
         import numpy as np

@@ -63,7 +63,9 @@ class RunConfig:
 def _stage(d: dict | None) -> StageCfg:
     d = dict(d or {})
     known = {f for f in StageCfg.__dataclass_fields__}
-    extra = {k: v for k, v in d.items() if k not in known}
+    # An explicit `extra:` mapping in YAML, plus any unknown top-level keys, both go to `extra`.
+    extra = dict(d.pop("extra", None) or {})
+    extra.update({k: v for k, v in d.items() if k not in known})
     base = {k: v for k, v in d.items() if k in known}
     return StageCfg(extra=extra, **base)
 

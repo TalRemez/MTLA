@@ -330,7 +330,7 @@ def slot_max_4d(arr_nq_l_h_t):
     return torch.stack([s0, s1, s2, s3], dim=0)
 
 
-def worker(rank, gpu_id, items, out_dir, pred_dir, svar_shift=False, seed=None):
+def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, seed=None):
     print(f"[worker {rank}] gpu={gpu_id} n={len(items)} svar_shift={svar_shift} seed={seed}", flush=True)
     torch.cuda.set_device(gpu_id)
     # Sampled rollout: seed per-worker so each (seed, rank) draw is reproducible.
@@ -380,7 +380,7 @@ def worker(rank, gpu_id, items, out_dir, pred_dir, svar_shift=False, seed=None):
         vid    = item["vid"]
         query  = item["query"]
         gt_windows = [tuple(w) for w in item["relevant_windows"]]
-        video_path = f"{VIDEO_DIR}/{vid}.mp4"
+        video_path = f"{video_dir}/{vid}.mp4"
         if not os.path.exists(video_path):
             n_skipped += 1; continue
         try:
@@ -738,7 +738,7 @@ def main():
         for w in range(args.workers_per_gpu):
             if rank >= len(chunks) or len(chunks[rank]) == 0:
                 rank += 1; continue
-            p = Process(target=worker, args=(rank, gpu, list(chunks[rank]), args.out_dir, args.pred_dir, args.svar_shift, args.seed))
+            p = Process(target=worker, args=(rank, gpu, list(chunks[rank]), args.out_dir, args.pred_dir, args.video_dir, args.svar_shift, args.seed))
             p.start(); procs.append(p)
             rank += 1
     for p in procs:

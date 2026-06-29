@@ -12,6 +12,8 @@ dependencies = [
     "numpy>=1.24",
     "scikit-learn>=1.2",
     "pyyaml>=6.0",
+    "pandas>=2.0",        # Charades adapter reads/scores its parquet split
+    "pyarrow>=14.0",      # parquet engine for pandas.read_parquet (Charades)
 ]
 
 [project.optional-dependencies]
@@ -24,11 +26,20 @@ demo = [
 ]
 # COCO detection evaluation.
 coco = ["pycocotools>=2.0"]
-# Full reproduction (model inference + attention extraction) needs a GPU; pin versions
-# in examples/*/README.md. Listed here for completeness, not installed by default.
+# Attention extraction (the extract stage): HF eager-attention forward pass on a GPU.
+# Pinned to the versions the pipeline was validated with. `decord`/`qwen-vl-utils` are only
+# needed for the video (Qwen3-VL) benchmarks.
 extract = [
     "torch>=2.1",
-    "transformers>=4.57",
+    "transformers==4.57.6",
+    "accelerate==1.13.0",
+    "torchvision==0.25.0",
+    "qwen-vl-utils==0.0.14",
+    "decord>=0.6.0",
+]
+# Fast batched generation for the COCO generate stage (no attention). GPU only; large install.
+generate = [
+    "vllm==0.19.0",
 ]
 
 [tool.setuptools]
