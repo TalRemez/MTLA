@@ -34,6 +34,7 @@ extract = [
     "transformers==4.57.6",
     "accelerate==1.13.0",
     "torchvision==0.25.0",
+    "timm>=1.0",            # InternVL's InternViT vision encoder (trust_remote_code)
     "qwen-vl-utils==0.0.14",
     "decord>=0.6.0",
 ]

@@ -57,14 +57,17 @@ class CocoDataset(DatasetAdapter):
     # ---- GPU stages (COCO = vLLM generate, then HF-eager extract) ----
     def generate(self, cfg, model, seed=0):
         from ..stages import run_stage
-        run_stage("internvl_generate.py", [
+        args = [
             "--model", model.model_id,
             "--dataset", cfg.path("data"),
             "--output_dir", os.path.join(cfg.path("predictions"), f"seed{seed}"),
             "--gpu_ids", *[str(g) for g in cfg.generate.gpus],
             "--temperature", str(cfg.generate.temperature),
             "--seed", str(seed),
-        ])
+        ]
+        if cfg.generate.n_items:
+            args += ["--limit", str(cfg.generate.n_items)]
+        run_stage("internvl_generate.py", args)
 
     def extract(self, cfg, model, seed=0):
         from ..stages import run_stage

@@ -12,5 +12,5 @@ pillow>=9.0
 pycocotools>=2.0
 
 # Full GPU reproduction additionally needs (install via `pip install -e ".[extract]"`, or:)
-#   transformers==4.57.6  accelerate==1.13.0  torchvision==0.25.0  qwen-vl-utils==0.0.14  decord
+#   transformers==4.57.6  accelerate==1.13.0  torchvision==0.25.0  timm  qwen-vl-utils==0.0.14  decord
 #   vllm==0.19.0   (COCO generate stage only)
