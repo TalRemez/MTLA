@@ -57,6 +57,13 @@ class CocoDataset(DatasetAdapter):
     # ---- GPU stages (COCO = vLLM generate, then HF-eager extract) ----
     def generate(self, cfg, model, seed=0):
         from ..stages import run_stage
+        # engine selects the generation backend; both write the same predictions.json schema.
+        #   vllm -> internvl_generate.py     (fast batched, large install)
+        #   hf   -> internvl_generate_hf.py  (transformers only, slower)
+        script = {"vllm": "internvl_generate.py",
+                  "hf": "internvl_generate_hf.py"}.get(cfg.generate.engine)
+        if script is None:
+            raise ValueError(f"coco generate: unknown engine {cfg.generate.engine!r} (use vllm|hf)")
         args = [
             "--model", model.model_id,
             "--dataset", cfg.path("data"),
@@ -67,7 +74,7 @@ class CocoDataset(DatasetAdapter):
         ]
         if cfg.generate.n_items:
             args += ["--limit", str(cfg.generate.n_items)]
-        run_stage("internvl_generate.py", args)
+        run_stage(script, args)
 
     def extract(self, cfg, model, seed=0):
         from ..stages import run_stage
