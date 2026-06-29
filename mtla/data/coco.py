@@ -12,10 +12,8 @@ import json
 import os
 from collections import defaultdict
 
-import numpy as np
-
 from .base import DatasetAdapter
-from ..score import reduce_band
+from ..score import apply_slot
 from ..eval import auroc, coco_map
 from ..voting import nms_fuse
 
@@ -43,6 +41,7 @@ PROMPT = (
 
 class CocoDataset(DatasetAdapter):
     name = "coco"
+    task = "image_det"
 
     def load_items(self, cfg):
         return json.load(open(cfg.path("data")))
@@ -54,16 +53,10 @@ class CocoDataset(DatasetAdapter):
     def ground_truth(self, item):
         return json.loads(item["conversations"][1]["value"])
 
-    # ---- GPU stages (COCO = vLLM generate, then HF-eager extract) ----
+    # ---- GPU stages: which script comes from the MODEL adapter (so COCO is model-agnostic) ----
     def generate(self, cfg, model, seed=0):
         from ..stages import run_stage
-        # engine selects the generation backend; both write the same predictions.json schema.
-        #   vllm -> internvl_generate.py     (fast batched, large install)
-        #   hf   -> internvl_generate_hf.py  (transformers only, slower)
-        script = {"vllm": "internvl_generate.py",
-                  "hf": "internvl_generate_hf.py"}.get(cfg.generate.engine)
-        if script is None:
-            raise ValueError(f"coco generate: unknown engine {cfg.generate.engine!r} (use vllm|hf)")
+        script = model.generate_script(self.task, cfg.generate.engine)
         args = [
             "--model", model.model_id,
             "--dataset", cfg.path("data"),
@@ -78,7 +71,7 @@ class CocoDataset(DatasetAdapter):
 
     def extract(self, cfg, model, seed=0):
         from ..stages import run_stage
-        run_stage("internvl_extract.py", [
+        run_stage(model.extract_script(self.task), [
             "--pred_file", os.path.join(cfg.path("predictions"), f"seed{seed}", "predictions.json"),
             "--dataset", cfg.path("data"),
             "--out_dir", os.path.join(cfg.path("features"), f"seed{seed}"),
@@ -86,46 +79,27 @@ class CocoDataset(DatasetAdapter):
             "--n_images", str(cfg.extract.n_items or 5000),
         ])
 
-    # ---- scoring ----
-    # MTLA aggregates a prediction's tokens; `slot` chooses which tokens (default "all" =
-    # the canonical paper recipe, label + coordinates count-weighted). SVAR reads a single
-    # token: on InternVL the label token is shared across a category's boxes, so the fair
-    # per-box SVAR token is the first coordinate digit x1 (attn_first_digit).
-    @staticmethod
-    def _mtla_inside(o, band, slot):
-        """MTLA: inside-region attention for the chosen token slot."""
-        if slot in ("all", "attn_all"):
-            cm, lm = o["attn_coord_mean"], o["attn_label_mean"]
-            nc, nl = o.get("n_coord_toks", 0), o.get("n_label_toks", 0)
-            ci = np.asarray(cm["image_inside_sum"], dtype=np.float32)
-            li = np.asarray(lm["image_inside_sum"], dtype=np.float32)
-            arr = (li * nl + ci * nc) / max(nl + nc, 1)
-        else:
-            key = {"coord": "attn_coord_mean", "label": "attn_label_mean",
-                   "first": "attn", "first_digit": "attn_first_digit"}.get(slot, slot)
-            arr = o[key]["image_inside_sum"]
-        return reduce_band(arr, band)
-
-    def _load_seed(self, features_dir, predictions_path, band, slot):
+    # ---- scoring (signal slots come from the model adapter, not hardcoded) ----
+    def _load_seed(self, features_dir, predictions_path, band, mtla_spec, svar_spec):
         preds = {r["id"]: r for r in json.load(open(predictions_path))}
         attn = {}
         for sp in sorted(glob.glob(f"{features_dir}/shard*.pt")):
             import torch
             for r in torch.load(sp, weights_only=False, map_location="cpu"):
                 for o in r["objects"]:
-                    fd = o.get("attn_first_digit", o.get("attn_coord_mean", {}))
                     attn[(r["image_id"], o["pred_idx"])] = (
-                        self._mtla_inside(o, band, slot),        # MTLA (slot tokens, inside)
-                        reduce_band(fd.get("image_sum"), band),  # SVAR (first coord digit, global)
+                        apply_slot(o, mtla_spec, band),   # MTLA (inside-region)
+                        apply_slot(o, svar_spec, band),   # SVAR (global baseline)
                         bool(o.get("is_hallucinated", False)),
                     )
         return preds, attn
 
-    def score(self, cfg) -> dict:
+    def score(self, cfg, model) -> dict:
         band = cfg.band_indices()
         n = cfg.score.n_rollouts
         agg = cfg.score.agg
-        slot = cfg.score.slot
+        mtla_spec = model.mtla_slot(self.task, cfg.score.slot)
+        svar_spec = model.svar_slot(self.task)
         features_root = cfg.path("features")
         predictions_root = cfg.path("predictions")
         coco_gt = cfg.path("coco_gt")
@@ -134,7 +108,7 @@ class CocoDataset(DatasetAdapter):
         for s in range(n):
             fdir = os.path.join(features_root, f"seed{s}")
             pj = os.path.join(predictions_root, f"seed{s}", "predictions.json")
-            data.append(self._load_seed(fdir, pj, band, slot))
+            data.append(self._load_seed(fdir, pj, band, mtla_spec, svar_spec))
             print(f"  loaded seed {s}: {len(data[-1][0])} images")
 
         # single-seed hallucination AUROC

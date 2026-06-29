@@ -75,6 +75,36 @@ def reduce_band(
     return float(scores[0]) if single else scores
 
 
+def apply_slot(record: dict, spec, band=DEFAULT_BAND) -> float:
+    """Reduce one signal from an extracted prediction `record` per a model's `SlotSpec`.
+
+    Lets dataset adapters read MTLA/SVAR without naming model-specific record keys: the model
+    adapter supplies the `SlotSpec` (block + stat, or the count-weighted "all" recipe).
+
+    spec.combine == "all": count-weighted mean over spec.parts = [(block, count_field), ...] of
+    each block's `spec.stat` array, then reduce_band. Otherwise: reduce_band of
+    record[spec.block][spec.stat]. Missing blocks fall back gracefully to 0.
+    """
+    if spec is None:
+        return 0.0
+    if spec.combine == "all":
+        num = None
+        denom = 0
+        for block, count_field in spec.parts:
+            blk = record.get(block)
+            if blk is None or spec.stat not in blk:
+                continue
+            cnt = record.get(count_field, 0) or 0
+            arr = np.asarray(blk[spec.stat], dtype=np.float32) * cnt
+            num = arr if num is None else num + arr
+            denom += cnt
+        if num is None:
+            return 0.0
+        return reduce_band(num / max(denom, 1), band)
+    blk = record.get(spec.block, {})
+    return reduce_band(blk.get(spec.stat), band)
+
+
 def mtla_score(record: dict, slot: str = "attn_coord_mean", band=DEFAULT_BAND) -> float:
     """MTLA score for one extracted prediction record (inside-region attention)."""
     return reduce_band(record[slot]["image_inside_sum"], band)

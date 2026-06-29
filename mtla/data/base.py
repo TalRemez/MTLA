@@ -28,6 +28,10 @@ class DatasetAdapter:
         """Ground-truth regions/labels for one item (used to label hallucinations + metric)."""
         raise NotImplementedError
 
+    # task family ("image_det" | "video_span"); used to ask the model adapter for the right
+    # stage scripts and signal slots. Subclasses set this.
+    task: str = ""
+
     def generate(self, cfg, model, seed=0):
         """GPU stage: run the model to produce predictions for one rollout `seed`,
         writing seed{seed}/. Dataset-specific stage script."""
@@ -37,11 +41,11 @@ class DatasetAdapter:
         """GPU stage: HF-eager pass capturing attention into seed{seed}/ feature shards."""
         raise NotImplementedError(f"{type(self).__name__} has no extract stage")
 
-    def score(self, cfg) -> dict:
+    def score(self, cfg, model) -> dict:
         """Compute hallucination AUROC and the task metric from the run's feature shards.
 
         Reads `cfg.path('features')` (and predictions / GT as needed), applies the layer-band
-        reduction (`cfg.band_indices()`) and the dataset's fusion (`cfg.score.agg`), and
-        returns a dict of metrics. Prints a human-readable summary as a side effect.
+        reduction (`cfg.band_indices()`), the dataset's fusion (`cfg.score.agg`), and the model
+        adapter's signal slots. Returns a dict of metrics; prints a summary as a side effect.
         """
         raise NotImplementedError

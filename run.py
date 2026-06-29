@@ -43,17 +43,16 @@ def main():
         cfg.generate.seeds = cfg.extract.seeds = args.seeds
 
     dataset = get_dataset_adapter(cfg.dataset)
+    model = get_model_adapter(cfg.model)  # adapters are weightless; resolving is free
     print(f"[MTLA] model={cfg.model}  dataset={cfg.dataset}  stage={args.stage}")
 
     if args.stage == "score":
-        # CPU-only; needs no model.
-        dataset.score(cfg)
+        # CPU-only; the model adapter supplies the signal slots (no model weights loaded).
+        dataset.score(cfg, model)
         return
 
-    # generate / extract are GPU stages: the dataset owns the (model x dataset)-specific stage
-    # script and passes the model adapter (for model_id / attn_module_path). We run one rollout
-    # per seed; each writes its own seed{K}/ directory.
-    model = get_model_adapter(cfg.model)
+    # generate / extract are GPU stages: the dataset asks the model adapter which stage script
+    # to run (model x task specific) and passes dataset args. One rollout per seed -> seed{K}/.
     seeds = (cfg.generate if args.stage == "generate" else cfg.extract).seeds
     for seed in seeds:
         print(f"[MTLA] {args.stage} seed {seed}  ({seeds.index(seed)+1}/{len(seeds)})")

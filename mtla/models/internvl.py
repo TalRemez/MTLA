@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from .base import ModelAdapter, Prediction
+from .base import ModelAdapter, Prediction, SlotSpec
 from ..mask import bbox_to_internvl_token_indices
 
 MODEL_ID = "OpenGVLab/InternVL3_5-8B"
@@ -61,10 +61,35 @@ class InternVLAdapter(ModelAdapter):
     model_id = MODEL_ID
     # InternVL's LLM backbone is Qwen3; that is the module we monkeypatch for attention.
     attn_module_path = "transformers.models.qwen3.modeling_qwen3"
+    tasks = ("image_det",)
 
-    def parse(self, response: str, **kw) -> list:
+    def parse(self, response: str, task: str = None, **kw) -> list:
         return parse_internvl(response)
 
     def region_mask(self, region, meta: dict):
         """region = bbox [x1,y1,x2,y2] in [0,1000]; meta has tile_grid + has_thumb."""
         return bbox_to_internvl_token_indices(region, meta["tile_grid"], meta["has_thumb"])
+
+    # ---- signal slots in the saved record (image_det) ----
+    # MTLA = inside-region attention; "all" = count-weighted mean over label+coord tokens
+    # (the canonical recipe). SVAR = global attention read at the first coord digit (x1):
+    # InternVL emits `label[[box1],[box2],...]` so the label token is shared across a category's
+    # boxes; the fair per-box SVAR token is x1 (attn_first_digit).
+    def mtla_slot(self, task: str, slot: str = "all") -> SlotSpec:
+        if slot in ("all", "attn_all"):
+            return SlotSpec(stat="image_inside_sum", combine="all",
+                            parts=[("attn_label_mean", "n_label_toks"),
+                                   ("attn_coord_mean", "n_coord_toks")])
+        block = {"coord": "attn_coord_mean", "label": "attn_label_mean",
+                 "first": "attn", "first_digit": "attn_first_digit"}.get(slot, slot)
+        return SlotSpec(stat="image_inside_sum", block=block)
+
+    def svar_slot(self, task: str) -> SlotSpec:
+        return SlotSpec(stat="image_sum", block="attn_first_digit")
+
+    # ---- stage scripts ----
+    def generate_script(self, task: str, engine: str) -> str:
+        return {"vllm": "internvl_generate.py", "hf": "internvl_generate_hf.py"}[engine]
+
+    def extract_script(self, task: str) -> str:
+        return "internvl_extract.py"

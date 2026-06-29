@@ -46,6 +46,7 @@ def _seg_mtla(frame_sum_LHT, window, duration, n_tokens, band):
 
 class QVHighlightsDataset(DatasetAdapter):
     name = "qvhighlights"
+    task = "video_span"
 
     def load_items(self, cfg):
         items = []
@@ -82,7 +83,9 @@ class QVHighlightsDataset(DatasetAdapter):
             args += ["--seed", str(seed)]
         run_stage("qwen3vl_video.py", args)
 
-    def score(self, cfg) -> dict:
+    def score(self, cfg, model=None) -> dict:
+        # Video scoring uses the record's 4-slot [.,L,H,T] index mechanism directly (single
+        # model family); `model` is accepted for interface uniformity but not needed here.
         import numpy as np
         import torch
 

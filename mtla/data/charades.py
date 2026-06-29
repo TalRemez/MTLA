@@ -49,6 +49,7 @@ def _span_iou(a, b):
 
 class CharadesDataset(DatasetAdapter):
     name = "charades"
+    task = "video_span"
 
     def load_items(self, cfg):
         import pandas as pd
@@ -84,7 +85,7 @@ class CharadesDataset(DatasetAdapter):
             args += ["--seed", str(seed)]
         run_stage("qwen3vl_charades.py", args)
 
-    def score(self, cfg) -> dict:
+    def score(self, cfg, model=None) -> dict:
         import numpy as np
         import torch
 
