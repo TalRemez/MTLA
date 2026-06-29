@@ -175,8 +175,12 @@ def slot_max_4d(arr_nq_l_h_t):
     return torch.stack([s0, s1, s2, s3], dim=0)
 
 
-def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, seed=None):
-    print(f"[worker {rank}] gpu={gpu_id} n={len(items)} svar_shift={svar_shift} seed={seed}", flush=True)
+def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, seed=None,
+           mode="extract", responses=None):
+    # mode="generate": run model.generate, write predictions only (no attention hook).
+    # mode="extract": read each item's saved `response`, run the monkeypatched forward, write
+    #   attention .pt only. Vision preprocessing/token-indexing/extraction are identical here.
+    print(f"[worker {rank}] mode={mode} gpu={gpu_id} n={len(items)} svar_shift={svar_shift} seed={seed}", flush=True)
     torch.cuda.set_device(gpu_id)
     # Sampled rollout: seed per-worker so each (seed, rank) draw is reproducible.
     # do_sample only flips on when --seed is passed; default stays greedy.
@@ -185,7 +189,9 @@ def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, 
         from transformers import set_seed as _hf_set_seed
         _hf_set_seed(seed * 1000 + rank)
     import transformers.models.qwen3_vl.modeling_qwen3_vl as qwen3_mod
-    qwen3_mod.eager_attention_forward = patched_eager_attention_forward
+    if mode == "extract":
+        qwen3_mod.eager_attention_forward = patched_eager_attention_forward
+    responses = responses or {}
 
     proc = AutoProcessor.from_pretrained(MODEL_ID)
     model = Qwen3VLForConditionalGeneration.from_pretrained(
@@ -270,18 +276,23 @@ def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, 
         W_tokens = W_grid // spatial_merge_size
         n_video_expected = T_tokens * H_tokens * W_tokens
 
-        try:
-            with torch.no_grad():
-                if do_sample:
-                    gen_ids = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS,
-                                             do_sample=True, temperature=0.7, top_p=0.95)
-                else:
-                    gen_ids = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)
-        except Exception as e:
-            print(f"[worker {rank}] skip {video_id}: gen {e}", flush=True)
-            n_skipped += 1; torch.cuda.empty_cache(); continue
-        new_tokens = gen_ids[0, prompt_len:]
-        response = proc.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        if mode == "extract":
+            response = responses.get(video_id)
+            if response is None:
+                n_skipped += 1; continue
+        else:
+            try:
+                with torch.no_grad():
+                    if do_sample:
+                        gen_ids = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS,
+                                                 do_sample=True, temperature=0.7, top_p=0.95)
+                    else:
+                        gen_ids = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)
+            except Exception as e:
+                print(f"[worker {rank}] skip {video_id}: gen {e}", flush=True)
+                n_skipped += 1; torch.cuda.empty_cache(); continue
+            new_tokens = gen_ids[0, prompt_len:]
+            response = proc.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
         parsed = parse_timestamps(response)
         if parsed is None:
@@ -293,6 +304,20 @@ def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, 
             iou_val = iou((pred_start, pred_end), (gt_start, gt_end))
             is_hallu = (iou_val < 0.5)
         if not is_hallu: n_correct += 1
+
+        if mode == "generate":
+            preds_out.append({
+                "video": video_id, "caption": query,
+                "gt_span": [gt_start, gt_end],
+                "pred_span": [pred_start, pred_end] if parsed else None,
+                "response": response, "iou": float(iou_val),
+                "is_correct": (not is_hallu),
+                "duration_s": float(duration),
+                "T_tokens": int(T_tokens), "H_tokens": int(H_tokens), "W_tokens": int(W_tokens),
+                "fps": SAMPLE_FPS, "min_pixels": MIN_PIXELS, "max_pixels": MAX_PIXELS,
+            })
+            n_done += 1
+            continue
 
         resp_enc = proc.tokenizer(response, add_special_tokens=False)
         resp_ids = torch.tensor(resp_enc["input_ids"], dtype=prompt_ids.dtype, device=device)
@@ -454,13 +479,6 @@ def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, 
                 "response_sum":  rsp_sum_slots  .to(torch.float16).numpy(),
             },
         })
-        preds_out.append({
-            "video": video_id, "caption": query,
-            "gt_span": [gt_start, gt_end],
-            "pred_span": [pred_start, pred_end] if parsed else None,
-            "response": response, "iou": float(iou_val),
-            "is_correct": (not is_hallu),
-        })
         n_done += 1
         if n_done % 25 == 0:
             rate = n_done / max(time.time() - t0, 1e-9)
@@ -473,13 +491,16 @@ def worker(rank, gpu_id, items, out_dir, pred_dir, video_dir, svar_shift=False, 
             _EXTRACT[kk] = None
         torch.cuda.empty_cache(); gc.collect()
 
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = f"{out_dir}/shard{rank}.pt"
-    torch.save(records, out_path)
-    print(f"[worker {rank}] saved {len(records)} -> {out_path}", flush=True)
-    os.makedirs(pred_dir, exist_ok=True)
-    with open(f"{pred_dir}/preds_rank{rank}.json", "w") as f:
-        json.dump(preds_out, f)
+    if mode == "extract":
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = f"{out_dir}/shard{rank}.pt"
+        torch.save(records, out_path)
+        print(f"[worker {rank}] saved {len(records)} -> {out_path}", flush=True)
+    else:
+        os.makedirs(pred_dir, exist_ok=True)
+        with open(f"{pred_dir}/preds_rank{rank}.json", "w") as f:
+            json.dump(preds_out, f)
+        print(f"[worker {rank}] saved {len(preds_out)} preds", flush=True)
 
 
 def main():
@@ -498,13 +519,22 @@ def main():
     ap.add_argument("--seed", type=int, default=None,
                     help="If set, sample (T=0.7, top-p=0.95) seeded by this value "
                          "instead of greedy decoding. Used for self-consistency rollouts.")
+    ap.add_argument("--mode", choices=["generate", "extract"], default="extract",
+                    help="generate -> predictions.json only; extract -> attention .pt only.")
     args = ap.parse_args()
     set_start_method("spawn", force=True)
 
     PARQUET, VIDEO_DIR = args.data, args.video_dir
     df = pd.read_parquet(PARQUET)
-    print(f"Charades-STA test queries: {len(df)}")
+    print(f"Charades-STA test queries: {len(df)}  mode={args.mode}")
     items = df.head(args.limit).to_dict("records")
+
+    # extract mode: load responses produced by the generate stage, keyed by video id.
+    responses = {}
+    if args.mode == "extract":
+        for p in json.load(open(f"{args.pred_dir}/predictions.json")):
+            responses[p["video"]] = p["response"]
+        items = [it for it in items if it["video"] in responses]
 
     n_workers = len(args.gpus) * args.workers_per_gpu
     chunks = np.array_split(items, n_workers)
@@ -514,21 +544,24 @@ def main():
         for w in range(args.workers_per_gpu):
             if rank >= len(chunks) or len(chunks[rank]) == 0:
                 rank += 1; continue
-            p = Process(target=worker, args=(rank, gpu, list(chunks[rank]), args.out_dir, args.pred_dir, args.video_dir, args.svar_shift, args.seed))
+            p = Process(target=worker, args=(rank, gpu, list(chunks[rank]), args.out_dir,
+                                             args.pred_dir, args.video_dir, args.svar_shift,
+                                             args.seed, args.mode, responses))
             p.start(); procs.append(p)
             rank += 1
     for p in procs:
         p.join()
 
-    all_preds = []
-    for r in range(n_workers):
-        pp = f"{args.pred_dir}/preds_rank{r}.json"
-        if os.path.exists(pp):
-            all_preds.extend(json.load(open(pp)))
-    with open(f"{args.pred_dir}/predictions.json", "w") as f:
-        json.dump(all_preds, f)
-    n_correct = sum(1 for p in all_preds if p["is_correct"])
-    print(f"\nMerged: {len(all_preds)} preds, R@IoU0.5={n_correct/max(len(all_preds),1)*100:.2f}%")
+    if args.mode == "generate":
+        all_preds = []
+        for r in range(n_workers):
+            pp = f"{args.pred_dir}/preds_rank{r}.json"
+            if os.path.exists(pp):
+                all_preds.extend(json.load(open(pp)))
+        with open(f"{args.pred_dir}/predictions.json", "w") as f:
+            json.dump(all_preds, f)
+        n_correct = sum(1 for p in all_preds if p["is_correct"])
+        print(f"\nMerged: {len(all_preds)} preds, R@IoU0.5={n_correct/max(len(all_preds),1)*100:.2f}%")
     print("all workers complete")
 
 
