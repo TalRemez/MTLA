@@ -18,8 +18,9 @@ How well the score separates grounded from hallucinated predictions.
 | AudioSet-Strong | Audio Flamingo 3 | **0.813** | 0.608 |
 
 `run.py --config configs/coco_internvl.yaml --stage score` reproduces the InternVL row
-(0.873 / 0.779); the CPU demo (`examples/demo.py`) reproduces it on an 800-prediction
-subsample (≈0.87 / ≈0.79).
+(0.873 / 0.803) and `configs/coco_qwen3vl.yaml` the Qwen3-VL row (0.902 / 0.763) — same
+`CocoDataset`, different `model:`. The CPU demo (`examples/demo.py`) reproduces InternVL on an
+800-prediction subsample (≈0.87 / ≈0.81).
 
 ## Task metrics after MTLA re-ranking / self-consistency voting
 

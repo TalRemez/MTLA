@@ -115,28 +115,39 @@ once per seed, e.g. `--seeds 0 1 ... 15`, then `score` with `n_rollouts: 16`):
 | Config | Benchmark / model | Single rollout | N=16 voting |
 |---|---|---|---|
 | `configs/coco_internvl.yaml` (+ `_voting`) | COCO det / InternVL3.5-8B | AUROC 0.873; mAP 36.2 | **mAP 41.9** |
+| `configs/coco_qwen3vl.yaml` | COCO det / Qwen3-VL-8B | AUROC 0.902 | — |
 | `configs/qvhighlights_qwen3vl.yaml` | QVHighlights / Qwen3-VL-8B | mAP 24.5 | **mAP 36.6, R@1@0.5 55.1** |
 | `configs/charades_qwen3vl.yaml` | Charades-STA / Qwen3-VL-8B | R@1@0.5 44 | **R@1@0.5 55.4, R@1@0.3 76.3** |
 
-`configs/coco_internvl_voting.yaml` ships the 16-seed COCO setup ready to run. CLI flags
+COCO runs on **either model** — same `CocoDataset`, just a different `model:` — because models and
+datasets are independent adapters (see [Extending](#extending-add-a-new-model-or-task)). Every
+benchmark uses the same **decoupled** stages (`generate` may use vLLM or HF; `extract` is always
+HF-eager). `configs/coco_internvl_voting.yaml` ships the 16-seed COCO setup ready to run. CLI flags
 override any config for quick sweeps: `--seeds 0 1 2 3`, `--n 16`, `--agg sum`, `--slot first_digit`.
 Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
 
 ## Extending: add a new model or task
 
-The pipeline is two registries; adding a benchmark is writing one small adapter, not editing
-`run.py`.
+Models and datasets are **independent registries**; any valid (model × dataset) pair runs from a
+config. A model adapter never appears in a dataset adapter and vice versa — the dataset asks the
+model, per `task` family (`"image_det"` | `"video_span"`), how to parse, mask, and read signals.
 
-**A new model family** (`mtla/models/<name>.py`): subclass `ModelAdapter`, set `model_id` and
-`attn_module_path` (the transformers module whose `eager_attention_forward` to hook), and
-implement `parse(response)` (text -> `[Prediction(region, label)]`) and `region_mask(region,
-meta)` (delegate to `mtla.mask` — image patches / tiling / temporal span). Register it in
-`mtla/models/__init__.py`.
+**A new model family** (`mtla/models/<name>.py`): subclass `ModelAdapter`, declare `tasks`,
+`model_id`, `attn_module_path` (the module whose `eager_attention_forward` to hook), and per task
+implement `parse(response, task)` (-> `[Prediction]`), `region_mask` (delegate to `mtla.mask`),
+`mtla_slot`/`svar_slot` (return a `SlotSpec` describing how the saved record encodes each signal),
+and `generate_script`/`extract_script` (which `mtla/stages/` script runs each stage). Register it
+in `mtla/models/__init__.py`. See `mtla/models/internvl.py` for the smallest complete example.
 
-**A new task / dataset** (`mtla/data/<name>.py`): subclass `DatasetAdapter` and implement
-`load_items`, `prompt`, `ground_truth`, `score` (reuse `mtla.reduce_band` + `mtla.nms_fuse` +
-`mtla.eval`), and the `generate`/`extract` GPU stages (point them at a script in
-`mtla/stages/`). Register it in `mtla/data/__init__.py`, then add a `configs/<name>.yaml`.
+**A new task / dataset** (`mtla/data/<name>.py`): subclass `DatasetAdapter`, set `task`, and
+implement `load_items`, `prompt`, `ground_truth`, and `score(cfg, model)` (read signals via
+`model.mtla_slot`/`svar_slot` + `mtla.apply_slot`, reuse `mtla.nms_fuse` + `mtla.eval`). The base
+`generate`/`extract` dispatch to the model's stage scripts. Register it in `mtla/data/__init__.py`
+and add a `configs/<name>.yaml`.
+
+**Decoupled stages.** Every stage is split: `generate` (vLLM or HF) writes `predictions.json`;
+`extract` (always HF-eager) re-runs the model to capture attention. vLLM can't expose attention,
+so this split is what lets generation stay fast while extraction stays faithful.
 
 That's it — `python run.py --config configs/<name>.yaml --stage score` now works. See
 `mtla/data/charades.py` for the smallest complete example.
