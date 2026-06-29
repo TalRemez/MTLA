@@ -108,15 +108,18 @@ python run.py --config configs/coco_internvl.yaml      --stage extract    # GPU
 python run.py --config configs/coco_internvl.yaml      --stage score      # CPU
 ```
 
-Swap the config to run another benchmark — same commands:
+Swap the config to run another benchmark — same commands. Configs default to a **single
+rollout**; the headline numbers below use N=16 self-consistency voting (run the GPU stages
+once per seed, e.g. `--seeds 0 1 ... 15`, then `score` with `n_rollouts: 16`):
 
-| Config | Benchmark / model | Reproduces |
-|---|---|---|
-| `configs/coco_internvl.yaml` | COCO detection / InternVL3.5-8B | AUROC 0.873; mAP 41.9 @ N=16 |
-| `configs/qvhighlights_qwen3vl.yaml` | QVHighlights / Qwen3-VL-8B | mAP 36.6, R@1@0.5 55.1 |
-| `configs/charades_qwen3vl.yaml` | Charades-STA / Qwen3-VL-8B | R@1@0.5 55.4, R@1@0.3 76.3 |
+| Config | Benchmark / model | Single rollout | N=16 voting |
+|---|---|---|---|
+| `configs/coco_internvl.yaml` (+ `_voting`) | COCO det / InternVL3.5-8B | AUROC 0.873; mAP 36.2 | **mAP 41.9** |
+| `configs/qvhighlights_qwen3vl.yaml` | QVHighlights / Qwen3-VL-8B | mAP 24.5 | **mAP 36.6, R@1@0.5 55.1** |
+| `configs/charades_qwen3vl.yaml` | Charades-STA / Qwen3-VL-8B | R@1@0.5 44 | **R@1@0.5 55.4, R@1@0.3 76.3** |
 
-CLI flags override the config for quick sweeps: `--n 16 --agg sum --slot first_digit`.
+`configs/coco_internvl_voting.yaml` ships the 16-seed COCO setup ready to run. CLI flags
+override any config for quick sweeps: `--seeds 0 1 2 3`, `--n 16`, `--agg sum`, `--slot first_digit`.
 Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
 
 ## Extending: add a new model or task

@@ -29,10 +29,11 @@ class StageCfg:
     engine: str = "hf"                 # generate engine: "hf" or "vllm"
     gpus: list = field(default_factory=lambda: [0])
     n_items: int = 0                   # 0 = all
-    n_rollouts: int = 1
+    seeds: list = field(default_factory=lambda: [0])  # generate/extract: which rollout seeds to produce
+    n_rollouts: int = 1                # score: how many seeds (seed 0..n_rollouts-1) to vote over
     agg: str = "max"                   # voting fusion: max | sum | support | mean
     slot: str = "first_digit"          # attention slot (model-specific meaning)
-    temperature: float = 0.0
+    temperature: float = 0.7           # all runs sample at T=0.7 (vary seed per rollout)
     extra: dict = field(default_factory=dict)
 
 

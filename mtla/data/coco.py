@@ -55,22 +55,21 @@ class CocoDataset(DatasetAdapter):
         return json.loads(item["conversations"][1]["value"])
 
     # ---- GPU stages (COCO = vLLM generate, then HF-eager extract) ----
-    def generate(self, cfg, model):
+    def generate(self, cfg, model, seed=0):
         from ..stages import run_stage
         run_stage("internvl_generate.py", [
             "--model", model.model_id,
             "--dataset", cfg.path("data"),
-            "--output_dir", os.path.join(cfg.path("predictions"), f"seed{cfg.generate.extra.get('seed', 0)}"),
+            "--output_dir", os.path.join(cfg.path("predictions"), f"seed{seed}"),
             "--gpu_ids", *[str(g) for g in cfg.generate.gpus],
             "--temperature", str(cfg.generate.temperature),
-            "--seed", str(cfg.generate.extra.get("seed", 0)),
+            "--seed", str(seed),
         ])
 
-    def extract(self, cfg, model):
+    def extract(self, cfg, model, seed=0):
         from ..stages import run_stage
-        seed = cfg.extract.extra.get("seed", 0)
         run_stage("internvl_extract.py", [
-            "--pred_file", os.path.join(cfg.path("predictions"), f"seed{seed}", "temp_0", "predictions.json"),
+            "--pred_file", os.path.join(cfg.path("predictions"), f"seed{seed}", "predictions.json"),
             "--dataset", cfg.path("data"),
             "--out_dir", os.path.join(cfg.path("features"), f"seed{seed}"),
             "--gpus", *[str(g) for g in cfg.extract.gpus],
@@ -78,21 +77,26 @@ class CocoDataset(DatasetAdapter):
         ])
 
     # ---- scoring ----
-    # Canonical slots (paper convention): MTLA averages over ALL of a prediction's tokens
-    # (label + coordinates, count-weighted); SVAR reads a single token. On InternVL the label
-    # token is shared across a category's boxes, so the fair per-box SVAR token is the first
-    # coordinate digit x1 (attn_first_digit), not the first label token.
+    # MTLA aggregates a prediction's tokens; `slot` chooses which tokens (default "all" =
+    # the canonical paper recipe, label + coordinates count-weighted). SVAR reads a single
+    # token: on InternVL the label token is shared across a category's boxes, so the fair
+    # per-box SVAR token is the first coordinate digit x1 (attn_first_digit).
     @staticmethod
-    def _all_token_inside(o, band):
-        """MTLA: inside-region attention averaged over label+coord tokens (count-weighted)."""
-        cm, lm = o["attn_coord_mean"], o["attn_label_mean"]
-        nc, nl = o.get("n_coord_toks", 0), o.get("n_label_toks", 0)
-        ci = np.asarray(cm["image_inside_sum"], dtype=np.float32)
-        li = np.asarray(lm["image_inside_sum"], dtype=np.float32)
-        allslot = (li * nl + ci * nc) / max(nl + nc, 1)
-        return reduce_band(allslot, band)
+    def _mtla_inside(o, band, slot):
+        """MTLA: inside-region attention for the chosen token slot."""
+        if slot in ("all", "attn_all"):
+            cm, lm = o["attn_coord_mean"], o["attn_label_mean"]
+            nc, nl = o.get("n_coord_toks", 0), o.get("n_label_toks", 0)
+            ci = np.asarray(cm["image_inside_sum"], dtype=np.float32)
+            li = np.asarray(lm["image_inside_sum"], dtype=np.float32)
+            arr = (li * nl + ci * nc) / max(nl + nc, 1)
+        else:
+            key = {"coord": "attn_coord_mean", "label": "attn_label_mean",
+                   "first": "attn", "first_digit": "attn_first_digit"}.get(slot, slot)
+            arr = o[key]["image_inside_sum"]
+        return reduce_band(arr, band)
 
-    def _load_seed(self, features_dir, predictions_path, band):
+    def _load_seed(self, features_dir, predictions_path, band, slot):
         preds = {r["id"]: r for r in json.load(open(predictions_path))}
         attn = {}
         for sp in sorted(glob.glob(f"{features_dir}/shard*.pt")):
@@ -101,32 +105,26 @@ class CocoDataset(DatasetAdapter):
                 for o in r["objects"]:
                     fd = o.get("attn_first_digit", o.get("attn_coord_mean", {}))
                     attn[(r["image_id"], o["pred_idx"])] = (
-                        self._all_token_inside(o, band),        # MTLA (all tokens, inside)
+                        self._mtla_inside(o, band, slot),        # MTLA (slot tokens, inside)
                         reduce_band(fd.get("image_sum"), band),  # SVAR (first coord digit, global)
                         bool(o.get("is_hallucinated", False)),
                     )
         return preds, attn
 
-    def _seed_dir(self, root, seed, sub):
-        for cand in (os.path.join(root, f"seed{seed}", sub),
-                     os.path.join(root, f"seed{seed}")):
-            if os.path.exists(cand):
-                return cand
-        return os.path.join(root, f"seed{seed}")
-
     def score(self, cfg) -> dict:
         band = cfg.band_indices()
         n = cfg.score.n_rollouts
         agg = cfg.score.agg
+        slot = cfg.score.slot
         features_root = cfg.path("features")
         predictions_root = cfg.path("predictions")
         coco_gt = cfg.path("coco_gt")
 
         data = []
         for s in range(n):
-            fdir = self._seed_dir(features_root, s, "")
-            pj = os.path.join(self._seed_dir(predictions_root, s, "temp_0"), "predictions.json")
-            data.append(self._load_seed(fdir, pj, band))
+            fdir = os.path.join(features_root, f"seed{s}")
+            pj = os.path.join(predictions_root, f"seed{s}", "predictions.json")
+            data.append(self._load_seed(fdir, pj, band, slot))
             print(f"  loaded seed {s}: {len(data[-1][0])} images")
 
         # single-seed hallucination AUROC

@@ -265,9 +265,9 @@ def main():
     parser.add_argument("--output_dir", default="/tmp/internvl_out")
     parser.add_argument("--gpu_ids", nargs="+", type=int, default=None)
     parser.add_argument("--tp", type=int, default=1)
-    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--top_p", type=float, default=1.0)
+    parser.add_argument("--top_p", type=float, default=0.95)
     parser.add_argument("--max_new_tokens", type=int, default=4096)
     parser.add_argument("--max_model_len", type=int, default=16384)
     parser.add_argument("--gpu_mem_util", type=float, default=0.92)
@@ -327,7 +327,7 @@ def main():
         if p.is_alive(): p.terminate()
 
     results.sort(key=lambda x: x["idx"])
-    out_dir = Path(args.output_dir) / "temp_0"
+    out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "predictions.json", "w") as f:
         json.dump(results, f, indent=2)

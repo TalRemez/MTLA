@@ -1,26 +1,29 @@
-# COCO detection with InternVL3.5-8B.
-# Reproduces: hallucination AUROC 0.873 (MTLA) / 0.779 (SVAR); detection mAP 41.9 at N=16.
+# COCO detection with InternVL3.5-8B  (single rollout).
+# Reproduces: hallucination AUROC 0.873 (MTLA) / 0.803 (SVAR); single-rollout mAP 36.2.
+# For the 41.9 mAP headline with N=16 self-consistency voting, use coco_internvl_voting.yaml.
 model: internvl
 dataset: coco
 
 paths:
   data: /path/to/coco_val_openvocab_80.json      # open-vocab dataset json (see docs/DATA.md)
   coco_gt: /path/to/instances_val2017.json        # COCO annotations (for mAP)
-  predictions: runs/coco/predictions              # seed{K}/temp_0/predictions.json
+  predictions: runs/coco/predictions              # seed{K}/predictions.json
   features: runs/coco/features                     # seed{K}/shard*.pt
 
 generate:
   engine: vllm                                     # fast batched generation (no attention)
   gpus: [0, 1, 2, 3, 4, 5, 6, 7]
-  temperature: 0.0                                 # seed 0 = greedy; 1..15 use T=0.7 for voting
+  temperature: 0.7
+  seeds: [0]                                       # one rollout
 
 extract:
   gpus: [0, 1, 2, 3, 4, 5, 6, 7]
   n_items: 5000                                    # HF eager-attention pass
+  seeds: [0]                                       # match generate
 
 score:
-  n_rollouts: 16
-  agg: sum                                         # COCO headline: sum-of-cluster fusion
-  slot: attn_coord_mean                            # mean over a box's coordinate tokens
+  n_rollouts: 1                                    # single rollout (seed 0)
+  agg: max
+  slot: all                                        # MTLA over ALL prediction tokens (label+coord); canonical
 
 band: [8, 21]                                      # middle-layer band (null = all layers)

@@ -28,12 +28,13 @@ class DatasetAdapter:
         """Ground-truth regions/labels for one item (used to label hallucinations + metric)."""
         raise NotImplementedError
 
-    def generate(self, cfg, model):
-        """GPU stage: run the model to produce predictions. Dataset-specific stage script."""
+    def generate(self, cfg, model, seed=0):
+        """GPU stage: run the model to produce predictions for one rollout `seed`,
+        writing seed{seed}/. Dataset-specific stage script."""
         raise NotImplementedError(f"{type(self).__name__} has no generate stage")
 
-    def extract(self, cfg, model):
-        """GPU stage: HF-eager pass capturing attention into feature shards."""
+    def extract(self, cfg, model, seed=0):
+        """GPU stage: HF-eager pass capturing attention into seed{seed}/ feature shards."""
         raise NotImplementedError(f"{type(self).__name__} has no extract stage")
 
     def score(self, cfg) -> dict:

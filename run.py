@@ -27,6 +27,9 @@ def main():
     ap.add_argument("--n", type=int, default=None, help="override score.n_rollouts")
     ap.add_argument("--agg", default=None, help="override score.agg (max|sum|support|mean)")
     ap.add_argument("--slot", default=None, help="override score.slot")
+    ap.add_argument("--seeds", type=int, nargs="+", default=None,
+                    help="generate/extract: rollout seeds to produce (e.g. --seeds 0 1 2 3); "
+                         "overrides the stage's `seeds` in the config")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -36,6 +39,8 @@ def main():
         cfg.score.agg = args.agg
     if args.slot is not None:
         cfg.score.slot = args.slot
+    if args.seeds is not None:
+        cfg.generate.seeds = cfg.extract.seeds = args.seeds
 
     dataset = get_dataset_adapter(cfg.dataset)
     print(f"[MTLA] model={cfg.model}  dataset={cfg.dataset}  stage={args.stage}")
@@ -46,12 +51,16 @@ def main():
         return
 
     # generate / extract are GPU stages: the dataset owns the (model x dataset)-specific stage
-    # script and passes the model adapter (for model_id / attn_module_path).
+    # script and passes the model adapter (for model_id / attn_module_path). We run one rollout
+    # per seed; each writes its own seed{K}/ directory.
     model = get_model_adapter(cfg.model)
-    if args.stage == "generate":
-        dataset.generate(cfg, model)
-    else:
-        dataset.extract(cfg, model)
+    seeds = (cfg.generate if args.stage == "generate" else cfg.extract).seeds
+    for seed in seeds:
+        print(f"[MTLA] {args.stage} seed {seed}  ({seeds.index(seed)+1}/{len(seeds)})")
+        if args.stage == "generate":
+            dataset.generate(cfg, model, seed)
+        else:
+            dataset.extract(cfg, model, seed)
 
 
 if __name__ == "__main__":

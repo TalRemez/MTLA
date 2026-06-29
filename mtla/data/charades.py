@@ -62,16 +62,15 @@ class CharadesDataset(DatasetAdapter):
         return [item.get("start"), item.get("end")]
 
     # ---- GPU stage (fused generate+extract in one HF-eager pass) ----
-    def generate(self, cfg, model):
-        self._run(cfg)
+    def generate(self, cfg, model, seed=0):
+        self._run(cfg, seed)
 
-    def extract(self, cfg, model):
-        self._run(cfg)  # single fused pass produces predictions + features
+    def extract(self, cfg, model, seed=0):
+        self._run(cfg, seed)  # single fused pass produces predictions + features
 
-    def _run(self, cfg):
+    def _run(self, cfg, seed):
         import os
         from ..stages import run_stage
-        seed = cfg.extract.extra.get("seed", cfg.generate.extra.get("seed", 0))
         run_stage("qwen3vl_charades.py", [
             "--data", cfg.path("data"),
             "--video_dir", cfg.path("video_dir"),

@@ -61,15 +61,14 @@ class QVHighlightsDataset(DatasetAdapter):
         return item.get("relevant_windows", [])
 
     # ---- GPU stage (fused generate+extract in one HF-eager pass) ----
-    def generate(self, cfg, model):
-        self._run(cfg)
+    def generate(self, cfg, model, seed=0):
+        self._run(cfg, seed)
 
-    def extract(self, cfg, model):
-        self._run(cfg)  # video pipeline fuses generate+extract; one run produces both
+    def extract(self, cfg, model, seed=0):
+        self._run(cfg, seed)  # video pipeline fuses generate+extract; one run produces both
 
-    def _run(self, cfg):
+    def _run(self, cfg, seed):
         from ..stages import run_stage
-        seed = cfg.extract.extra.get("seed", cfg.generate.extra.get("seed", 0))
         run_stage("qwen3vl_video.py", [
             "--ann", cfg.path("ann"),
             "--video_dir", cfg.path("video_dir"),
