@@ -61,24 +61,26 @@ class QVHighlightsDataset(DatasetAdapter):
     def ground_truth(self, item):
         return item.get("relevant_windows", [])
 
-    # ---- GPU stage (fused generate+extract in one HF-eager pass) ----
+    # ---- GPU stages (decoupled): same stage script, --mode picks generate vs extract ----
     def generate(self, cfg, model, seed=0):
-        self._run(cfg, seed)
+        self._run(cfg, model, seed, "generate")
 
     def extract(self, cfg, model, seed=0):
-        self._run(cfg, seed)  # video pipeline fuses generate+extract; one run produces both
+        self._run(cfg, model, seed, "extract")
 
-    def _run(self, cfg, seed):
+    def _run(self, cfg, model, seed, mode):
         from ..stages import run_stage
+        n_items = (cfg.generate if mode == "generate" else cfg.extract).n_items
         args = [
+            "--mode", mode,
             "--ann", cfg.path("ann"),
             "--video_dir", cfg.path("video_dir"),
             "--out_dir", os.path.join(cfg.path("features"), f"seed{seed}"),
             "--pred_dir", os.path.join(cfg.path("predictions"), f"seed{seed}"),
             "--gpus", *[str(g) for g in (cfg.extract.gpus or cfg.generate.gpus)],
         ]
-        if cfg.extract.n_items:
-            args += ["--limit", str(cfg.extract.n_items)]
+        if n_items:
+            args += ["--limit", str(n_items)]
         if seed:
             args += ["--seed", str(seed)]
         run_stage("qwen3vl_video.py", args)
