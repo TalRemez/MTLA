@@ -1,0 +1,29 @@
+# COCO detection with Qwen3-VL-8B  (single rollout).
+# Reproduces: hallucination AUROC 0.902 (MTLA) / 0.763 (SVAR).
+# Demonstrates COCO running on a second model: same dataset adapter, different model:.
+model: qwen3vl
+dataset: coco
+
+paths:
+  data: /path/to/coco_val_openvocab_80.json      # open-vocab dataset json (see docs/DATA.md)
+  coco_gt: /path/to/instances_val2017.json        # COCO annotations (for mAP)
+  predictions: runs/coco_qwen/predictions          # seed{K}/predictions.json
+  features: runs/coco_qwen/features                 # seed{K}/shard*.pt
+
+generate:
+  engine: vllm                                     # Qwen3-VL COCO generation is vLLM-only
+  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  temperature: 0.7
+  seeds: [0]
+
+extract:
+  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  n_items: 5000
+  seeds: [0]
+
+score:
+  n_rollouts: 1
+  agg: max
+  slot: all                                        # MTLA over all prediction tokens; SVAR=first token
+
+band: [8, 21]

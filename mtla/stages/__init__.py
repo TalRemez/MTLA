@@ -5,11 +5,13 @@ so they are driven by command-line args. They are large and GPU-only, so they ar
 standalone scripts (not imported) and invoked by `run_stage(...)`. Dataset adapters declare
 which script + args each stage needs.
 
-  internvl_generate.py     COCO detection generation (vLLM; engine: vllm)
-  internvl_generate_hf.py  COCO detection generation (HF; engine: hf, transformers only)
-  internvl_extract.py      COCO detection attention extraction (HF eager)
-  qwen3vl_video.py         QVHighlights fused generate+extract (HF eager)
-  qwen3vl_charades.py      Charades-STA fused generate+extract (HF eager)
+  internvl_generate.py      COCO detection generation, InternVL (vLLM; engine: vllm)
+  internvl_generate_hf.py   COCO detection generation, InternVL (HF; engine: hf)
+  internvl_extract.py       COCO detection attention extraction, InternVL (HF eager)
+  qwen3vl_det_generate.py   COCO detection generation, Qwen3-VL (vLLM)
+  qwen3vl_det_extract.py    COCO detection attention extraction, Qwen3-VL (HF eager)
+  qwen3vl_video.py          QVHighlights generate|extract via --mode (HF eager)
+  qwen3vl_charades.py       Charades-STA generate|extract via --mode (HF eager)
 """
 import os
 import subprocess
