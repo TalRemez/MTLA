@@ -20,12 +20,13 @@ results*/
 *.bin
 *.pth
 
-# Datasets (download separately; see docs/DATA.md)
-datasets/
-data/
+# Datasets (download separately; see docs/DATA.md). Anchored to repo root so they don't
+# shadow the mtla/data/ package.
+/datasets/
+/data/
 
-# Audio cascade (AudioSet / Audio Flamingo 3) — not part of the unified pipeline yet
-cascade/
+# Audio cascade (AudioSet / Audio Flamingo 3), not part of the unified pipeline yet
+/cascade/
 
 # Attention/feature shards anywhere — EXCEPT the small committed demo fixture
 *.pt

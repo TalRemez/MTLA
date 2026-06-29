@@ -1,20 +1,20 @@
-# MTLA: Multi-Token Localized Attention
+# Propose and Attend: Training-free MLLM Grounding Confidence via Multi-Token Localized Attention
 
 **Does a multimodal LLM actually look where it says it's looking?**
 
-When a vision/video/audio LLM grounds a prediction — draws a bounding box, names a time span —
-it also produces internal attention over the input. MTLA reads that attention and asks a
-simple question: *did the prediction's tokens attend to evidence **inside** the region they
-claim?* Grounded predictions do; hallucinations attend elsewhere. The result is a
+When a vision, video, or audio LLM grounds a prediction (a bounding box, a time span) it also
+produces internal attention over the input. MTLA reads that attention and asks a simple
+question: *did the prediction's tokens attend to evidence **inside** the region they claim?*
+Grounded predictions do, while hallucinations attend elsewhere. The result is a
 **training-free, post-hoc** confidence score that needs no fine-tuning, no extra model, and
-no labels — just one forward pass of the model you already have.
+no labels, just one forward pass of the model you already have.
 
 <p align="center">
-  <img src="docs/assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects; MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
+  <img src="docs/assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects, then MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
 </p>
-<p align="center"><em>An MLLM emits box+label predictions; MTLA reads the decoder's attention from
-each prediction's tokens, restricts it to the patches inside the proposed region, and scores the
-prediction by how much attention falls inside — high when grounded, low when hallucinated.</em></p>
+<p align="center"><em>An MLLM emits box and label predictions. MTLA reads the decoder's attention
+from each prediction's tokens, restricts it to the patches inside the proposed region, and scores
+the prediction by how much attention falls inside, high when grounded and low when hallucinated.</em></p>
 
 ## Why it works
 
@@ -56,55 +56,34 @@ This loads a small bundled fixture of pre-extracted attention (InternVL3.5-8B on
 
 ## Use it on your own predictions
 
-**What MTLA consumes.** For one prediction, the only input is a `[L, H]` attention array —
-the attention its tokens pay to the input, summed over the modality tokens **inside** its
-proposed region, per transformer layer `L` and head `H`. `reduce_band` collapses that to one
-scalar (mean over heads, sum over the layer band). You produce these arrays with the extract
-stage (`run.py --stage extract`); see [`mtla/extract.py`](mtla/extract.py) for the hook.
+MTLA scores a prediction from a `[L, H]` array (layers × heads): the attention its tokens pay
+to the modality tokens **inside** its proposed region. `reduce_band` reduces it to one scalar
+(mean over heads, sum over the layer band) — higher means more grounded.
 
-**Score a single prediction.** `>` means more grounded.
-
-```python
-import numpy as np
-from mtla import reduce_band
-
-# [L, H] attention: layers x heads. Here L=36, H=32 (e.g. InternVL3.5-8B).
-inside = my_record["image_inside_sum"]   # attention restricted to patches INSIDE the box -> MTLA
-glob   = my_record["image_sum"]          # attention over ALL image tokens         -> SVAR baseline
-
-mtla = reduce_band(inside)               # default band L8-21; pass band=None for all layers
-svar = reduce_band(glob)
-print(f"MTLA={mtla:.3f}  SVAR={svar:.3f}")
-```
-
-**Score a list and flag hallucinations.** `reduce_band` is vectorized over a leading axis,
-and `auroc` measures how well the score separates grounded from hallucinated predictions.
+**If you have the attention arrays** (the extract stage produces them), scoring is CPU-only.
+Run it now on the bundled fixture — no GPU, no download:
 
 ```python
+import numpy as np, torch
 from mtla import reduce_band, auroc
 
-inside = np.stack([r["image_inside_sum"] for r in records])  # [N, L, H]
-scores = reduce_band(inside)                                  # [N]  (one MTLA score each)
-
-labels = [r["is_hallucinated"] for r in records]             # your IoU>=0.5 ground-truth flags
-print(f"AUROC = {auroc(scores, labels):.3f}")                # how well MTLA flags hallucinations
+data   = torch.load("fixtures/coco_demo.pt", weights_only=False)["scoring"]   # ~800 preds
+one    = reduce_band(data[0]["image_inside_sum"])                              # single -> scalar
+scores = reduce_band(np.stack([r["image_inside_sum"] for r in data]))         # batch  -> [N]
+labels = [r["is_hallucinated"] for r in data]                                  # IoU>=0.5 flags
+print(f"AUROC = {auroc(scores, labels):.3f}")                                  # ~0.87
 ```
 
-**Try it now** on the bundled fixture — no GPU, no data download:
+**Starting from your own model?** Run it to write a `predictions.json`
+(`[{id, status, response, pred_bboxes:[{box, label}]}, ...]`), then let the extract stage do the
+GPU forward pass that captures attention, and score:
 
-```python
-import torch
-from mtla import reduce_band, auroc
-
-data = torch.load("fixtures/coco_demo.pt", weights_only=False)["scoring"]  # ~800 InternVL preds
-scores = [reduce_band(r["attn_coord_mean"]["image_inside_sum"]) for r in data]
-labels = [r["is_hallucinated"] for r in data]
-print(f"MTLA AUROC = {auroc(scores, labels):.3f}")           # ~0.87
+```bash
+python run.py --config configs/coco_internvl.yaml --stage extract   # GPU: predictions -> [L,H] shards
+python run.py --config configs/coco_internvl.yaml --stage score     # CPU: shards -> AUROC / mAP
 ```
 
-Have raw boxes but no attention yet? `mtla.mask` turns a region into the inside-token indices
-the extractor needs: `bbox_to_patch_indices` / `bbox_to_internvl_token_indices` (images),
-`span_to_token_indices` (video/audio).
+To plug in a different model or task, see [Extending](#extending-add-a-new-model-or-task).
 
 The package is small and modular:
 

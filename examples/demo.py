@@ -33,9 +33,11 @@ def main():
           f"{sum(p['is_hallucinated'] for p in scoring)} hallucinated)\n")
 
     # ---- 1. hallucination AUROC: MTLA vs SVAR ----
+    # Each record stores two [L,H] arrays: image_inside_sum (MTLA, inside-region attention over
+    # all the prediction's tokens) and image_sum (SVAR baseline, global attention).
     labels = [p["is_hallucinated"] for p in scoring]
-    mtla = [reduce_band(p["attn_coord_mean"]["image_inside_sum"], band) for p in scoring]
-    svar = [reduce_band(p["attn_coord_mean"]["image_sum"], band) for p in scoring]
+    mtla = [reduce_band(p["image_inside_sum"], band) for p in scoring]
+    svar = [reduce_band(p["image_sum"], band) for p in scoring]
     auroc_mtla = auroc(mtla, labels)
     auroc_svar = auroc(svar, labels)
     print("Hallucination detection AUROC (higher = better separation)")
