@@ -15,7 +15,7 @@ generate:
   gpus: [0, 1, 2, 3, 4, 5, 6, 7]
   temperature: 0.7
   seeds: [0]                                        # one rollout; e.g. [0,1,...,15] for N=16 voting
-  extra: {fps: 2.0, max_pixels_factor: 128}         # Charades sampling (denser, shorter clips)
+  # video sampling (fps=2.0, max_pixels=128*32*32) is fixed in mtla/stages/qwen3vl_charades.py
 
 extract:
   gpus: [0, 1, 2, 3, 4, 5, 6, 7]

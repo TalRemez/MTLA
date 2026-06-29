@@ -34,7 +34,6 @@ class StageCfg:
     agg: str = "max"                   # voting fusion: max | sum | support | mean
     slot: str = "first_digit"          # attention slot (model-specific meaning)
     temperature: float = 0.7           # all runs sample at T=0.7 (vary seed per rollout)
-    extra: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -63,11 +62,9 @@ class RunConfig:
 def _stage(d: dict | None) -> StageCfg:
     d = dict(d or {})
     known = {f for f in StageCfg.__dataclass_fields__}
-    # An explicit `extra:` mapping in YAML, plus any unknown top-level keys, both go to `extra`.
-    extra = dict(d.pop("extra", None) or {})
-    extra.update({k: v for k, v in d.items() if k not in known})
+    # Keep only recognized keys; ignore unknown ones (forgiving to stray/legacy YAML keys).
     base = {k: v for k, v in d.items() if k in known}
-    return StageCfg(extra=extra, **base)
+    return StageCfg(**base)
 
 
 def load_config(path: str) -> RunConfig:
