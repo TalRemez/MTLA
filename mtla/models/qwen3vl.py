@@ -48,9 +48,11 @@ _PATTERNS = [
 def parse_spans(response: str, multi: bool = True) -> list:
     """Parse temporal spans from a Qwen3-VL response.
 
-    multi=True (QVHighlights): all [start,end] windows; multi=False (Charades): the first.
-    Mirrors the validated parser in mtla/stages/qwen3vl_video.py: try each pattern family in
-    order, keep the first that matches, dedup, order low->high.
+    multi=True (QVHighlights): all [start,end] windows; multi=False (Charades): the earliest.
+    Collects matches across ALL timestamp pattern families, dedups, and orders by start time, so
+    a response that mixes formats (e.g. "from 10s to 19s and again [30,42]") keeps every window.
+    (Verified to leave the validated QVH/Charades outputs unchanged — the models emit one format
+    per response, and overlapping families dedup to the same spans.)
     """
     t = response.lower().replace("seconds", "s")
     seen = set(); spans = []
@@ -67,10 +69,10 @@ def parse_spans(response: str, multi: bool = True) -> list:
             key = (round(a, 2), round(b, 2))
             if key in seen:
                 continue
-            seen.add(key); spans.append(Prediction([a, b], ""))
-        if spans:
-            break
-    return spans if multi else spans[:1]
+            seen.add(key); spans.append((a, b))
+    spans.sort(key=lambda ab: ab[0])  # order by start time
+    preds = [Prediction([a, b], "") for a, b in spans]
+    return preds if multi else preds[:1]
 
 
 def parse_bboxes(response: str) -> list:

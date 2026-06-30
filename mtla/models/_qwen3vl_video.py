@@ -36,7 +36,7 @@ def parse_windows_with_spans(text: str):
     validated parser. Offsets are taken against a length-preserving lowercase copy so they align
     with the original response. Returns (windows, char_spans) aligned by index."""
     t = text.lower()  # length-preserving (do NOT replace "seconds"->"s" here; would shift offsets)
-    seen = set(); windows = []; spans = []
+    seen = set(); rows = []  # (window, char_span)
     for p in _PATTERNS:
         for m in re.finditer(p, t):
             try:
@@ -50,9 +50,10 @@ def parse_windows_with_spans(text: str):
             key = (round(a, 2), round(b, 2))
             if key in seen:
                 continue
-            seen.add(key); windows.append([a, b]); spans.append(m.span())
-        if windows:
-            break
+            seen.add(key); rows.append(([a, b], m.span()))
+    rows.sort(key=lambda r: r[0][0])  # order by start time — must match parse_spans so the
+    windows = [w for w, _ in rows]    # extract-time Q_p attribution aligns with pred_windows[i]
+    spans = [s for _, s in rows]
     return windows, spans
 
 
