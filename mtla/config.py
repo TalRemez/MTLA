@@ -45,6 +45,9 @@ class RunConfig:
     extract: StageCfg = field(default_factory=StageCfg)
     score: StageCfg = field(default_factory=StageCfg)
     band: list | None = None            # [lo, hi] inclusive, or None for all layers
+    config_path: str = ""               # absolute path this config was loaded from (set by
+                                        # load_config); lets a GPU stage subprocess rebuild the
+                                        # config and ask the dataset adapter for its items.
 
     def band_indices(self):
         """Return the layer-index list for `mtla.reduce_band` (None means all layers)."""
@@ -57,6 +60,14 @@ class RunConfig:
         if key not in self.paths:
             raise KeyError(f"config paths is missing '{key}'")
         return os.path.expanduser(self.paths[key])
+
+    def pred_dir(self, seed: int) -> str:
+        """Per-rollout predictions dir `<predictions>/seed{K}/` (holds predictions.json)."""
+        return os.path.join(self.path("predictions"), f"seed{seed}")
+
+    def feat_dir(self, seed: int) -> str:
+        """Per-rollout feature-shard dir `<features>/seed{K}/` (holds shard*.pt)."""
+        return os.path.join(self.path("features"), f"seed{seed}")
 
 
 def _stage(d: dict | None) -> StageCfg:
@@ -81,4 +92,5 @@ def load_config(path: str) -> RunConfig:
         extract=_stage(raw.get("extract")),
         score=_stage(raw.get("score")),
         band=raw.get("band", [8, 21]),
+        config_path=os.path.abspath(path),
     )

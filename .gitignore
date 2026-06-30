@@ -25,7 +25,9 @@ results*/
 /datasets/
 /data/
 
-# Audio cascade (AudioSet / Audio Flamingo 3), not part of the unified pipeline yet
+# Audio cascade (AudioSet / Audio Flamingo 3): separate research code, not part of this
+# repo's unified image/video pipeline. Kept out of the public tree on purpose; the audio
+# results in the README are reported numbers, not reproduced here.
 /cascade/
 
 # Attention/feature shards anywhere — EXCEPT the small committed demo fixture

@@ -192,20 +192,25 @@ def worker(rank, gpu_id, items, out_dir, temperature, seed, max_new_tokens):
 
 def main():
     global MODEL_ID
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default=MODEL_ID)
-    ap.add_argument("--dataset", required=True, help="COCO openvocab dataset json")
-    ap.add_argument("--output_dir", default="predictions")
-    ap.add_argument("--gpu_ids", type=int, nargs="+", default=[0])
-    ap.add_argument("--temperature", type=float, default=0.7)
-    ap.add_argument("--seed", type=int, default=0)
+    from mtla.config import load_config
+    from mtla.registry import resolve
+    ap = argparse.ArgumentParser(description="InternVL COCO detection generation (HF, slow).")
+    ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
+    ap.add_argument("--seed", type=int, default=0, help="rollout seed (selects seed{K}/ out dir)")
     ap.add_argument("--max_new_tokens", type=int, default=4096)
-    ap.add_argument("--limit", type=int, default=99999)
     args = ap.parse_args()
-    MODEL_ID = args.model
+
+    # Config drives model/dataset/gpus/seed/temperature; the dataset adapter owns item loading.
+    cfg = load_config(args.config)
+    model, dataset = resolve(cfg.model, cfg.dataset)
+    MODEL_ID = model.model_id
+    args.gpu_ids = cfg.generate.gpus or [0]
+    args.temperature = cfg.generate.temperature
+    args.output_dir = cfg.pred_dir(args.seed)
+    limit = cfg.generate.n_items or 99999
     set_start_method("spawn", force=True)
 
-    data = json.load(open(args.dataset))[:args.limit]
+    data = dataset.load_items(cfg)[:limit]
     for i, d in enumerate(data):
         d.setdefault("idx", i)
     chunks = np.array_split(data, len(args.gpu_ids))

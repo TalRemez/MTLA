@@ -234,25 +234,31 @@ def _error_result(idx, item):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
-    parser.add_argument("--limit", type=int, default=99999)
-    parser.add_argument("--output_dir", default="/tmp/vllm_mc")
-    parser.add_argument("--gpu_ids", nargs="+", type=int, default=None)
+    from mtla.config import load_config
+    from mtla.registry import resolve
+    parser = argparse.ArgumentParser(description="Qwen3-VL COCO detection generation (vLLM).")
+    parser.add_argument("--config", required=True, help="path to a configs/*.yaml")
+    parser.add_argument("--seed", type=int, default=0, help="rollout seed (selects seed{K}/ out dir)")
+    # vLLM performance knobs (not part of the run config; tune per box)
     parser.add_argument("--tp", type=int, default=1, help="Tensor parallel size per engine")
-    parser.add_argument("--temperature", type=float, default=0.7)
-    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--top_p", type=float, default=1.0)
     parser.add_argument("--max_new_tokens", type=int, default=4096)
     parser.add_argument("--max_model_len", type=int, default=16384)
     parser.add_argument("--gpu_mem_util", type=float, default=0.92)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--num_cpu_workers", type=int, default=16)
-    parser.add_argument("--dataset", required=True, help="COCO openvocab dataset json")
     args = parser.parse_args()
 
-    data = json.load(open(args.dataset))
-    samples = data[:args.limit]
+    # Config drives model/dataset/gpus/seed/temperature; the dataset adapter owns item loading.
+    cfg = load_config(args.config)
+    model, dataset = resolve(cfg.model, cfg.dataset)
+    args.model = model.model_id
+    args.gpu_ids = cfg.generate.gpus
+    args.temperature = cfg.generate.temperature
+    args.output_dir = cfg.pred_dir(args.seed)
+    args.limit = cfg.generate.n_items or 99999
+
+    samples = dataset.load_items(cfg)[:args.limit]
 
     gpu_ids = args.gpu_ids or list(range(8))
     # Split GPUs into engine groups based on TP

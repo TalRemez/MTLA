@@ -1,15 +1,20 @@
-"""Shared image-detection MTLA extraction driver (InternVL + Qwen3-VL).
+"""Shared image-detection MTLA extraction driver (any image_det model).
 
-One HF-eager MTLA stage for any image_det model. The scaffold here is model-agnostic
-(arg parse, multi-GPU worker spawn, predictions/dataset load, shard save). All model-specific
-work is delegated to the resolved ModelAdapter:
-  - `adapter.load_for_extract(gpu_id)` -> ctx (model, tokenizer/processor, n_layers/heads, the
+One HF-eager MTLA stage for any image_det model. The scaffold here is model- and dataset-agnostic:
+it loads the run config, resolves the (model, dataset) adapters from the registry, and delegates
+every specific piece:
+  - `dataset.load_items(cfg)`            -> the dataset items (the adapter owns file I/O).
+  - `model.load_for_extract(gpu_id)`     -> ctx (model, tokenizer/processor, n_layers/heads, the
     MTLAState with the MTLA attention forward installed).
-  - `adapter.extract_one(pred_record, ds_by_id, ctx, svar_shift)` -> the per-image .pt record
-    (or None to skip). This delegates to `mtla.mtla_attn.compute_image_mtla`, the shared per-image
-    MTLA computation.
+  - `model.extract_one(pred, ds_by_id, ctx, svar_shift)` -> the per-image .pt record (or None to
+    skip). This delegates to `mtla.mtla_attn.compute_mtla`, the shared per-item MTLA computation.
 
-Reads predictions.json (from the generate stage), writes shard{rank}.pt feature shards.
+Invoked as a subprocess by the dataset adapter's `stage_cmd` (see `mtla.data.base`):
+
+    python -m mtla.stages.image_extract --config configs/coco_internvl.yaml --seed 0
+
+Reads `<predictions>/seed{K}/predictions.json` (from the generate stage); writes
+`<features>/seed{K}/shard{rank}.pt` feature shards.
 """
 import argparse
 import json
@@ -20,21 +25,23 @@ import numpy as np
 import torch
 
 
-def worker(rank, gpu_id, image_indices, out_dir, model_key, dataset_file, pred_file, svar_shift):
-    from mtla.models import get_model_adapter
+def worker(rank, gpu_id, image_indices, out_dir, config_path, pred_file, svar_shift):
+    from mtla.config import load_config
+    from mtla.registry import resolve
     torch.cuda.set_device(gpu_id)
-    adapter = get_model_adapter(model_key)
-    ctx = adapter.load_for_extract(gpu_id)
-    print(f"[worker {rank}] model={model_key} gpu={gpu_id} n={len(image_indices)} "
-          f"L={ctx['n_layers']} H={ctx['n_heads']}", flush=True)
+    cfg = load_config(config_path)
+    model, dataset = resolve(cfg.model, cfg.dataset)
+    ctx = model.load_for_extract(gpu_id)
+    print(f"[worker {rank}] model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
+          f"n={len(image_indices)} L={ctx['n_layers']} H={ctx['n_heads']}", flush=True)
 
     preds_all = json.load(open(pred_file))
-    ds_by_id = {d["id"]: d for d in json.load(open(dataset_file))}
+    ds_by_id = {d["id"]: d for d in dataset.load_items(cfg)}
 
     records = []
     n_done = n_skipped = 0
     for cnt, idx in enumerate(image_indices):
-        rec = adapter.extract_one(preds_all[idx], ds_by_id, ctx, svar_shift, rank=rank)
+        rec = model.extract_one(preds_all[idx], ds_by_id, ctx, svar_shift, rank=rank)
         if rec is None:
             n_skipped += 1
             continue
@@ -51,23 +58,27 @@ def worker(rank, gpu_id, image_indices, out_dir, model_key, dataset_file, pred_f
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True, help="model adapter key (internvl | qwen3vl)")
-    ap.add_argument("--gpus", type=int, nargs="+", default=[0, 1])
-    ap.add_argument("--n_images", type=int, default=5000)
-    ap.add_argument("--out_dir", required=True)
-    ap.add_argument("--pred_file", required=True, help="predictions.json from the generate stage")
-    ap.add_argument("--dataset", required=True, help="COCO openvocab dataset json")
+    from mtla.config import load_config
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
+    ap.add_argument("--seed", type=int, default=0, help="rollout seed (selects seed{K}/ dirs)")
     ap.add_argument("--svar_shift", action="store_true")
     args = ap.parse_args()
+
+    cfg = load_config(args.config)
+    gpus = cfg.extract.gpus or [0]
+    n_images = cfg.extract.n_items or 5000
+    pred_file = os.path.join(cfg.pred_dir(args.seed), "predictions.json")
+    out_dir = cfg.feat_dir(args.seed)
+
     set_start_method("spawn", force=True)
-    chunks = np.array_split(list(range(args.n_images)), len(args.gpus))
+    chunks = np.array_split(list(range(n_images)), len(gpus))
     procs = []
-    for rank, (gpu, chunk) in enumerate(zip(args.gpus, chunks)):
+    for rank, (gpu, chunk) in enumerate(zip(gpus, chunks)):
         if len(chunk) == 0:
             continue
-        p = Process(target=worker, args=(rank, gpu, list(chunk), args.out_dir, args.model,
-                                         args.dataset, args.pred_file, args.svar_shift))
+        p = Process(target=worker, args=(rank, gpu, list(chunk), out_dir, cfg.config_path,
+                                         pred_file, args.svar_shift))
         p.start(); procs.append(p)
     for p in procs:
         p.join()

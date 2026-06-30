@@ -55,27 +55,14 @@ class CocoDataset(DatasetAdapter):
         return json.loads(item["conversations"][1]["value"])
 
     # ---- GPU stages: the MODEL adapter names the script (so COCO is model-agnostic) ----
+    # Every stage script is config-driven: it reloads the config, resolves (model, dataset) from
+    # the registry, and asks this adapter for its items via `load_items(cfg)`. So the command is
+    # uniform — just the config path and the rollout seed.
     def stage_cmd(self, cfg, model, seed, mode):
-        pred_seed = os.path.join(cfg.path("predictions"), f"seed{seed}")
+        args = ["--config", cfg.config_path, "--seed", str(seed)]
         if mode == "generate":
-            args = [
-                "--model", model.model_id,
-                "--dataset", cfg.path("data"),
-                "--output_dir", pred_seed,
-                "--gpu_ids", *[str(g) for g in cfg.generate.gpus],
-                "--temperature", str(cfg.generate.temperature),
-                "--seed", str(seed),
-            ]
-            if cfg.generate.n_items:
-                args += ["--limit", str(cfg.generate.n_items)]
             return model.generate_script(self.task, cfg.generate.engine), args
-        return model.extract_script(self.task), [
-            "--pred_file", os.path.join(pred_seed, "predictions.json"),
-            "--dataset", cfg.path("data"),
-            "--out_dir", os.path.join(cfg.path("features"), f"seed{seed}"),
-            "--gpus", *[str(g) for g in cfg.extract.gpus],
-            "--n_images", str(cfg.extract.n_items or 5000),
-        ]
+        return model.extract_script(self.task), args
 
     # ---- scoring (MTLA = reduce_band(local_attention); returns a dict, no prints) ----
     def _load_seed(self, features_dir, predictions_path, band):
@@ -93,11 +80,10 @@ class CocoDataset(DatasetAdapter):
         band = cfg.band_indices()
         n = cfg.score.n_rollouts
         agg = cfg.score.agg
-        predictions_root = cfg.path("predictions")
         coco_gt = cfg.path("coco_gt")
 
-        data = [self._load_seed(os.path.join(cfg.path("features"), f"seed{s}"),
-                                os.path.join(predictions_root, f"seed{s}", "predictions.json"),
+        data = [self._load_seed(cfg.feat_dir(s),
+                                os.path.join(cfg.pred_dir(s), "predictions.json"),
                                 band)
                 for s in range(n)]
 
