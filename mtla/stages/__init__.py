@@ -1,17 +1,19 @@
 """GPU stage scripts (generation + attention extraction).
 
-These are the validated, paper-faithful pipeline scripts, lightly cleaned of hardcoded paths
-so they are driven by command-line args. They are large and GPU-only, so they are kept as
-standalone scripts (not imported) and invoked by `run_stage(...)`. Dataset adapters declare
-which script + args each stage needs.
+Large, GPU-only, paper-faithful scripts kept standalone (not imported) and invoked as
+subprocesses by `run_stage(...)`. Dataset adapters' `stage_cmd` declare which script + args each
+stage needs. The shared extract drivers are config-driven (`--config <yaml> --seed <K>`): they
+resolve the (model, dataset) adapters and delegate the model/task specifics to `ext_*` callbacks.
 
+  image_extract.py          shared image_det MTLA extraction (any image model) — HF eager
+  video_extract.py          shared video_span MTLA extraction (any video model) — HF eager
   internvl_generate.py      COCO detection generation, InternVL (vLLM; engine: vllm)
   internvl_generate_hf.py   COCO detection generation, InternVL (HF; engine: hf)
-  internvl_extract.py       COCO detection attention extraction, InternVL (HF eager)
   qwen3vl_det_generate.py   COCO detection generation, Qwen3-VL (vLLM)
-  qwen3vl_det_extract.py    COCO detection attention extraction, Qwen3-VL (HF eager)
-  qwen3vl_video.py          QVHighlights generate|extract via --mode (HF eager)
-  qwen3vl_charades.py       Charades-STA generate|extract via --mode (HF eager)
+
+  qwen3vl_video.py          LEGACY QVHighlights generate|extract monolith (kept as the parity
+  qwen3vl_charades.py       LEGACY Charades-STA   generate|extract monolith   reference for the
+                            video_extract.py GPU equivalence gate; not on the run path).
 """
 import os
 import subprocess

@@ -15,7 +15,7 @@ generate:
   gpus: [0, 1, 2, 3, 4, 5, 6, 7]
   temperature: 0.7
   seeds: [0]                                        # one rollout; e.g. [0,1,...,15] for N=16 voting
-  # video sampling (fps=1.0, max_pixels=64*32*32) is fixed in mtla/stages/qwen3vl_video.py
+  # video sampling (fps=1.0, max_pixels=64*32*32) is a dataset property: QVHighlightsDataset.video
 
 extract:
   gpus: [0, 1, 2, 3, 4, 5, 6, 7]
