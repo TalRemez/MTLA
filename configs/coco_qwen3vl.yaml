@@ -24,6 +24,5 @@ extract:
 score:
   n_rollouts: 1
   agg: max
-  slot: all                                        # MTLA over all prediction tokens; SVAR=first token
 
 band: [8, 21]

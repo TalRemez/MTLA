@@ -117,25 +117,97 @@ class Qwen3VLAdapter(ModelAdapter):
             if engine != "vllm":
                 raise NotImplementedError("Qwen3-VL COCO generation is vLLM-only (engine: vllm)")
             return "qwen3vl_det_generate.py"
-        raise NotImplementedError("video_span generation is dataset-driven (qwen3vl_video/charades)")
+        return "video_generate.py"
 
     def extract_script(self, task: str) -> str:
         if task == "image_det":
             return "image_extract.py"
-        raise NotImplementedError("video_span extraction is dataset-driven")
+        return "video_extract.py"
 
-    # ---- HF-eager extraction (image_det) ----
+    # ---- HF-eager extraction ----
     # Shares the per-item flow with InternVL via mtla.mtla_attn.compute_mtla; this adapter supplies
-    # only the Qwen-specific pieces via the `ext_*` callbacks below. (Video uses the same flow with
-    # the video `ext_*` further down.)
-    def load_for_extract(self, gpu_id):
-        return _load_qwen_det_for_extract(gpu_id)
+    # the Qwen-specific pieces via the `ext_*` callbacks. The same flow serves image detection
+    # (boxes) and video grounding (time-span windows); each `ext_*` dispatches on the task family,
+    # which the worker records on the adapter via `load_for_extract`/`extract_one`.
+    def load_for_extract(self, gpu_id, task="image_det"):
+        self._task = task
+        ctx = _load_qwen_for_extract(gpu_id, task)
+        ctx["task"] = task
+        return ctx
 
     def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
         from ..mtla_attn import compute_mtla
+        self._task = ctx.get("task", "image_det")
         return compute_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
 
+    # ---- ext_* dispatch (image_det <-> video_span) ----
     def ext_build_inputs(self, p, ds_by_id, ctx, rank):
+        if ctx.get("task") == "video_span":
+            return self._vid_build_inputs(p, ds_by_id, ctx, rank)
+        return self._img_build_inputs(p, ds_by_id, ctx, rank)
+
+    def ext_token_ranges(self, response, predictions, tokenizer):
+        if getattr(self, "_task", "image_det") == "video_span":
+            return self._vid_token_ranges(response, predictions, tokenizer)
+        return find_pred_token_ranges(response, predictions, tokenizer)
+
+    def ext_region_mask(self, prediction, meta):
+        if meta.get("task") == "video_span":
+            return self._vid_region_mask(prediction, meta)
+        return _bbox_to_patch_indices(prediction["box"], meta["grid_h"], meta["grid_w"])[0]
+
+    def ext_forward_kwargs(self, full_ids, total_len, device, inp):
+        # Identical for image and video: forward the cached vision inputs + a full attention mask,
+        # padding mm_token_type_ids to the response length. (video adds pixel_values_videos /
+        # video_grid_thw, which are simply whatever keys `inp["inputs"]` carries.)
+        import torch
+        inputs = inp["inputs"]
+        fk = {"input_ids": full_ids,
+              "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
+        for k in ["pixel_values", "image_grid_thw", "pixel_values_videos", "video_grid_thw"]:
+            if k in inputs:
+                fk[k] = inputs[k]
+        if "mm_token_type_ids" in inputs:
+            orig = inputs["mm_token_type_ids"]
+            extra = total_len - orig.shape[1]
+            fk["mm_token_type_ids"] = (torch.cat(
+                [orig, torch.zeros(1, extra, dtype=orig.dtype, device=orig.device)], dim=1)
+                if extra > 0 else orig)
+        return fk
+
+    def ext_obj_record(self, prediction, pred_idx, meta):
+        if meta.get("task") == "video_span":
+            return {"pred_idx": pred_idx, "window": list(prediction)}
+        return {"pred_idx": pred_idx, "label": prediction["label"], "box": prediction["box"],
+                "grid_h": int(meta["grid_h"]), "grid_w": int(meta["grid_w"])}
+
+    def ext_record(self, p, meta, objects, n_predictions):
+        if meta.get("task") == "video_span":
+            return {"qid": p.get("qid"), "video": p.get("video") or p.get("vid"),
+                    "query": p.get("query") or p.get("caption"),
+                    "gt_windows": meta["gt_windows"],
+                    "duration_s": meta["duration_s"], "T_tokens": meta["T_tokens"],
+                    "n_pred_windows": n_predictions, "n_extracted": len(objects), "objects": objects}
+        return {"image_id": p["id"], "n_pred_bboxes": n_predictions, "n_extracted": len(objects),
+                "objects": objects, "grid_hw": (int(meta["grid_h"]), int(meta["grid_w"]))}
+
+    # ---- video_span ext_* (Qwen3-VL temporal grounding) ----
+    def _vid_build_inputs(self, p, ds_by_id, ctx, rank):
+        return _vid_build_inputs(p, ds_by_id, ctx, rank)
+
+    def _vid_token_ranges(self, response, predictions, tokenizer):
+        from ._qwen3vl_video import parse_windows_with_spans, perwindow_qp_tokens
+        _windows, spans = parse_windows_with_spans(response)
+        # predictions are the (already-parsed) windows from the prediction record; align Q_p to
+        # them by index (parse here reproduces the same dedup/order as the saved windows).
+        return perwindow_qp_tokens(response, predictions, spans, tokenizer)
+
+    def _vid_region_mask(self, prediction, meta):
+        from ._qwen3vl_video import span_to_frame_token_indices
+        return span_to_frame_token_indices(prediction, meta["duration_s"], meta["T_tokens"],
+                                           meta["H_tokens"], meta["W_tokens"])
+
+    def _img_build_inputs(self, p, ds_by_id, ctx, rank):
         """Build the Qwen detection prompt via the processor, derive the merged patch grid from
         image_grid_thw, locate the <|image_pad|> tokens, and flag hallucinations against the GT.
         Returns None to skip."""
@@ -172,42 +244,11 @@ class Qwen3VLAdapter(ModelAdapter):
         hallu_flags = [label_hallu_bbox(pb["box"], pb["label"], gt_objs) for pb in p["pred_bboxes"]]
         return {"prompt_ids": prompt_ids, "response": p["response"], "modality_idx_l": image_idx_l,
                 "predictions": p["pred_bboxes"], "hallu_flags": hallu_flags,
-                "inputs": inputs, "meta": {"grid_h": grid_h, "grid_w": grid_w}}
-
-    def ext_token_ranges(self, response, predictions, tokenizer):
-        return find_pred_token_ranges(response, predictions, tokenizer)
-
-    def ext_region_mask(self, prediction, meta):
-        """Modality-token indices inside the proposal box M(R_p) (Qwen fixed patch grid)."""
-        return _bbox_to_patch_indices(prediction["box"], meta["grid_h"], meta["grid_w"])[0]
-
-    def ext_forward_kwargs(self, full_ids, total_len, device, inp):
-        import torch
-        inputs = inp["inputs"]
-        fk = {"input_ids": full_ids,
-              "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
-        for k in ["pixel_values", "image_grid_thw"]:
-            if k in inputs:
-                fk[k] = inputs[k]
-        if "mm_token_type_ids" in inputs:
-            orig = inputs["mm_token_type_ids"]
-            extra = total_len - orig.shape[1]
-            fk["mm_token_type_ids"] = (torch.cat(
-                [orig, torch.zeros(1, extra, dtype=orig.dtype, device=orig.device)], dim=1)
-                if extra > 0 else orig)
-        return fk
-
-    def ext_obj_record(self, prediction, pred_idx, meta):
-        return {"pred_idx": pred_idx, "label": prediction["label"], "box": prediction["box"],
-                "grid_h": int(meta["grid_h"]), "grid_w": int(meta["grid_w"])}
-
-    def ext_record(self, p, meta, objects, n_predictions):
-        return {"image_id": p["id"], "n_pred_bboxes": n_predictions, "n_extracted": len(objects),
-                "objects": objects, "grid_hw": (int(meta["grid_h"]), int(meta["grid_w"]))}
+                "inputs": inputs, "meta": {"task": "image_det", "grid_h": grid_h, "grid_w": grid_w}}
 
 
 # ============================================================================
-# HF-eager MTLA extraction implementation (image_det) for Qwen3-VL.
+# HF-eager MTLA extraction implementation for Qwen3-VL.
 # Supplies the Qwen-specific pieces of mtla.mtla_attn.compute_mtla.
 # ============================================================================
 import numpy as np  # noqa: E402
@@ -292,7 +333,10 @@ def find_pred_token_ranges(response_text, pred_bboxes, tokenizer):
     return out
 
 
-def _load_qwen_det_for_extract(gpu_id):
+def _load_qwen_for_extract(gpu_id, task="image_det"):
+    """Load Qwen3-VL + processor on `gpu_id`, install the MTLA attention forward, return the ctx.
+    Same model/processor for both tasks; `task` only selects which modality pad-id the driver
+    locates (`<|image_pad|>` for image, `<|video_pad|>` for video)."""
     from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 
     state = MTLAState()
@@ -308,7 +352,84 @@ def _load_qwen_det_for_extract(gpu_id):
     state.lang_attn_ids = {id(L.self_attn) for L in decoder_layers}
     state.lang_attn_order = [id(L.self_attn) for L in decoder_layers]
 
+    pad_tok = "<|video_pad|>" if task == "video_span" else "<|image_pad|>"
     return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "state": state,
             "device": device, "n_layers": len(decoder_layers),
             "n_heads": model.config.text_config.num_attention_heads,
-            "img_pad_id": proc.tokenizer.convert_tokens_to_ids("<|image_pad|>")}
+            "img_pad_id": proc.tokenizer.convert_tokens_to_ids(pad_tok),
+            "video_pad_id": proc.tokenizer.convert_tokens_to_ids("<|video_pad|>")}
+
+
+def _vid_build_inputs(p, ds_by_id, ctx, rank):
+    """Build the Qwen video grounding input for one prediction record, locate the <|video_pad|>
+    frame tokens, derive the frame-token grid (T,H,W), and flag each predicted window against the
+    GT. Mirrors _img_build_inputs but for time-span windows. Returns None to skip.
+
+    `p` is a prediction record from the generate stage. The dataset adapter normalizes it (it owns
+    its own record schema) into {video_path, query, pred_windows, gt_windows} via `video_item`;
+    `ds_by_id` is unused for video (predictions are self-contained)."""
+    import os
+    from qwen_vl_utils import process_vision_info
+    from ._qwen3vl_video import hallu_flags_windows
+    proc = ctx["proc"]; device = ctx["device"]; video_pad_id = ctx["video_pad_id"]
+    dataset = ctx["dataset"]; vcfg = dataset.video
+
+    response = p.get("response")
+    if not response:
+        return None
+    vi = dataset.video_item(p, ctx["video_dir"])
+    pred_windows = [list(w) for w in vi["pred_windows"]]
+    if not pred_windows:
+        return None
+    gt_windows = [list(w) for w in vi["gt_windows"]]
+    video_path = vi["video_path"]
+    if not os.path.exists(video_path):
+        return None
+    msgs = [{"role": "user", "content": [
+        {"type": "video", "video": f"file://{video_path}",
+         "min_pixels": vcfg["min_pixels"], "max_pixels": vcfg["max_pixels"], "fps": vcfg["fps"]},
+        {"type": "text", "text": vi["query"]},
+    ]}]
+    text = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+    try:
+        images, videos, video_kwargs = process_vision_info(
+            msgs, image_patch_size=16, return_video_kwargs=True, return_video_metadata=True)
+        if videos is not None:
+            videos, video_metadatas = zip(*videos)
+            videos, video_metadatas = list(videos), list(video_metadatas)
+        else:
+            video_metadatas = None
+        inputs = proc(text=text, images=images, videos=videos, video_metadata=video_metadatas,
+                      do_resize=False, return_tensors="pt", **video_kwargs).to(device)
+    except Exception as e:
+        print(f"[worker {rank}] skip {vi['video_path']}: processor {e}", flush=True)
+        return None
+    prompt_ids = inputs["input_ids"][0]
+    vgthw = inputs.get("video_grid_thw")
+    if vgthw is None or vgthw.shape[0] != 1:
+        return None
+    T_grid, H_grid, W_grid = (int(vgthw[0, i].item()) for i in range(3))
+    sms = getattr(ctx["model"].config.vision_config, "spatial_merge_size", 2)
+    T_tokens, H_tokens, W_tokens = T_grid, H_grid // sms, W_grid // sms
+    n_video_expected = T_tokens * H_tokens * W_tokens
+
+    prompt_cpu = prompt_ids.cpu().tolist()
+    video_idx_l = [k for k, t in enumerate(prompt_cpu) if t == video_pad_id]
+    if not video_idx_l or len(video_idx_l) != n_video_expected:
+        print(f"[worker {rank}] skip {vi['video_path']}: video tokens {len(video_idx_l)} != "
+              f"T*H*W={n_video_expected}", flush=True)
+        return None
+
+    duration_s = float(p.get("duration_s") or get_video_duration(video_path))
+    hallu_flags = hallu_flags_windows(pred_windows, gt_windows, vcfg["multi"])
+    return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": video_idx_l,
+            "predictions": pred_windows, "hallu_flags": hallu_flags, "inputs": inputs,
+            "meta": {"task": "video_span", "duration_s": duration_s, "T_tokens": T_tokens,
+                     "H_tokens": H_tokens, "W_tokens": W_tokens, "gt_windows": gt_windows}}
+
+
+def get_video_duration(video_path):
+    from decord import VideoReader, cpu
+    vr = VideoReader(video_path, ctx=cpu(0))
+    fps = vr.get_avg_fps()
+    return len(vr) / fps if fps > 0 else 0.0

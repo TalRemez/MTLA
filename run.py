@@ -11,7 +11,7 @@ hyperparameters. Three stages:
 hallucination AUROC + the benchmark's task metric. The score stage needs no GPU and no model.
 
 CLI flags override the config's score stage for quick sweeps:
-    --n 16   --agg sum   --slot first_digit
+    --n 16   --agg sum
 """
 import argparse
 
@@ -26,7 +26,6 @@ def main():
     ap.add_argument("--stage", required=True, choices=["generate", "extract", "score"])
     ap.add_argument("--n", type=int, default=None, help="override score.n_rollouts")
     ap.add_argument("--agg", default=None, help="override score.agg (max|sum|support|mean)")
-    ap.add_argument("--slot", default=None, help="override score.slot")
     ap.add_argument("--seeds", type=int, nargs="+", default=None,
                     help="generate/extract: rollout seeds to produce (e.g. --seeds 0 1 2 3); "
                          "overrides the stage's `seeds` in the config")
@@ -37,8 +36,6 @@ def main():
         cfg.score.n_rollouts = args.n
     if args.agg is not None:
         cfg.score.agg = args.agg
-    if args.slot is not None:
-        cfg.score.slot = args.slot
     if args.seeds is not None:
         cfg.generate.seeds = cfg.extract.seeds = args.seeds
 
@@ -47,7 +44,7 @@ def main():
     print(f"[MTLA] model={cfg.model}  dataset={cfg.dataset}  stage={args.stage}")
 
     if args.stage == "score":
-        # CPU-only; the model adapter supplies the signal slots (no model weights loaded).
+        # CPU-only; reads the saved [L,H] attention arrays (no model weights loaded).
         metrics = dataset.score(cfg, model)
         print_metrics(f"{cfg.dataset}/{cfg.model}", metrics)
         return

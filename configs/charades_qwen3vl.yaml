@@ -24,6 +24,5 @@ extract:
 score:
   n_rollouts: 1                                     # single rollout (set 16 to vote over seed 0..15)
   agg: max                                          # single-span: max-MTLA selection
-  slot: first_digit                                 # REQUIRED: first timestamp-digit token
 
 band: [8, 21]

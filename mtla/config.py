@@ -15,7 +15,7 @@ Example (configs/coco_internvl.yaml):
       features: runs/coco/features
     generate: {engine: vllm, gpus: [0,1,2,3,4,5,6,7]}
     extract:  {gpus: [0,1,2,3,4,5,6,7], n_items: 5000}
-    score:    {n_rollouts: 16, agg: sum, slot: attn_coord_mean}
+    score:    {n_rollouts: 16, agg: sum}
     band: [8, 21]            # inclusive layer band; null = all layers
 """
 from __future__ import annotations
@@ -32,7 +32,6 @@ class StageCfg:
     seeds: list = field(default_factory=lambda: [0])  # generate/extract: which rollout seeds to produce
     n_rollouts: int = 1                # score: how many seeds (seed 0..n_rollouts-1) to vote over
     agg: str = "max"                   # voting fusion: max | sum | support | mean
-    slot: str = "first_digit"          # attention slot (model-specific meaning)
     temperature: float = 0.7           # all runs sample at T=0.7 (vary seed per rollout)
 
 

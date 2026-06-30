@@ -24,6 +24,5 @@ extract:
 score:
   n_rollouts: 1                                    # single rollout (seed 0)
   agg: max
-  slot: all                                        # MTLA over ALL prediction tokens (label+coord); canonical
 
 band: [8, 21]                                      # middle-layer band (null = all layers)

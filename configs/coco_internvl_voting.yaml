@@ -27,6 +27,5 @@ extract:
 score:
   n_rollouts: 16                                   # vote over seed 0..15
   agg: sum                                         # COCO headline: sum-of-cluster fusion
-  slot: all                                        # MTLA over ALL prediction tokens (label+coord)
 
 band: [8, 21]
