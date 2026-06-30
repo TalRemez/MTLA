@@ -59,6 +59,21 @@ class QVHighlightsDataset(DatasetAdapter):
     def ground_truth(self, item):
         return item.get("relevant_windows", [])
 
+    def video_path(self, item, video_dir):
+        import os
+        return os.path.join(video_dir, f"{item['vid']}.mp4")
+
+    def make_prediction(self, item, response, model):
+        """Raw QVH item + model response -> a prediction record (multi-window generate schema)."""
+        from ..voting import tiou
+        windows = [list(s.region) for s in model.parse(response, task="video_span", multi=True)]
+        gt = [list(w) for w in self.ground_truth(item)]
+        mean_iou = (sum(max((tiou(w, g) for w in windows), default=0.0) for g in gt) / len(gt)
+                    if (windows and gt) else 0.0)
+        return {"qid": item["qid"], "vid": item["vid"], "query": item["query"],
+                "gt_windows": gt, "pred_windows": windows, "response": response,
+                "mean_iou": float(mean_iou), "is_correct": mean_iou >= 0.5}
+
     def video_item(self, p, video_dir):
         """Normalize one QVHighlights prediction record for the video extractor (multi-window)."""
         import os

@@ -48,7 +48,24 @@ class CharadesDataset(DatasetAdapter):
         return PROMPT.format(query=(item.get("caption") or item.get("query")).rstrip("."))
 
     def ground_truth(self, item):
-        return [item.get("start"), item.get("end")]
+        # raw item carries [start, end] in `timestamp`; a normalized record carries `gt_span`.
+        ts = item.get("timestamp") or item.get("gt_span")
+        return [float(ts[0]), float(ts[1])] if ts else None
+
+    def video_path(self, item, video_dir):
+        import os
+        return os.path.join(video_dir, item["video"])
+
+    def make_prediction(self, item, response, model):
+        """Raw Charades item + model response -> a prediction record (the generate-stage schema)."""
+        from ..utils import tiou
+        spans = model.parse(response, task="video_span", multi=False)
+        gt = self.ground_truth(item)
+        pred_span = list(spans[0].region) if spans else None
+        iou_val = tiou(pred_span, gt) if (pred_span and gt) else 0.0
+        return {"video": item["video"], "caption": item.get("caption") or item.get("query"),
+                "gt_span": gt, "pred_span": pred_span, "response": response,
+                "iou": float(iou_val), "is_correct": iou_val >= 0.5}
 
     def video_item(self, p, video_dir):
         """Normalize one Charades prediction record for the video extractor (single span)."""

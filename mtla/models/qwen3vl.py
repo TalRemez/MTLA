@@ -135,6 +135,15 @@ class Qwen3VLAdapter(ModelAdapter):
         ctx["task"] = task
         return ctx
 
+    # ---- video_span generation (HF; no attention hook) ----
+    def load_for_generate(self, gpu_id):
+        """Load Qwen3-VL for video generation (stock attention, no MTLA hook)."""
+        return _load_qwen_for_generate(gpu_id)
+
+    def generate_video(self, ctx, video_path, query, vcfg, seed=None, rank=0):
+        """Generate one video response (greedy when seed is None, else sampled T=0.7/top-p=0.95)."""
+        return _generate_video(ctx, video_path, query, vcfg, seed, rank)
+
     def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
         from ..mtla_attn import compute_mtla
         self._task = ctx.get("task", "image_det")
@@ -358,6 +367,57 @@ def _load_qwen_for_extract(gpu_id, task="image_det"):
             "n_heads": model.config.text_config.num_attention_heads,
             "img_pad_id": proc.tokenizer.convert_tokens_to_ids(pad_tok),
             "video_pad_id": proc.tokenizer.convert_tokens_to_ids("<|video_pad|>")}
+
+
+def _load_qwen_for_generate(gpu_id):
+    """Load Qwen3-VL + processor for generation. Stock attention (no MTLA hook) — generation
+    needs no attention readout, so this stays fast and faithful to the model's default forward."""
+    from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
+    device = f"cuda:{gpu_id}"
+    proc = AutoProcessor.from_pretrained(MODEL_ID)
+    model = Qwen3VLForConditionalGeneration.from_pretrained(
+        MODEL_ID, dtype=torch.bfloat16, device_map=device).eval()
+    return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "device": device}
+
+
+def _generate_video(ctx, video_path, query, vcfg, seed=None, rank=0):
+    """Run video preprocessing + model.generate for one clip; return the decoded response (or None
+    to skip). Deterministic preprocessing (fps/pixels from the dataset's `video` cfg)."""
+    from qwen_vl_utils import process_vision_info
+    proc = ctx["proc"]; model = ctx["model"]; device = ctx["device"]
+    msgs = [{"role": "user", "content": [
+        {"type": "video", "video": f"file://{video_path}",
+         "min_pixels": vcfg["min_pixels"], "max_pixels": vcfg["max_pixels"], "fps": vcfg["fps"]},
+        {"type": "text", "text": query},
+    ]}]
+    text = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+    try:
+        images, videos, video_kwargs = process_vision_info(
+            msgs, image_patch_size=16, return_video_kwargs=True, return_video_metadata=True)
+        if videos is not None:
+            videos, video_metadatas = zip(*videos)
+            videos, video_metadatas = list(videos), list(video_metadatas)
+        else:
+            video_metadatas = None
+        inputs = proc(text=text, images=images, videos=videos, video_metadata=video_metadatas,
+                      do_resize=False, return_tensors="pt", **video_kwargs).to(device)
+    except Exception as e:
+        print(f"[worker {rank}] skip {video_path}: processor {e}", flush=True)
+        return None
+    prompt_len = inputs["input_ids"].shape[1]
+    gen_kwargs = {"max_new_tokens": vcfg["max_new_tokens"]}
+    if seed is not None:
+        gen_kwargs.update(do_sample=True, temperature=0.7, top_p=0.95)
+    else:
+        gen_kwargs.update(do_sample=False)
+    try:
+        with torch.no_grad():
+            gen_ids = model.generate(**inputs, **gen_kwargs)
+    except Exception as e:
+        print(f"[worker {rank}] skip {video_path}: gen {e}", flush=True)
+        torch.cuda.empty_cache()
+        return None
+    return proc.tokenizer.decode(gen_ids[0, prompt_len:], skip_special_tokens=True).strip()
 
 
 def _vid_build_inputs(p, ds_by_id, ctx, rank):
