@@ -84,20 +84,27 @@ class InternVLAdapter(ModelAdapter):
         return "image_extract.py"
 
     # ---- HF-eager extraction (image_det) ----
-    # The per-image flow is shared with Qwen in mtla.mtla_attn.compute_image_mtla; this adapter
-    # supplies only the InternVL-specific pieces via the `ext_*` callbacks below.
+    # The per-item flow is shared with Qwen in mtla.mtla_attn.compute_mtla; this adapter supplies
+    # only the InternVL-specific pieces via the `ext_*` callbacks below.
     def load_for_extract(self, gpu_id):
         return _load_internvl_for_extract(gpu_id)
 
     def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
-        from ..mtla_attn import compute_image_mtla
-        return compute_image_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
+        from ..mtla_attn import compute_mtla
+        return compute_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
 
-    def ext_build_inputs(self, p, ds_item, ctx, rank):
+    def ext_build_inputs(self, p, ds_by_id, ctx, rank):
         """Tile the image, build the InternVL grounding prompt, re-insert the <ref>/<box>
-        tags vLLM stripped, and locate the <IMG_CONTEXT> tokens. Returns None to skip."""
-        import torch
+        tags vLLM stripped, locate the <IMG_CONTEXT> tokens, and flag hallucinations against the
+        GT. Returns None to skip."""
+        import torch, json
+        from .base import label_hallu_bbox
         tokenizer = ctx["tokenizer"]; device = ctx["device"]; img_pad_id = ctx["img_pad_id"]
+        if p.get("status") != "success" or not p.get("pred_bboxes"):
+            return None
+        ds_item = ds_by_id.get(p["id"])
+        if ds_item is None:
+            return None
         try:
             pixel_values, tile_grid, has_thumb = load_image_internvl(ds_item["image"])
             pixel_values = pixel_values.to(device, dtype=torch.bfloat16)
@@ -121,16 +128,19 @@ class InternVLAdapter(ModelAdapter):
         image_idx_l = [i for i, t in enumerate(prompt_cpu) if t == img_pad_id]
         if len(image_idx_l) != n_image_tokens:
             return None
-        return {"prompt_ids": prompt_ids, "response": response, "image_idx_l": image_idx_l,
+        gt_objs = json.loads(ds_item["conversations"][1]["value"])
+        hallu_flags = [label_hallu_bbox(pb["box"], pb["label"], gt_objs) for pb in p["pred_bboxes"]]
+        return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx_l,
+                "predictions": p["pred_bboxes"], "hallu_flags": hallu_flags,
                 "pixel_values": pixel_values,
                 "meta": {"tile_grid": tile_grid, "has_thumb": has_thumb, "n_image_tokens": n_image_tokens}}
 
-    def ext_token_ranges(self, response, pred_bboxes, tokenizer):
-        return find_pred_token_ranges(response, pred_bboxes, tokenizer)
+    def ext_token_ranges(self, response, predictions, tokenizer):
+        return find_pred_token_ranges(response, predictions, tokenizer)
 
-    def ext_region_mask(self, box, meta):
+    def ext_region_mask(self, prediction, meta):
         """Modality-token indices inside the proposal box M(R_p) (InternVL dynamic tiling)."""
-        return bbox_to_internvl_token_indices(box, meta["tile_grid"], meta["has_thumb"])[0]
+        return bbox_to_internvl_token_indices(prediction["box"], meta["tile_grid"], meta["has_thumb"])[0]
 
     def ext_forward_kwargs(self, full_ids, total_len, device, inp):
         import torch
@@ -139,16 +149,18 @@ class InternVLAdapter(ModelAdapter):
                 "image_flags": torch.ones(pv.shape[0], dtype=torch.long, device=device),
                 "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
 
-    def ext_obj_extras(self, meta):
-        return {"tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
+    def ext_obj_record(self, prediction, pred_idx, meta):
+        return {"pred_idx": pred_idx, "label": prediction["label"], "box": prediction["box"],
+                "tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
 
-    def ext_rec_extras(self, meta):
-        return {"tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
+    def ext_record(self, p, meta, objects, n_predictions):
+        return {"image_id": p["id"], "n_pred_bboxes": n_predictions, "n_extracted": len(objects),
+                "objects": objects, "tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
 
 
 # ============================================================================
 # HF-eager MTLA extraction implementation (image_det) for InternVL3.5.
-# Supplies the InternVL-specific pieces of mtla.mtla_attn.compute_image_mtla.
+# Supplies the InternVL-specific pieces of mtla.mtla_attn.compute_mtla.
 # ============================================================================
 import torch  # noqa: E402
 import torchvision.transforms as _T  # noqa: E402
@@ -259,7 +271,6 @@ def find_pred_token_ranges(response_text, pred_bboxes, tokenizer):
 
 def _load_internvl_for_extract(gpu_id):
     from transformers import AutoModel, AutoTokenizer, modeling_utils
-    import transformers.models.qwen3.modeling_qwen3 as q3_mod
     # transformers v5 compat shim (InternVL remote code expects an attr v5 dropped)
     if not hasattr(modeling_utils.PreTrainedModel, '_compat_done'):
         _orig = modeling_utils.PreTrainedModel.__getattr__
@@ -275,7 +286,7 @@ def _load_internvl_for_extract(gpu_id):
 
     state = MTLAState()
     install("transformers.models.qwen3.modeling_qwen3",
-            make_mtla_attention_forward(state, q3_mod.repeat_kv))
+            make_mtla_attention_forward(state))
 
     device = f"cuda:{gpu_id}"
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=True)

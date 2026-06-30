@@ -125,19 +125,28 @@ class Qwen3VLAdapter(ModelAdapter):
         raise NotImplementedError("video_span extraction is dataset-driven")
 
     # ---- HF-eager extraction (image_det) ----
-    # Shares the per-image flow with InternVL via mtla.mtla_attn.compute_image_mtla; this adapter
-    # supplies only the Qwen-specific pieces via the `ext_*` callbacks below.
+    # Shares the per-item flow with InternVL via mtla.mtla_attn.compute_mtla; this adapter supplies
+    # only the Qwen-specific pieces via the `ext_*` callbacks below. (Video uses the same flow with
+    # the video `ext_*` further down.)
     def load_for_extract(self, gpu_id):
         return _load_qwen_det_for_extract(gpu_id)
 
     def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
-        from ..mtla_attn import compute_image_mtla
-        return compute_image_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
+        from ..mtla_attn import compute_mtla
+        return compute_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
 
-    def ext_build_inputs(self, p, ds_item, ctx, rank):
+    def ext_build_inputs(self, p, ds_by_id, ctx, rank):
         """Build the Qwen detection prompt via the processor, derive the merged patch grid from
-        image_grid_thw, and locate the <|image_pad|> tokens. Returns None to skip."""
+        image_grid_thw, locate the <|image_pad|> tokens, and flag hallucinations against the GT.
+        Returns None to skip."""
+        import json
+        from .base import label_hallu_bbox
         proc = ctx["proc"]; device = ctx["device"]; img_pad_id = ctx["img_pad_id"]
+        if p.get("status") != "success" or not p.get("pred_bboxes"):
+            return None
+        ds_item = ds_by_id.get(p["id"])
+        if ds_item is None:
+            return None
         prompt_text = ds_item["conversations"][0]["value"].replace("<image>\n", "")
         try:
             img = _Image.open(ds_item["image"]).convert("RGB")
@@ -159,15 +168,18 @@ class Qwen3VLAdapter(ModelAdapter):
             print(f"[worker {rank}] WARN {p['id']}: image_idx_l={len(image_idx_l)} != "
                   f"grid_h*grid_w={grid_h * grid_w}", flush=True)
             return None
-        return {"prompt_ids": prompt_ids, "response": p["response"], "image_idx_l": image_idx_l,
+        gt_objs = json.loads(ds_item["conversations"][1]["value"])
+        hallu_flags = [label_hallu_bbox(pb["box"], pb["label"], gt_objs) for pb in p["pred_bboxes"]]
+        return {"prompt_ids": prompt_ids, "response": p["response"], "modality_idx_l": image_idx_l,
+                "predictions": p["pred_bboxes"], "hallu_flags": hallu_flags,
                 "inputs": inputs, "meta": {"grid_h": grid_h, "grid_w": grid_w}}
 
-    def ext_token_ranges(self, response, pred_bboxes, tokenizer):
-        return find_pred_token_ranges(response, pred_bboxes, tokenizer)
+    def ext_token_ranges(self, response, predictions, tokenizer):
+        return find_pred_token_ranges(response, predictions, tokenizer)
 
-    def ext_region_mask(self, box, meta):
+    def ext_region_mask(self, prediction, meta):
         """Modality-token indices inside the proposal box M(R_p) (Qwen fixed patch grid)."""
-        return _bbox_to_patch_indices(box, meta["grid_h"], meta["grid_w"])[0]
+        return _bbox_to_patch_indices(prediction["box"], meta["grid_h"], meta["grid_w"])[0]
 
     def ext_forward_kwargs(self, full_ids, total_len, device, inp):
         import torch
@@ -185,16 +197,18 @@ class Qwen3VLAdapter(ModelAdapter):
                 if extra > 0 else orig)
         return fk
 
-    def ext_obj_extras(self, meta):
-        return {"grid_h": int(meta["grid_h"]), "grid_w": int(meta["grid_w"])}
+    def ext_obj_record(self, prediction, pred_idx, meta):
+        return {"pred_idx": pred_idx, "label": prediction["label"], "box": prediction["box"],
+                "grid_h": int(meta["grid_h"]), "grid_w": int(meta["grid_w"])}
 
-    def ext_rec_extras(self, meta):
-        return {"grid_hw": (int(meta["grid_h"]), int(meta["grid_w"]))}
+    def ext_record(self, p, meta, objects, n_predictions):
+        return {"image_id": p["id"], "n_pred_bboxes": n_predictions, "n_extracted": len(objects),
+                "objects": objects, "grid_hw": (int(meta["grid_h"]), int(meta["grid_w"]))}
 
 
 # ============================================================================
 # HF-eager MTLA extraction implementation (image_det) for Qwen3-VL.
-# Supplies the Qwen-specific pieces of mtla.mtla_attn.compute_image_mtla.
+# Supplies the Qwen-specific pieces of mtla.mtla_attn.compute_mtla.
 # ============================================================================
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
@@ -280,11 +294,10 @@ def find_pred_token_ranges(response_text, pred_bboxes, tokenizer):
 
 def _load_qwen_det_for_extract(gpu_id):
     from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
-    import transformers.models.qwen3_vl.modeling_qwen3_vl as qwen3_mod
 
     state = MTLAState()
     install("transformers.models.qwen3_vl.modeling_qwen3_vl",
-            make_mtla_attention_forward(state, qwen3_mod.repeat_kv))
+            make_mtla_attention_forward(state))
 
     device = f"cuda:{gpu_id}"
     proc = AutoProcessor.from_pretrained(MODEL_ID)

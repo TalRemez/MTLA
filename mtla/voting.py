@@ -16,26 +16,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+# Spatial/temporal IoU live in mtla.utils (the shared primitives home); re-exported here so
+# `from mtla.voting import iou, tiou` and `nms_fuse(..., iou_fn=iou)` keep working.
+from .utils import iou, tiou
+
 CLUSTER_IOU = 0.5  # overlap threshold for "same prediction" across rollouts
-
-
-def iou(b1, b2) -> float:
-    """Spatial IoU of two ``[x1,y1,x2,y2]`` boxes."""
-    x1, y1 = max(b1[0], b2[0]), max(b1[1], b2[1])
-    x2, y2 = min(b1[2], b2[2]), min(b1[3], b2[3])
-    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
-    a1 = max(0.0, b1[2] - b1[0]) * max(0.0, b1[3] - b1[1])
-    a2 = max(0.0, b2[2] - b2[0]) * max(0.0, b2[3] - b2[1])
-    return inter / (a1 + a2 - inter + 1e-9)
-
-
-def tiou(a, b) -> float:
-    """Temporal IoU of two ``[t_start, t_end]`` spans."""
-    s = max(a[0], b[0])
-    e = min(a[1], b[1])
-    inter = max(0.0, e - s)
-    union = max(a[1], b[1]) - min(a[0], b[0])
-    return inter / union if union > 1e-9 else 0.0
 
 
 def _fuse(agg: str, rep_score: float, member_scores, n_seeds: int) -> float:

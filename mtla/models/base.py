@@ -29,6 +29,17 @@ class Prediction:
     label: str
 
 
+def label_hallu_bbox(pred_box, pred_label, gt_objs) -> bool:
+    """Image-det hallucination label: a predicted (box, label) is hallucinated if no same-label
+    GT box has IoU >= 0.5. Shared by the image_det adapters (InternVL, Qwen3-VL)."""
+    from ..utils import iou
+    pl = pred_label.strip().lower()
+    for go in gt_objs:
+        if str(go.get("label", "")).strip().lower() == pl and iou(pred_box, go["bbox_2d"]) >= 0.5:
+            return False
+    return True
+
+
 class ModelAdapter:
     """Base class for model-family adapters."""
 
@@ -53,44 +64,53 @@ class ModelAdapter:
         """Filename in mtla/stages/ for the (always HF-eager) extract stage."""
         raise NotImplementedError(f"{type(self).__name__} has no extract for task {task}")
 
-    # ---- HF-eager MTLA extraction (driven by mtla/stages/image_extract.py) ----
+    # ---- HF-eager MTLA extraction (driven by mtla/stages/{image,video}_extract.py) ----
     def load_for_extract(self, gpu_id: int) -> dict:
         """Load model + processor on `gpu_id`, install the MTLA attention forward, and return a
-        ctx dict (model, tokenizer, MTLAState, device, n_layers, n_heads, img_pad_id) the shared
-        driver passes back to `extract_one`."""
+        ctx dict (model, tokenizer, MTLAState, device, n_layers, n_heads, ...) the shared driver
+        passes back to `extract_one`."""
         raise NotImplementedError(f"{type(self).__name__} has no load_for_extract")
 
-    def extract_one(self, pred_record: dict, ds_by_id: dict, ctx: dict, svar_shift: bool, rank: int = 0):
-        """Compute MTLA for one image's predictions and return its saved .pt record (or None to
-        skip). Image-det adapters delegate to `mtla.mtla_attn.compute_image_mtla`, which drives the
-        shared per-image MTLA computation and calls back the `ext_*` methods below."""
+    def extract_one(self, p: dict, ds_by_id: dict, ctx: dict, svar_shift: bool, rank: int = 0):
+        """Compute MTLA for one item's predictions and return its saved .pt record (or None to
+        skip). Adapters delegate to `mtla.mtla_attn.compute_mtla`, which drives the shared per-item
+        MTLA computation (identical for image boxes and video windows) and calls back the `ext_*`
+        methods below."""
         raise NotImplementedError(f"{type(self).__name__} has no extract_one")
 
-    # ---- image_det model-specific callbacks invoked by mtla.mtla_attn.compute_image_mtla ----
-    # Each returns plain data; the shared driver owns the common flow (valid-pred filtering,
-    # query-position dedup, pred_specs, forward, buffer->record). Override these to add a model.
-    def ext_build_inputs(self, p, ds_item, ctx, rank):
-        """Preprocess image + build prompt. Return dict with keys: prompt_ids (1-D tensor),
-        response (str), image_idx_l (modality-token positions), meta (geometry), plus any keys
-        ext_forward_kwargs needs (e.g. pixel_values / inputs). Return None to skip."""
+    # ---- model/task-specific callbacks invoked by mtla.mtla_attn.compute_mtla ----
+    # Each returns plain data; the shared driver owns the common flow (Q_p assembly, query-position
+    # dedup, pred_specs, the single forward, buffer->record). Override these to add a model/task.
+    # A "prediction" is a bbox (image_det) or a [t0,t1] window (video_span).
+    def ext_build_inputs(self, p, ds_by_id, ctx, rank):
+        """Preprocess the input (image/video), build the prompt, locate the modality tokens, and
+        enumerate the predictions. Return a dict (or None to skip the item) with keys:
+          prompt_ids (1-D tensor), response (str), modality_idx_l (modality-token positions),
+          predictions (list of bbox/window), hallu_flags (list[bool], aligned with predictions),
+          meta (geometry), plus any keys ext_forward_kwargs needs (e.g. pixel_values / inputs)."""
         raise NotImplementedError
 
-    def ext_token_ranges(self, response, pred_bboxes, tokenizer):
-        """Per-prediction {first_label_tok, label_toks, coord_toks} (the tokens Q_p) or None."""
+    def ext_token_ranges(self, response, predictions, tokenizer):
+        """Per-prediction {first_label_tok, label_toks, coord_toks} (the tokens Q_p) or None.
+        Images: label + coordinate tokens. Video: the window's digit tokens (as `coord_toks`,
+        with `first_label_tok` = the first digit), so the driver's Q_p assembly is identical."""
         raise NotImplementedError
 
-    def ext_region_mask(self, box, meta):
-        """Modality-token indices inside the proposal box M(R_p)."""
+    def ext_region_mask(self, prediction, meta):
+        """Modality-token indices inside one prediction's proposal region M(R_p): image patches
+        inside a bbox, or the frame tokens inside a time span."""
         raise NotImplementedError
 
     def ext_forward_kwargs(self, full_ids, total_len, device, inp):
         """kwargs dict for the patched `model(**fk)` forward."""
         raise NotImplementedError
 
-    def ext_obj_extras(self, meta) -> dict:
-        """Per-object record fields beyond the shared ones (e.g. tile_grid / grid_h)."""
-        return {}
+    def ext_obj_record(self, prediction, pred_idx, meta) -> dict:
+        """Per-prediction record fields (the driver adds is_hallucinated / n_qp_tokens /
+        local_attention / first_digit). Images: {pred_idx, label, box, ...geometry}; video:
+        {pred_idx, window, ...geometry}."""
+        raise NotImplementedError
 
-    def ext_rec_extras(self, meta) -> dict:
-        """Top-level record fields beyond the shared ones."""
-        return {}
+    def ext_record(self, p, meta, objects, n_predictions) -> dict:
+        """Wrap the per-prediction objects into the top-level saved record (id keys + counts)."""
+        raise NotImplementedError
