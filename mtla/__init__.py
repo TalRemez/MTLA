@@ -12,6 +12,13 @@ Typical use, starting from extracted attention records (see ``examples/`` for ex
 
     auroc_mtla = auroc_from_records(objects)                           # MTLA (local_attention)
     auroc_fd   = auroc_from_records(objects, signal="first_digit")     # first-digit ablation
+
+Resolve a (model, dataset) pair to its adapters. ``import mtla`` itself stays light (the scoring
+and demo helpers above pull in only numpy); the adapter modules are imported lazily on the first
+``resolve`` / ``available_*`` call:
+
+    from mtla import resolve
+    model, dataset = resolve("qwen3vl", "coco")
 """
 from .score import (
     ALL_LAYERS,
@@ -27,6 +34,13 @@ from .mask import (
 )
 from .voting import iou, nms_fuse, tiou
 from .eval import auroc, auroc_from_records, coco_map
+from .registry import (
+    resolve,
+    register_model,
+    register_dataset,
+    available_models,
+    available_datasets,
+)
 
 __all__ = [
     "DEFAULT_BAND", "ALL_LAYERS", "LAYER_BANDS",
@@ -34,6 +48,8 @@ __all__ = [
     "bbox_to_patch_indices", "bbox_to_internvl_token_indices", "span_to_token_indices",
     "nms_fuse", "iou", "tiou",
     "auroc", "auroc_from_records", "coco_map",
+    "resolve", "register_model", "register_dataset",
+    "available_models", "available_datasets",
 ]
 
 __version__ = "0.1.0"

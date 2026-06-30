@@ -1,15 +1,11 @@
-"""Model-family adapters. `get_model_adapter(key)` resolves a config's `model:` field."""
+"""Model-family adapters.
+
+Each adapter lives in its own module and self-registers with `@register_model("<key>")`; the
+registry discovers them automatically (see `mtla.registry`). `get_model_adapter(key)` resolves a
+config's `model:` field.
+"""
 from .base import ModelAdapter, Prediction
+from ..registry import register_model, get_model_adapter, available_models
 
-
-def get_model_adapter(key: str) -> ModelAdapter:
-    if key == "internvl":
-        from .internvl import InternVLAdapter
-        return InternVLAdapter()
-    if key == "qwen3vl":
-        from .qwen3vl import Qwen3VLAdapter
-        return Qwen3VLAdapter()
-    raise KeyError(f"unknown model adapter '{key}' (have: internvl, qwen3vl)")
-
-
-__all__ = ["ModelAdapter", "Prediction", "get_model_adapter"]
+__all__ = ["ModelAdapter", "Prediction", "register_model", "get_model_adapter",
+           "available_models"]

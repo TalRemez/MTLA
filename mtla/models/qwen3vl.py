@@ -16,6 +16,7 @@ import json
 import re
 
 from .base import ModelAdapter, Prediction
+from ..registry import register_model
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 
@@ -100,6 +101,7 @@ def parse_bboxes(response: str) -> list:
     return out
 
 
+@register_model("qwen3vl")
 class Qwen3VLAdapter(ModelAdapter):
     model_id = MODEL_ID
     attn_module_path = "transformers.models.qwen3_vl.modeling_qwen3_vl"

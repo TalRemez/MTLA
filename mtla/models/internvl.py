@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 from .base import ModelAdapter, Prediction
+from ..registry import register_model
 from ..mask import bbox_to_internvl_token_indices
 
 MODEL_ID = "OpenGVLab/InternVL3_5-8B"
@@ -65,6 +66,7 @@ def parse_internvl(response: str) -> list:
     return preds
 
 
+@register_model("internvl")
 class InternVLAdapter(ModelAdapter):
     model_id = MODEL_ID
     # InternVL's LLM backbone is Qwen3; that is the module we monkeypatch for attention.

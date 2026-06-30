@@ -1,18 +1,10 @@
-"""Benchmark dataset adapters. `get_dataset_adapter(key)` resolves a config's `dataset:` field."""
+"""Benchmark dataset adapters.
+
+Each adapter lives in its own module and self-registers with `@register_dataset("<key>")`; the
+registry discovers them automatically (see `mtla.registry`). `get_dataset_adapter(key)` resolves
+a config's `dataset:` field.
+"""
 from .base import DatasetAdapter
+from ..registry import register_dataset, get_dataset_adapter, available_datasets
 
-
-def get_dataset_adapter(key: str) -> DatasetAdapter:
-    if key == "coco":
-        from .coco import CocoDataset
-        return CocoDataset()
-    if key == "qvhighlights":
-        from .qvhighlights import QVHighlightsDataset
-        return QVHighlightsDataset()
-    if key == "charades":
-        from .charades import CharadesDataset
-        return CharadesDataset()
-    raise KeyError(f"unknown dataset adapter '{key}' (have: coco, qvhighlights, charades)")
-
-
-__all__ = ["DatasetAdapter", "get_dataset_adapter"]
+__all__ = ["DatasetAdapter", "register_dataset", "get_dataset_adapter", "available_datasets"]

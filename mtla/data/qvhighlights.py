@@ -15,6 +15,7 @@ import sys
 from collections import defaultdict
 
 from .base import DatasetAdapter
+from ..registry import register_dataset
 from ..score import reduce_band
 from ..eval import auroc
 from ..voting import nms_fuse, tiou
@@ -43,6 +44,7 @@ def _seg_mtla(frame_sum_LHT, window, duration, n_tokens, band):
     return reduce_band(frame_sum_LHT[:, :, fs:fe].sum(axis=2), band)
 
 
+@register_dataset("qvhighlights")
 class QVHighlightsDataset(DatasetAdapter):
     name = "qvhighlights"
     task = "video_span"

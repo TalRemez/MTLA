@@ -12,6 +12,7 @@ import os
 from collections import defaultdict
 
 from .base import DatasetAdapter
+from ..registry import register_dataset
 from ..score import mtla_score
 from ..eval import auroc, coco_map
 from ..voting import nms_fuse
@@ -38,6 +39,7 @@ PROMPT = (
 )
 
 
+@register_dataset("coco")
 class CocoDataset(DatasetAdapter):
     name = "coco"
     task = "image_det"

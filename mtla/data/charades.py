@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from .base import DatasetAdapter
+from ..registry import register_dataset
 from ..score import reduce_band
 from ..eval import auroc
 
@@ -46,6 +47,7 @@ def _span_iou(a, b):
     return inter / union if union > 1e-9 else 0.0
 
 
+@register_dataset("charades")
 class CharadesDataset(DatasetAdapter):
     name = "charades"
     task = "video_span"
