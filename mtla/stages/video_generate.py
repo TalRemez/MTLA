@@ -25,16 +25,19 @@ import numpy as np
 
 
 def worker(rank, gpu_id, items, pred_dir, config_path, video_dir, seed):
+    # Pin this process to exactly one GPU BEFORE importing torch / initializing CUDA, so the
+    # assigned GPU is the only visible device (cuda:0). vLLM's LLM() otherwise grabs device 0 for
+    # every worker regardless of set_device, collapsing all workers onto one GPU.
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     from mtla.config import load_config
     from mtla.registry import resolve
-    import torch
-    torch.cuda.set_device(gpu_id)
     if seed:
         from transformers import set_seed
         set_seed(seed * 1000 + rank)  # reproducible per (seed, rank) rollout
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
-    ctx = model.load_for_generate(gpu_id, cfg.generate.engine)
+    ctx = model.load_for_generate(0, cfg.generate.engine)  # only one GPU visible -> cuda:0
     vcfg = dataset.video
     sample_seed = seed if seed else None
     print(f"[worker {rank}] generate model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "

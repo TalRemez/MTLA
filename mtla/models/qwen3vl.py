@@ -462,9 +462,8 @@ def _load_qwen_vllm_for_generate(gpu_id):
 
     vLLM only needs the decoded *text*; the extract stage re-runs the clip under HF-eager to read
     attention, so the response is the only thing that crosses between stages. We keep the HF
-    processor alongside to build the chat prompt identically to the HF path."""
-    import os
-    os.environ.setdefault("CUDA_VISIBLE_DEVICES", str(gpu_id))  # pin this engine to one GPU
+    processor alongside to build the chat prompt identically to the HF path. GPU pinning is done by
+    the worker (CUDA_VISIBLE_DEVICES set before torch import), so this engine sees one GPU as 0."""
     from vllm import LLM
     from transformers import AutoProcessor
     proc = AutoProcessor.from_pretrained(MODEL_ID)
