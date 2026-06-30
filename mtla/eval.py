@@ -38,16 +38,15 @@ def auroc(scores, is_hallucinated) -> float:
     return float(roc_auc_score(y, s))
 
 
-def auroc_from_records(records, slot: str = "attn_coord_mean",
-                       stat: str = "image_inside_sum", band=DEFAULT_BAND) -> float:
-    """AUROC straight from a list of extracted prediction records.
+def auroc_from_records(objects, signal: str = "local_attention", band=DEFAULT_BAND) -> float:
+    """AUROC straight from a list of extracted prediction objects.
 
-    Each record is a dict with ``record[slot][stat]`` a ``[L, H]`` attention aggregate and a
-    boolean ``record["is_hallucinated"]``. Use ``stat="image_inside_sum"`` for MTLA (default)
-    or ``stat="image_sum"`` for the SVAR baseline.
+    Each object is a dict with ``object[signal]`` a ``[L, H]`` attention array and a boolean
+    ``object["is_hallucinated"]``. ``signal="local_attention"`` (default) is MTLA;
+    ``signal="first_digit"`` reads the single first-coordinate-digit token.
     """
-    scores = [reduce_band(r[slot][stat], band) for r in records]
-    labels = [bool(r["is_hallucinated"]) for r in records]
+    scores = [reduce_band(o[signal], band) for o in objects]
+    labels = [bool(o["is_hallucinated"]) for o in objects]
     return auroc(scores, labels)
 
 

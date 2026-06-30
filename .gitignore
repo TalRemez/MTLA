@@ -36,6 +36,9 @@ results*/
 examples/output/
 *.tmp
 
+# Agent handover notes — local only, never push
+HANDOVER_AGENT.md
+
 # OS / editor
 .DS_Store
 .vscode/

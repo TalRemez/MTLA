@@ -1,17 +1,12 @@
-"""Core MTLA scoring: reduce a per-prediction attention tensor to one scalar.
+"""Core MTLA scoring: reduce a per-prediction attention array to one scalar.
 
-The whole method, once attention has been extracted, is a deterministic, parameter-free
-reduction. For a prediction ``p`` the extractor produces, for every transformer layer
-``l`` and head ``h``, the attention that ``p``'s output tokens pay to the input-modality
-tokens that fall *inside* its proposal region. We average over heads and over a fixed
-band of middle layers (paper eq. 4):
+The MTLA computation (`mtla.mtla_attn`) already did the modality-token reductions during
+extraction, saving each prediction's ``local_attention``: a ``[L, H]`` array of localized
+attention (the attention its tokens Q_p pay to the modality tokens inside its proposal region,
+summed over the region and meaned over Q_p — paper eqs. 2-3). This module finishes the score
+(paper eq. 4) by averaging over heads and over a fixed band of middle layers:
 
-    s(p) = mean_{l in band}  mean_h  A[l, h]
-
-where ``A`` is one of the extracted ``[L, H]`` aggregates:
-
-  * ``image_inside_sum``  -> MTLA  (Multi-Token Localized Attention, ours)
-  * ``image_sum``         -> GA / SVAR baseline (attention over *all* modality tokens)
+    s(p) = mean_{l in band}  mean_h  local_attention[l, h]
 
 A higher score means the prediction looks more grounded; a lower score flags a likely
 hallucination. See ``docs/METHOD.md`` for the full derivation.
@@ -75,41 +70,12 @@ def reduce_band(
     return float(scores[0]) if single else scores
 
 
-def apply_slot(record: dict, spec, band=DEFAULT_BAND) -> float:
-    """Reduce one signal from an extracted prediction `record` per a model's `SlotSpec`.
+def mtla_score(obj: dict, signal: str = "local_attention", band=DEFAULT_BAND) -> float:
+    """MTLA score for one extracted prediction object.
 
-    Lets dataset adapters read MTLA/SVAR without naming model-specific record keys: the model
-    adapter supplies the `SlotSpec` (block + stat, or the count-weighted "all" recipe).
-
-    spec.combine == "all": count-weighted mean over spec.parts = [(block, count_field), ...] of
-    each block's `spec.stat` array, then reduce_band. Otherwise: reduce_band of
-    record[spec.block][spec.stat]. Missing blocks fall back gracefully to 0.
+    `signal` selects which saved ``[L, H]`` array to reduce:
+      * ``local_attention`` (default) — localized attention meaned over all the prediction's
+        tokens Q_p; this is MTLA.
+      * ``first_digit`` — the same, read at only the first coordinate digit (x1).
     """
-    if spec is None:
-        return 0.0
-    if spec.combine == "all":
-        num = None
-        denom = 0
-        for block, count_field in spec.parts:
-            blk = record.get(block)
-            if blk is None or spec.stat not in blk:
-                continue
-            cnt = record.get(count_field, 0) or 0
-            arr = np.asarray(blk[spec.stat], dtype=np.float32) * cnt
-            num = arr if num is None else num + arr
-            denom += cnt
-        if num is None:
-            return 0.0
-        return reduce_band(num / max(denom, 1), band)
-    blk = record.get(spec.block, {})
-    return reduce_band(blk.get(spec.stat), band)
-
-
-def mtla_score(record: dict, slot: str = "attn_coord_mean", band=DEFAULT_BAND) -> float:
-    """MTLA score for one extracted prediction record (inside-region attention)."""
-    return reduce_band(record[slot]["image_inside_sum"], band)
-
-
-def svar_score(record: dict, slot: str = "attn_coord_mean", band=DEFAULT_BAND) -> float:
-    """SVAR / Global-Attention baseline for one record (attention over all tokens)."""
-    return reduce_band(record[slot]["image_sum"], band)
+    return reduce_band(obj[signal], band)

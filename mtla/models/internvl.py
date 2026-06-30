@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import re
 
-from .base import ModelAdapter, Prediction, SlotSpec
+from .base import ModelAdapter, Prediction
 from ..mask import bbox_to_internvl_token_indices
 
 MODEL_ID = "OpenGVLab/InternVL3_5-8B"
 IMG_CONTEXT_TOK = "<IMG_CONTEXT>"
 NUM_IMAGE_TOKEN_PER_TILE = 16 * 16  # 256, InternVL per-tile patches after pixel-shuffle 0.5
-VARIANTS = ("first", "label", "coord", "first_digit")
 
 PROMPT_TMPL = (
     "Please detect all instances of {cats} in the image. "
@@ -75,27 +74,6 @@ class InternVLAdapter(ModelAdapter):
     def parse(self, response: str, task: str = None, **kw) -> list:
         return parse_internvl(response)
 
-    def region_mask(self, region, meta: dict):
-        """region = bbox [x1,y1,x2,y2] in [0,1000]; meta has tile_grid + has_thumb."""
-        return bbox_to_internvl_token_indices(region, meta["tile_grid"], meta["has_thumb"])
-
-    # ---- signal slots in the saved record (image_det) ----
-    # MTLA = inside-region attention; "all" = count-weighted mean over label+coord tokens
-    # (the canonical recipe). SVAR = global attention read at the first coord digit (x1):
-    # InternVL emits `label[[box1],[box2],...]` so the label token is shared across a category's
-    # boxes; the fair per-box SVAR token is x1 (attn_first_digit).
-    def mtla_slot(self, task: str, slot: str = "all") -> SlotSpec:
-        if slot in ("all", "attn_all"):
-            return SlotSpec(stat="image_inside_sum", combine="all",
-                            parts=[("attn_label_mean", "n_label_toks"),
-                                   ("attn_coord_mean", "n_coord_toks")])
-        block = {"coord": "attn_coord_mean", "label": "attn_label_mean",
-                 "first": "attn", "first_digit": "attn_first_digit"}.get(slot, slot)
-        return SlotSpec(stat="image_inside_sum", block=block)
-
-    def svar_slot(self, task: str) -> SlotSpec:
-        return SlotSpec(stat="image_sum", block="attn_first_digit")
-
     # ---- stage scripts ----
     def generate_script(self, task: str, engine: str) -> str:
         return {"vllm": "internvl_generate.py", "hf": "internvl_generate_hf.py"}[engine]
@@ -104,14 +82,14 @@ class InternVLAdapter(ModelAdapter):
         return "image_extract.py"
 
     # ---- HF-eager extraction (image_det) ----
-    # The per-image flow is shared with Qwen in mtla.extract.compute_image_mtla; this adapter
+    # The per-image flow is shared with Qwen in mtla.mtla_attn.compute_image_mtla; this adapter
     # supplies only the InternVL-specific pieces via the `ext_*` callbacks below.
     def load_for_extract(self, gpu_id):
         return _load_internvl_for_extract(gpu_id)
 
     def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
-        from ..extract import compute_image_mtla
-        return compute_image_mtla(self, p, ds_by_id, ctx, svar_shift, VARIANTS, rank)
+        from ..mtla_attn import compute_image_mtla
+        return compute_image_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
 
     def ext_build_inputs(self, p, ds_item, ctx, rank):
         """Tile the image, build the InternVL grounding prompt, re-insert the <ref>/<box>
@@ -148,39 +126,9 @@ class InternVLAdapter(ModelAdapter):
     def ext_token_ranges(self, response, pred_bboxes, tokenizer):
         return find_pred_token_ranges(response, pred_bboxes, tokenizer)
 
-    def ext_classify_keys(self, prompt_cpu, image_idx_l, specials_ids, tokenizer, prompt_len, total_len):
-        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
-        user_id = tokenizer.convert_tokens_to_ids("user")
-        assistant_id = tokenizer.convert_tokens_to_ids("assistant")
-        user_turn_start = 0; assistant_start = None
-        for k in range(len(prompt_cpu) - 1):
-            if prompt_cpu[k] == im_start_id and prompt_cpu[k + 1] == user_id:
-                user_turn_start = k + 2
-            if prompt_cpu[k] == im_start_id and prompt_cpu[k + 1] == assistant_id:
-                assistant_start = k
-        image_set = set(image_idx_l)
-        system = []; task = []; spc = []; resp = []
-        for i, tid in enumerate(prompt_cpu):
-            if i in image_set:
-                continue
-            if tid in specials_ids:
-                spc.append(i); continue
-            if i < user_turn_start:
-                system.append(i)
-            elif assistant_start is not None and i >= assistant_start:
-                resp.append(i)
-            else:
-                task.append(i)
-        for i in range(prompt_len, total_len):
-            resp.append(i)
-        return {"system": system, "task": task, "specials": spc, "response": resp,
-                "user_turn_start": user_turn_start, "assistant_start": assistant_start}
-
     def ext_region_mask(self, box, meta):
-        return bbox_to_internvl_token_indices(box, meta["tile_grid"], meta["has_thumb"])
-
-    def ext_mentions(self, label, tokenizer, prompt_cpu, user_turn_start, end_pos):
-        return find_label_token_positions(label, tokenizer, prompt_cpu, user_turn_start, end_pos)
+        """Modality-token indices inside the proposal box M(R_p) (InternVL dynamic tiling)."""
+        return bbox_to_internvl_token_indices(box, meta["tile_grid"], meta["has_thumb"])[0]
 
     def ext_forward_kwargs(self, full_ids, total_len, device, inp):
         import torch
@@ -189,24 +137,22 @@ class InternVLAdapter(ModelAdapter):
                 "image_flags": torch.ones(pv.shape[0], dtype=torch.long, device=device),
                 "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
 
-    def ext_obj_extras(self, meta, tr):
-        return {"n_image_tokens": meta["n_image_tokens"], "tile_grid": meta["tile_grid"],
-                "has_thumb": meta["has_thumb"]}
+    def ext_obj_extras(self, meta):
+        return {"tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
 
     def ext_rec_extras(self, meta):
-        return {"tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"],
-                "n_image_tokens": meta["n_image_tokens"]}
+        return {"tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
 
 
 # ============================================================================
-# HF-eager extraction implementation (lifted verbatim from the validated
-# internvl_extract.py; wired to the shared hook in mtla.extract).
+# HF-eager MTLA extraction implementation (image_det) for InternVL3.5.
+# Supplies the InternVL-specific pieces of mtla.mtla_attn.compute_image_mtla.
 # ============================================================================
 import torch  # noqa: E402
 import torchvision.transforms as _T  # noqa: E402
 from torchvision.transforms.functional import InterpolationMode as _Interp  # noqa: E402
 from PIL import Image as _Image  # noqa: E402
-from ..extract import MTLAState, make_mtla_attention_forward, install  # noqa: E402
+from ..mtla_attn import MTLAState, make_mtla_attention_forward, install  # noqa: E402
 
 _IMAGENET_MEAN = (0.485, 0.456, 0.406); _IMAGENET_STD = (0.229, 0.224, 0.225)
 
@@ -309,23 +255,6 @@ def find_pred_token_ranges(response_text, pred_bboxes, tokenizer):
     return out
 
 
-def find_label_token_positions(label, tokenizer, prompt_token_ids, user_turn_start, end_pos):
-    user_token_ids = prompt_token_ids[user_turn_start:end_pos]
-    user_text = tokenizer.decode(user_token_ids, skip_special_tokens=False)
-    pat = re.compile(re.escape(label), flags=re.IGNORECASE)
-    matches = list(pat.finditer(user_text))
-    if not matches:
-        return []
-    enc = tokenizer(user_text, add_special_tokens=False, return_offsets_mapping=True)
-    offsets = enc["offset_mapping"]
-    positions = []
-    for m in matches:
-        for ti, (ts, te) in enumerate(offsets):
-            if ts < m.end() and te > m.start():
-                positions.append(user_turn_start + ti)
-    return sorted(set(positions))
-
-
 def _load_internvl_for_extract(gpu_id):
     from transformers import AutoModel, AutoTokenizer, modeling_utils
     import transformers.models.qwen3.modeling_qwen3 as q3_mod
@@ -344,7 +273,7 @@ def _load_internvl_for_extract(gpu_id):
 
     state = MTLAState()
     install("transformers.models.qwen3.modeling_qwen3",
-            make_mtla_attention_forward(state, q3_mod.repeat_kv, VARIANTS))
+            make_mtla_attention_forward(state, q3_mod.repeat_kv))
 
     device = f"cuda:{gpu_id}"
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=True)
@@ -357,21 +286,9 @@ def _load_internvl_for_extract(gpu_id):
     state.lang_attn_ids = {id(L.self_attn) for L in decoder_layers}
     state.lang_attn_order = [id(L.self_attn) for L in decoder_layers]
 
-    img_pad_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOK)
-    special_token_strings = ["<|im_start|>", "<|im_end|>", "<img>", "</img>", "<IMG_CONTEXT>",
-                             "<quad>", "</quad>", "<ref>", "</ref>", "<box>", "</box>", "<|endoftext|>"]
-    specials_ids = set()
-    for s in special_token_strings:
-        tid = tokenizer.convert_tokens_to_ids(s)
-        if isinstance(tid, int) and tid >= 0:
-            specials_ids.add(tid)
-    for tid in (tokenizer.all_special_ids or []):
-        if tid != img_pad_id:
-            specials_ids.add(int(tid))
-
     return {"model": model, "tokenizer": tokenizer, "state": state, "device": device,
             "n_layers": len(decoder_layers),
             "n_heads": model.language_model.config.num_attention_heads,
-            "img_pad_id": img_pad_id, "specials_ids": specials_ids}
+            "img_pad_id": tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOK)}
 
 

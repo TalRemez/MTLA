@@ -12,7 +12,7 @@ import os
 from collections import defaultdict
 
 from .base import DatasetAdapter
-from ..score import apply_slot
+from ..score import mtla_score
 from ..eval import auroc, coco_map
 from ..voting import nms_fuse
 
@@ -75,15 +75,14 @@ class CocoDataset(DatasetAdapter):
             "--n_images", str(cfg.extract.n_items or 5000),
         ]
 
-    # ---- scoring (signal slots come from the model adapter; returns a dict, no prints) ----
-    def _load_seed(self, features_dir, predictions_path, band, mtla_spec, svar_spec):
+    # ---- scoring (MTLA = reduce_band(local_attention); returns a dict, no prints) ----
+    def _load_seed(self, features_dir, predictions_path, band):
         preds = {r["id"]: r for r in json.load(open(predictions_path))}
         attn = {}
         for r in self.load_shards(features_dir):
             for o in r["objects"]:
                 attn[(r["image_id"], o["pred_idx"])] = (
-                    apply_slot(o, mtla_spec, band),   # MTLA (inside-region)
-                    apply_slot(o, svar_spec, band),   # SVAR (global baseline)
+                    mtla_score(o, band=band),
                     bool(o.get("is_hallucinated", False)),
                 )
         return preds, attn
@@ -92,20 +91,17 @@ class CocoDataset(DatasetAdapter):
         band = cfg.band_indices()
         n = cfg.score.n_rollouts
         agg = cfg.score.agg
-        mtla_spec = model.mtla_slot(self.task, cfg.score.slot)
-        svar_spec = model.svar_slot(self.task)
         predictions_root = cfg.path("predictions")
         coco_gt = cfg.path("coco_gt")
 
         data = [self._load_seed(os.path.join(cfg.path("features"), f"seed{s}"),
                                 os.path.join(predictions_root, f"seed{s}", "predictions.json"),
-                                band, mtla_spec, svar_spec)
+                                band)
                 for s in range(n)]
 
         # single-seed hallucination AUROC
         attn0 = data[0][1]
-        auroc_mtla = auroc([v[0] for v in attn0.values()], [v[2] for v in attn0.values()]) if attn0 else float("nan")
-        auroc_svar = auroc([v[1] for v in attn0.values()], [v[2] for v in attn0.values()]) if attn0 else float("nan")
+        auroc_mtla = auroc([v[0] for v in attn0.values()], [v[1] for v in attn0.values()]) if attn0 else float("nan")
 
         # N-seed voting mAP
         gt = json.load(open(coco_gt))
@@ -123,7 +119,7 @@ class CocoDataset(DatasetAdapter):
                     box, label = pb.get("box"), (pb.get("label") or "").strip().lower()
                     if not (label and box and len(box) == 4):
                         continue
-                    sc = attn.get((iid, pi), (0.0, 0.0, False))[0]
+                    sc = attn.get((iid, pi), (0.0, False))[0]
                     by_label[label].append((box, sc, s))
             W, H = img_wh.get(iid, (1, 1))
             for label, cands in by_label.items():
@@ -139,6 +135,6 @@ class CocoDataset(DatasetAdapter):
                         "score": float(sc),
                     })
 
-        return {"auroc_mtla": auroc_mtla, "auroc_svar": auroc_svar,
+        return {"auroc_mtla": auroc_mtla,
                 "map": coco_map(detections, coco_gt), "n_dets": len(detections),
                 "n_rollouts": n, "agg": agg}

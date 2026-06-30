@@ -4,7 +4,7 @@
 dataset's task family is one the model supports — so an unsupported pairing fails fast with a
 clear message rather than deep inside a stage. This is the single entry point `run.py` uses to
 turn a config's `model:` / `dataset:` keys into the objects that carry every task-specific
-function (parse, region_mask, mtla_slot/svar_slot, stage scripts, score).
+function (parse, the MTLA extraction callbacks, stage scripts, score).
 """
 from __future__ import annotations
 

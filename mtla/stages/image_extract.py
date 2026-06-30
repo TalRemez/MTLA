@@ -6,7 +6,7 @@ work is delegated to the resolved ModelAdapter:
   - `adapter.load_for_extract(gpu_id)` -> ctx (model, tokenizer/processor, n_layers/heads, the
     MTLAState with the MTLA attention forward installed).
   - `adapter.extract_one(pred_record, ds_by_id, ctx, svar_shift)` -> the per-image .pt record
-    (or None to skip). This delegates to `mtla.extract.compute_image_mtla`, the shared per-image
+    (or None to skip). This delegates to `mtla.mtla_attn.compute_image_mtla`, the shared per-image
     MTLA computation.
 
 Reads predictions.json (from the generate stage), writes shard{rank}.pt feature shards.
