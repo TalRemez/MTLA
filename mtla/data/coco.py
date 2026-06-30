@@ -54,6 +54,21 @@ class CocoDataset(DatasetAdapter):
     def ground_truth(self, item):
         return json.loads(item["conversations"][1]["value"])
 
+    def make_prediction(self, item, response, model, truncated=False):
+        """Raw COCO item + model response -> a prediction record (the generate-stage schema the
+        extract stage reads back). `model.parse` turns the response into boxes+labels; an empty
+        response (a worker error) yields a status="error" record with no boxes."""
+        preds = model.parse(response, task="image_det") if response else []
+        return {
+            "status": "success" if response else "error",
+            "id": item.get("id"),
+            "categories": item.get("categories", []),
+            "gt_response": item["conversations"][1]["value"] if item.get("conversations") else "[]",
+            "pred_bboxes": [{"box": p.region, "label": p.label, "score": 1.0} for p in preds],
+            "response": response,
+            "truncated": bool(truncated),
+        }
+
     # ---- GPU stages: the MODEL adapter names the script (so COCO is model-agnostic) ----
     # Every stage script is config-driven: it reloads the config, resolves (model, dataset) from
     # the registry, and asks this adapter for its items via `load_items(cfg)`. So the command is

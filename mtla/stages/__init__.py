@@ -2,14 +2,14 @@
 
 Large, GPU-only, paper-faithful scripts kept standalone (not imported) and invoked as
 subprocesses by `run_stage(...)`. Dataset adapters' `stage_cmd` declare which script + args each
-stage needs. The shared extract drivers are config-driven (`--config <yaml> --seed <K>`): they
-resolve the (model, dataset) adapters and delegate the model/task specifics to `ext_*` callbacks.
+stage needs. All four shared drivers are config-driven (`--config <yaml> --seed <K>`): they
+resolve the (model, dataset) adapters and delegate the model/task specifics to adapter callbacks
+(`ext_*` for extract; `make_vllm_prep` / `make_hf_generate` / `generate_video` for generate).
 
+  image_generate.py         shared image_det generation (any image model; vLLM or HF)
   image_extract.py          shared image_det MTLA extraction (any image model) — HF eager
+  video_generate.py         shared video_span generation (any video model; vLLM or HF)
   video_extract.py          shared video_span MTLA extraction (any video model) — HF eager
-  internvl_generate.py      COCO detection generation, InternVL (vLLM; engine: vllm)
-  internvl_generate_hf.py   COCO detection generation, InternVL (HF; engine: hf)
-  qwen3vl_det_generate.py   COCO detection generation, Qwen3-VL (vLLM)
 
   qwen3vl_video.py          LEGACY QVHighlights generate|extract monolith (kept as the parity
   qwen3vl_charades.py       LEGACY Charades-STA   generate|extract monolith   reference for the
