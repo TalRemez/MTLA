@@ -35,8 +35,7 @@ scripts at it with the `--dataset` / `--ann` / `--video_dir` / `--coco_gt` flags
 ## Other benchmarks in the paper
 
 - **Charades-STA** (single-span video grounding): https://github.com/jiyanggao/TALL — same
-  Qwen3-VL pipeline as QVHighlights, scored by R@1@IoU{0.3,0.5,0.7}. Use `--slot first_digit`
-  and `--agg max`.
+  Qwen3-VL pipeline as QVHighlights, scored by R@1@IoU{0.3,0.5,0.7}. Use `--agg max`.
 - **AudioSet-Strong** (sound-event detection): audio grounding with Audio Flamingo 3, scored
   by PSDS1 (DCASE Task 4). All-layers reduction (28-layer model). Headline numbers in
   [`RESULTS.md`](RESULTS.md); the audio extraction maps time→token at a fixed 25 Hz.

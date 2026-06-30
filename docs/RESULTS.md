@@ -35,7 +35,7 @@ How well the score separates grounded from hallucinated predictions.
 **QVHighlights** (Qwen3-VL-8B, N=16, NMS-MTLA): mAP **36.6**, R@1@0.5 **55.1**,
 R@1@0.7 **39.5** (SVAR baseline mAP 28.1).
 
-**Charades-STA** (Qwen3-VL-8B, N=16, max selection, `--slot first_digit`): R@1@0.3 **76.3**,
+**Charades-STA** (Qwen3-VL-8B, N=16, max selection): R@1@0.3 **76.3**,
 R@1@0.5 **55.4**, R@1@0.7 **29.4**, mIoU 0.508 (SVAR R@1@0.5 43.8).
 
 **AudioSet-Strong** (Audio Flamingo 3, N=16, PSDS1 @ DCASE Task 4): NMS-MTLA **0.255**,

@@ -89,11 +89,12 @@ The package is small and modular:
 
 | Module | What it does |
 |---|---|
-| `mtla.score` | `reduce_band`, `mtla_score`, `svar_score` — the layer-band + head reduction |
+| `mtla.score` | `reduce_band`, `mtla_score` — the layer-band + head reduction |
 | `mtla.mask` | map a box / time-span to the modality-token indices inside it (`M(R_p)`) |
-| `mtla.extract` | the eager-attention monkeypatch that captures per-token attention |
+| `mtla.mtla_attn` | the eager-attention monkeypatch + per-item driver that capture localized attention |
 | `mtla.voting` | self-consistency NMS fusion across rollouts (`max` / `sum` / ...) |
 | `mtla.eval` | hallucination AUROC and COCO mAP |
+| `mtla.utils` | shared primitives: `iou` / `tiou`, `repeat_kv`, token-span helpers |
 | `mtla.viz` | attention heatmap overlays |
 
 ## Full reproduction — one config-driven pipeline
@@ -123,49 +124,65 @@ COCO runs on **either model** — same `CocoDataset`, just a different `model:` 
 datasets are independent adapters (see [Extending](#extending-add-a-new-model-or-task)). Every
 benchmark uses the same **decoupled** stages (`generate` may use vLLM or HF; `extract` is always
 HF-eager). `configs/coco_internvl_voting.yaml` ships the 16-seed COCO setup ready to run. CLI flags
-override any config for quick sweeps: `--seeds 0 1 2 3`, `--n 16`, `--agg sum`, `--slot first_digit`.
+override any config for quick sweeps: `--seeds 0 1 2 3`, `--n 16`, `--agg sum`.
 Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
 
 ## Extending: add a new model or task
 
 Models and datasets are **independent registries**; any valid (model × dataset) pair runs from a
-config. A model adapter never appears in a dataset adapter and vice versa — the dataset asks the
-model, per `task` family (`"image_det"` | `"video_span"`), how to parse, mask, and read signals.
+config. You ask for a `(model, dataset)` pair and, if either is missing, the error tells you how
+to add it. A model adapter never appears in a dataset adapter and vice versa — the dataset asks
+the model, per `task` family (`"image_det"` | `"video_span"`), how to parse, mask, and read its
+attention.
 
-**A new model family** (`mtla/models/<name>.py`): subclass `ModelAdapter`, declare `tasks`,
-`model_id`, `attn_module_path` (the module whose `eager_attention_forward` to hook), and per task
-implement `parse(response, task)` (-> `[Prediction]`), `region_mask` (delegate to `mtla.mask`),
-`mtla_slot`/`svar_slot` (return a `SlotSpec` describing how the saved record encodes each signal),
-and `generate_script`/`extract_script` (which `mtla/stages/` script runs each stage). Register it
-in `mtla/models/__init__.py`. See `mtla/models/internvl.py` for the smallest complete example.
+Adapters **self-register** with a decorator and are auto-discovered, so adding one is just a new
+file — no central registry to edit:
 
-**A new task / dataset** (`mtla/data/<name>.py`): subclass `DatasetAdapter`, set `task`, and
-implement `load_items`, `prompt`, `ground_truth`, and `score(cfg, model)` (read signals via
-`model.mtla_slot`/`svar_slot` + `mtla.apply_slot`, reuse `mtla.nms_fuse` + `mtla.eval`). The base
-`generate`/`extract` dispatch to the model's stage scripts. Register it in `mtla/data/__init__.py`
-and add a `configs/<name>.yaml`.
+```python
+from mtla.registry import register_model
+@register_model("myvlm")
+class MyVLMAdapter(ModelAdapter):
+    tasks = ("image_det",)
+    ...
+```
+
+```python
+from mtla import resolve
+model, dataset = resolve("myvlm", "coco")   # unknown key -> error listing what's available
+```
+
+**A new model family** (`mtla/models/<name>.py`): subclass `ModelAdapter`, decorate it with
+`@register_model("<name>")`, declare `tasks` / `model_id` / `attn_module_path`, implement `parse`,
+the `ext_*` extraction callbacks (build inputs + enumerate predictions, find each prediction's
+tokens `Q_p`, mask the proposal region, assemble the record), and `generate_script`/`extract_script`.
+
+**A new task / dataset** (`mtla/data/<name>.py`): subclass `DatasetAdapter`, decorate it with
+`@register_dataset("<name>")`, set `task`, and implement `load_items(cfg)` (owns file I/O),
+`ground_truth`, `score(cfg, model)` (reuse `mtla.reduce_band` + `mtla.nms_fuse` + `mtla.eval`), and
+`stage_cmd`. Add a `configs/<name>.yaml`.
 
 **Decoupled stages.** Every stage is split: `generate` (vLLM or HF) writes `predictions.json`;
 `extract` (always HF-eager) re-runs the model to capture attention. vLLM can't expose attention,
 so this split is what lets generation stay fast while extraction stays faithful.
 
-That's it — `python run.py --config configs/<name>.yaml --stage score` now works. See
-`mtla/data/charades.py` for the smallest complete example.
+Full walkthrough with the exact contract and the smallest examples: [`docs/EXTENDING.md`](docs/EXTENDING.md).
 
 ## Repository layout
 
 ```
 mtla/                  core package
-  score / mask / voting / eval / extract / viz   parameter-free MTLA building blocks
+  mtla_attn.py         the MTLA computation: eager-attn monkeypatch + per-item driver (image+video)
+  score / mask / voting / eval / utils / viz     parameter-free MTLA building blocks
+  registry.py          @register_model / @register_dataset + resolve(model, dataset)
   config.py            YAML -> RunConfig
   models/              model adapters: internvl, qwen3vl  (parse, region mask, attn hook)
-  data/                dataset adapters: coco, qvhighlights, charades  (load, prompt, score)
-  stages/              validated GPU generate/extract scripts the adapters drive
+  data/                dataset adapters: coco, qvhighlights, charades  (load, score)
+  stages/              GPU drivers: image_extract / video_extract + per-model generate scripts
 run.py                 unified CLI: --config <yaml> --stage {generate,extract,score}
 configs/               one YAML per model x dataset
 examples/demo.py       CPU demo on the bundled fixture (no GPU, no download)
 fixtures/              small committed demo fixture
-docs/                  METHOD.md, DATA.md, RESULTS.md
+docs/                  METHOD.md, DATA.md, RESULTS.md, EXTENDING.md
 third_party/           vendored Moment-DETR evaluation (MIT)
 ```
 

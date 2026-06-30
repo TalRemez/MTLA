@@ -78,7 +78,7 @@ each kept prediction from its cluster's MTLA values (`mtla.nms_fuse`):
 | Paper concept | Code |
 |---|---|
 | `M(R_p)` mask (image / tiling / temporal) | `mtla/mask.py` |
-| LA / MTLA extraction (eager-attention hook) | `mtla/extract.py` (+ per-model adapters in `mtla/models/`, GPU drivers in `mtla/stages/`) |
-| Layer-band + head reduction `s(p)` | `mtla/score.py` (`reduce_band`, `mtla_score`, `svar_score`) |
+| LA / MTLA extraction (eager-attention hook) | `mtla/mtla_attn.py` (+ per-model adapters in `mtla/models/`, GPU drivers in `mtla/stages/`) |
+| Layer-band + head reduction `s(p)` | `mtla/score.py` (`reduce_band`, `mtla_score`) |
 | Self-consistency voting / NMS fusion | `mtla/voting.py` (`nms_fuse`) |
 | AUROC / COCO mAP | `mtla/eval.py` |
