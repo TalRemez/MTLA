@@ -66,7 +66,7 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    gpus = cfg.extract.gpus or [0]
+    gpus = cfg.stage_gpus("extract")
     video_dir = cfg.path("video_dir")
     pred_file = os.path.join(cfg.pred_dir(args.seed), "predictions.json")
     out_dir = cfg.feat_dir(args.seed)

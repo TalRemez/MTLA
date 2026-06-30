@@ -6,7 +6,7 @@ predicted this time span), did it actually look inside the region it claims?* Pr
 whose tokens attend to evidence inside their proposal region are grounded; those that attend
 elsewhere are likely hallucinations.
 
-Typical use, starting from extracted attention records (see ``examples/`` for extraction):
+Typical use, starting from the attention records the extract stage writes:
 
     from mtla import mtla_score, auroc_from_records
 
@@ -14,7 +14,7 @@ Typical use, starting from extracted attention records (see ``examples/`` for ex
     auroc_fd   = auroc_from_records(objects, signal="first_digit")     # first-digit ablation
 
 Resolve a (model, dataset) pair to its adapters. ``import mtla`` itself stays light (the scoring
-and demo helpers above pull in only numpy); the adapter modules are imported lazily on the first
+helpers above pull in only numpy); the adapter modules are imported lazily on the first
 ``resolve`` / ``available_*`` call:
 
     from mtla import resolve

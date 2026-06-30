@@ -66,7 +66,7 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    gpus = cfg.extract.gpus or [0]
+    gpus = cfg.stage_gpus("extract")
     n_images = cfg.extract.n_items or 5000
     pred_file = os.path.join(cfg.pred_dir(args.seed), "predictions.json")
     out_dir = cfg.feat_dir(args.seed)

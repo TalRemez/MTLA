@@ -78,7 +78,7 @@ class CocoDataset(DatasetAdapter):
 
     def score(self, cfg, model) -> dict:
         band = cfg.band_indices()
-        n = cfg.score.n_rollouts
+        n = cfg.n_rollouts
         agg = cfg.score.agg
         coco_gt = cfg.path("coco_gt")
 

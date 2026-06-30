@@ -121,9 +121,10 @@ Then add `configs/mybench_myvlm.yaml`:
 model: myvlm
 dataset: mybench
 paths:   {data: ..., predictions: runs/mybench/predictions, features: runs/mybench/features}
-generate: {engine: vllm, gpus: [0,1]}
-extract:  {gpus: [0,1], n_items: 5000}
-score:    {n_rollouts: 1, agg: max}
+n_rollouts: 1                          # one knob: generate/extract produce seeds 0..n-1, score votes
+generate: {engine: vllm, gpus: null}   # gpus: null = all visible GPUs
+extract:  {gpus: null, n_items: 5000}
+score:    {agg: max}
 band: [8, 21]
 ```
 

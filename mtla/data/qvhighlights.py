@@ -2,8 +2,7 @@
 
 Scoring (CPU): per-window hallucination AUROC + moment-retrieval mAP / R@1 after pooling
 windows across rollouts and ranking them with NMS (max fusion = video headline). Uses the
-official Moment-DETR evaluator vendored under third_party/moment_detr_eval. Lifts the
-validated logic from the original examples/qvhighlights/score.py.
+official Moment-DETR evaluator vendored under third_party/moment_detr_eval.
 
 Reproduces: NMS-MTLA mAP 36.6, R@1@0.5 55.1, R@1@0.7 39.5.
 
@@ -95,7 +94,7 @@ class QVHighlightsDataset(DatasetAdapter):
         import numpy as np
 
         band = cfg.band_indices()
-        n = cfg.score.n_rollouts
+        n = cfg.n_rollouts
         agg = cfg.score.agg
         signal = VIDEO_SIGNAL
 

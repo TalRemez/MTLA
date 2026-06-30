@@ -278,7 +278,7 @@ def main():
     cfg = load_config(args.config)
     model, dataset = resolve(cfg.model, cfg.dataset)
     args.model = model.model_id
-    args.gpu_ids = cfg.generate.gpus
+    args.gpu_ids = cfg.stage_gpus("generate")
     args.temperature = cfg.generate.temperature
     args.seed = args.seed
     args.output_dir = cfg.pred_dir(args.seed)

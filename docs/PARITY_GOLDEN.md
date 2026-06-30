@@ -22,6 +22,3 @@ from the core (its baseline numbers are kept here as the documented historical t
 - AUROC (seed 0): MTLA **0.6634**, SVAR **0.5177**
 - max-MTLA: R@.3 **76.26**, R@.5 **55.40**, R@.7 **29.41**, mIoU **0.5076**
 - max-SVAR: R@.3 68.82, R@.5 43.79, R@.7 18.90, mIoU 0.4316
-
-## CPU demo (fixtures/coco_demo.pt)
-- MTLA AUROC ≈ 0.870, SVAR ≈ 0.813

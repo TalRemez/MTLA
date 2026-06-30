@@ -5,24 +5,23 @@ model: internvl
 dataset: coco
 
 paths:
-  data: /path/to/coco_val_openvocab_80.json      # open-vocab dataset json (see docs/DATA.md)
-  coco_gt: /path/to/instances_val2017.json        # COCO annotations (for mAP)
-  predictions: runs/coco/predictions              # seed{K}/predictions.json
-  features: runs/coco/features                     # seed{K}/shard*.pt
+  data: data/coco/coco_val_openvocab_80.json                  # open-vocab dataset json (scripts/prepare_coco.py)
+  coco_gt: data/coco/annotations/instances_val2017.json       # COCO annotations (for mAP)
+  predictions: runs/coco/predictions                          # seed{K}/predictions.json
+  features: runs/coco/features                                # seed{K}/shard*.pt
+
+n_rollouts: 1                                      # one knob: produce + vote over seeds 0..n-1
 
 generate:
-  engine: vllm                                     # vllm (fast, needs .[generate]) or hf (transformers only, slower)
-  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  engine: vllm                                     # vllm (fast, needs .[generate]) or hf (slower)
+  gpus: null                                       # null = all visible GPUs (respects CUDA_VISIBLE_DEVICES)
   temperature: 0.7
-  seeds: [0]                                       # one rollout
 
 extract:
-  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  gpus: null
   n_items: 5000                                    # HF eager-attention pass
-  seeds: [0]                                       # match generate
 
 score:
-  n_rollouts: 1                                    # single rollout (seed 0)
   agg: max
 
 band: [8, 21]                                      # middle-layer band (null = all layers)

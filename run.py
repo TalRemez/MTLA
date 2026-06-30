@@ -10,8 +10,8 @@ hyperparameters. Three stages:
 `generate` writes predictions, `extract` writes attention feature shards, `score` computes
 hallucination AUROC + the benchmark's task metric. The score stage needs no GPU and no model.
 
-CLI flags override the config's score stage for quick sweeps:
-    --n 16   --agg sum
+CLI flags override the config for quick sweeps:
+    --n 16   --agg sum   --seeds 0 1 2 3
 """
 import argparse
 
@@ -24,20 +24,18 @@ def main():
     ap = argparse.ArgumentParser(description="Unified MTLA generate/extract/score pipeline.")
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
     ap.add_argument("--stage", required=True, choices=["generate", "extract", "score"])
-    ap.add_argument("--n", type=int, default=None, help="override score.n_rollouts")
+    ap.add_argument("--n", type=int, default=None, help="override n_rollouts (drives seeds + voting)")
     ap.add_argument("--agg", default=None, help="override score.agg (max|sum|support|mean)")
     ap.add_argument("--seeds", type=int, nargs="+", default=None,
-                    help="generate/extract: rollout seeds to produce (e.g. --seeds 0 1 2 3); "
-                         "overrides the stage's `seeds` in the config")
+                    help="generate/extract: produce exactly these rollout seeds (e.g. --seeds 0 1 2 3); "
+                         "by default the seeds are 0..n_rollouts-1")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     if args.n is not None:
-        cfg.score.n_rollouts = args.n
+        cfg.n_rollouts = args.n
     if args.agg is not None:
         cfg.score.agg = args.agg
-    if args.seeds is not None:
-        cfg.generate.seeds = cfg.extract.seeds = args.seeds
 
     # resolve validates the (model x dataset) task pairing and returns both adapters.
     model, dataset = resolve(cfg.model, cfg.dataset)
@@ -50,10 +48,11 @@ def main():
         return
 
     # generate / extract are GPU stages: the dataset asks the model adapter which stage script
-    # to run (model x task specific) and passes dataset args. One rollout per seed -> seed{K}/.
-    seeds = (cfg.generate if args.stage == "generate" else cfg.extract).seeds
-    for seed in seeds:
-        print(f"[MTLA] {args.stage} seed {seed}  ({seeds.index(seed)+1}/{len(seeds)})")
+    # to run (model x task specific). One rollout per seed -> seed{K}/. Seeds default to
+    # 0..n_rollouts-1; --seeds produces an explicit subset.
+    seeds = args.seeds if args.seeds is not None else cfg.seeds()
+    for i, seed in enumerate(seeds):
+        print(f"[MTLA] {args.stage} seed {seed}  ({i+1}/{len(seeds)})")
         if args.stage == "generate":
             dataset.generate(cfg, model, seed)
         else:

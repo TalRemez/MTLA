@@ -9,13 +9,15 @@ Example (configs/coco_internvl.yaml):
     model: internvl          # -> mtla.models.internvl.InternVLAdapter
     dataset: coco            # -> mtla.data.coco.CocoDataset
     paths:
-      data: /data/coco_val_openvocab_80.json
-      coco_gt: /data/instances_val2017.json
+      data: data/coco/coco_val_openvocab_80.json     # repo-relative; see scripts/prepare_coco.py
+      coco_gt: data/coco/instances_val2017.json
       predictions: runs/coco/predictions
       features: runs/coco/features
-    generate: {engine: vllm, gpus: [0,1,2,3,4,5,6,7]}
-    extract:  {gpus: [0,1,2,3,4,5,6,7], n_items: 5000}
-    score:    {n_rollouts: 16, agg: sum}
+    n_rollouts: 1            # one number drives everything: generate/extract produce seeds
+                             # 0..n_rollouts-1, score votes over them
+    generate: {engine: vllm, gpus: null}             # gpus: null = all visible GPUs
+    extract:  {gpus: null, n_items: 5000}
+    score:    {agg: sum}
     band: [8, 21]            # inclusive layer band; null = all layers
 """
 from __future__ import annotations
@@ -24,13 +26,21 @@ import os
 from dataclasses import dataclass, field
 
 
+def all_visible_gpus() -> list:
+    """All visible CUDA device indices (respects CUDA_VISIBLE_DEVICES); [0] if CUDA is absent."""
+    try:
+        import torch
+        n = torch.cuda.device_count()
+        return list(range(n)) if n > 0 else [0]
+    except Exception:
+        return [0]
+
+
 @dataclass
 class StageCfg:
     engine: str = "hf"                 # generate engine: "hf" or "vllm"
-    gpus: list = field(default_factory=lambda: [0])
+    gpus: list | None = None           # None = all visible GPUs (see RunConfig.stage_gpus)
     n_items: int = 0                   # 0 = all
-    seeds: list = field(default_factory=lambda: [0])  # generate/extract: which rollout seeds to produce
-    n_rollouts: int = 1                # score: how many seeds (seed 0..n_rollouts-1) to vote over
     agg: str = "max"                   # voting fusion: max | sum | support | mean
     temperature: float = 0.7           # all runs sample at T=0.7 (vary seed per rollout)
 
@@ -40,6 +50,8 @@ class RunConfig:
     model: str                          # adapter key in mtla.models
     dataset: str                        # adapter key in mtla.data
     paths: dict = field(default_factory=dict)
+    n_rollouts: int = 1                 # the single rollout knob: generate/extract produce seeds
+                                        # 0..n_rollouts-1; score votes over the same range.
     generate: StageCfg = field(default_factory=StageCfg)
     extract: StageCfg = field(default_factory=StageCfg)
     score: StageCfg = field(default_factory=StageCfg)
@@ -54,6 +66,15 @@ class RunConfig:
             return None
         lo, hi = self.band
         return list(range(lo, hi + 1))
+
+    def seeds(self) -> list:
+        """Rollout seeds to produce / score: 0 .. n_rollouts-1 (one knob drives all stages)."""
+        return list(range(max(1, self.n_rollouts)))
+
+    def stage_gpus(self, stage: str) -> list:
+        """GPU list for a stage; resolves `gpus: null` to all visible GPUs at run time."""
+        g = getattr(self, stage).gpus
+        return list(g) if g else all_visible_gpus()
 
     def path(self, key: str) -> str:
         if key not in self.paths:
@@ -83,10 +104,13 @@ def load_config(path: str) -> RunConfig:
 
     with open(path) as f:
         raw = yaml.safe_load(f)
+    # n_rollouts is top-level now; accept a legacy score.n_rollouts as a fallback.
+    n_rollouts = raw.get("n_rollouts", (raw.get("score") or {}).get("n_rollouts", 1))
     return RunConfig(
         model=raw["model"],
         dataset=raw["dataset"],
         paths=raw.get("paths", {}),
+        n_rollouts=n_rollouts,
         generate=_stage(raw.get("generate")),
         extract=_stage(raw.get("extract")),
         score=_stage(raw.get("score")),

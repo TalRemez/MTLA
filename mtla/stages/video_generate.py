@@ -73,7 +73,7 @@ def main():
 
     cfg = load_config(args.config)
     model, dataset = resolve(cfg.model, cfg.dataset)
-    gpus = cfg.generate.gpus or [0]
+    gpus = cfg.stage_gpus("generate")
     video_dir = cfg.path("video_dir")
     pred_dir = cfg.pred_dir(args.seed)
 

@@ -1,6 +1,6 @@
 # COCO detection with InternVL3.5-8B  (N=16 self-consistency voting, the headline result).
 # Reproduces: detection mAP 41.9 at N=16 (single-rollout is 36.2; see coco_internvl.yaml).
-# Produce all 16 seeds first:
+# n_rollouts drives everything — generate/extract produce seeds 0..15, score votes over them:
 #   python run.py --config configs/coco_internvl_voting.yaml --stage generate   # writes seed0..15/
 #   python run.py --config configs/coco_internvl_voting.yaml --stage extract
 #   python run.py --config configs/coco_internvl_voting.yaml --stage score
@@ -8,24 +8,23 @@ model: internvl
 dataset: coco
 
 paths:
-  data: /path/to/coco_val_openvocab_80.json      # open-vocab dataset json (see docs/DATA.md)
-  coco_gt: /path/to/instances_val2017.json        # COCO annotations (for mAP)
-  predictions: runs/coco/predictions              # seed{K}/predictions.json
-  features: runs/coco/features                     # seed{K}/shard*.pt
+  data: data/coco/coco_val_openvocab_80.json                  # open-vocab dataset json (scripts/prepare_coco.py)
+  coco_gt: data/coco/annotations/instances_val2017.json       # COCO annotations (for mAP)
+  predictions: runs/coco/predictions                          # seed{K}/predictions.json
+  features: runs/coco/features                                # seed{K}/shard*.pt
+
+n_rollouts: 16                                     # 16 stochastic rollouts: produce + vote over seeds 0..15
 
 generate:
   engine: vllm                                     # or hf (transformers only, slower)
-  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  gpus: null                                       # null = all visible GPUs
   temperature: 0.7
-  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]   # 16 stochastic rollouts
 
 extract:
-  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  gpus: null
   n_items: 5000
-  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]   # match generate
 
 score:
-  n_rollouts: 16                                   # vote over seed 0..15
-  agg: sum                                         # COCO headline: sum-of-cluster fusion
+  agg: sum                                          # COCO headline: sum-of-cluster fusion
 
 band: [8, 21]

@@ -1,28 +1,27 @@
 # QVHighlights temporal grounding with Qwen3-VL-8B  (single rollout).
 # Single-rollout MTLA mAP ~24.5; the headline NMS-MTLA mAP 36.6 / R@1@0.5 55.1 comes from
-# N=16 self-consistency voting (set seeds: [0..15] and score.n_rollouts: 16).
+# N=16 self-consistency voting (set n_rollouts: 16).
 model: qwen3vl
 dataset: qvhighlights
 
 paths:
-  ann: /path/to/highlight_val_release.jsonl        # QVHighlights val annotations (jsonl)
-  video_dir: /path/to/qvhighlights/videos          # {video_id}.mp4 clips
+  ann: data/qvhighlights/highlight_val_release.jsonl          # QVHighlights val annotations (scripts/prepare_qvhighlights.py)
+  video_dir: data/qvhighlights/videos                         # {video_id}.mp4 clips
   predictions: runs/qvh/predictions
-  features: runs/qvh/features                       # seed{K}/shard*.pt
+  features: runs/qvh/features                                 # seed{K}/shard*.pt
+
+n_rollouts: 1                                      # one knob: produce + vote over seeds 0..n-1 (16 for the headline)
 
 generate:
   engine: hf                                        # Qwen3-VL video generation runs under HF
-  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+  gpus: null                                        # null = all visible GPUs
   temperature: 0.7
-  seeds: [0]                                        # one rollout; e.g. [0,1,...,15] for N=16 voting
-  # video sampling (fps=1.0, max_pixels=64*32*32) is a dataset property: QVHighlightsDataset.video
+  # video sampling (fps=1.0, max_pixels=64*32*32) is a dataset property: QVHighlightsDataset
 
 extract:
-  gpus: [0, 1, 2, 3, 4, 5, 6, 7]
-  seeds: [0]                                        # video fuses generate+extract; match seeds
+  gpus: null
 
 score:
-  n_rollouts: 1                                     # single rollout (set 16 to vote over seed 0..15)
   agg: max                                          # video: max-of-cluster fusion
 
 band: [8, 21]

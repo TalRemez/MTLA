@@ -9,7 +9,7 @@ summed over the region and meaned over Q_p — paper eqs. 2-3). This module fini
     s(p) = mean_{l in band}  mean_h  local_attention[l, h]
 
 A higher score means the prediction looks more grounded; a lower score flags a likely
-hallucination. See ``docs/METHOD.md`` for the full derivation.
+hallucination. See the Method section of the README for the full derivation.
 """
 from __future__ import annotations
 

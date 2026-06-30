@@ -17,8 +17,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Scoring + visualization demo (CPU only, no model weights needed).
-demo = [
+# Attention-heatmap visualization (mtla.viz; CPU only, no model weights needed).
+viz = [
     "torch>=2.1",
     "matplotlib>=3.6",
     "scipy>=1.10",

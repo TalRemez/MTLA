@@ -16,62 +16,141 @@ no labels, just one forward pass of the model you already have.
 from each prediction's tokens, restricts it to the patches inside the proposed region, and scores
 the prediction by how much attention falls inside, high when grounded and low when hallucinated.</em></p>
 
-## Why it works
+## Method
+
+MTLA is a **training-free, post-hoc** confidence score for grounding predictions from
+multimodal LLMs. It needs no extra parameters, no fine-tuning, and no auxiliary model: it
+reads the model's own attention from the same forward pass that produced the prediction.
+
+**Problem setup.** A grounding MLLM autoregressively emits one or more localized predictions.
+Each prediction `p` has a **proposal region** `R_p` and a label. Depending on the modality, `R_p` is
+
+- a bounding box `[x1, y1, x2, y2]` in an image (coordinates in `[0, 1000]`), or
+- a temporal interval `[t_start, t_end]` in video or audio.
+
+A prediction is **hallucinated** if its region matches no ground-truth region under the task's
+criterion (IoU ≥ 0.5 throughout). The goal is a scalar score `s(p)`, computed from the model's
+attention, that is high for grounded predictions and low for hallucinations.
+
+**Localized Attention (LA).** Let the transformer have `L` layers and `H` heads, and let
+`X = {k_1, ..., k_N}` be the input-modality tokens (image patches, video frames, or audio
+frames). For a response token at position `q`, the model produces attention weights
+`a[l,h](q -> k)` over `k ∈ X`. The key idea is to restrict the attention sum to the tokens
+*inside* the proposal region, `M(R_p)` (image patches overlapping the box; frames whose
+timestamps fall in the span):
 
 ```
-SVAR baseline:  sum attention over ALL input tokens          (global)
-MTLA (ours):    sum attention over tokens INSIDE the region  (localized)  ... averaged over
-                the prediction's tokens, over heads, over a band of middle layers.
+LA[l,h](q) = sum over k in M(R_p) of  a[l,h](q -> k)
 ```
 
-A hallucination can still attend to *something*; what it cannot do is attend to evidence
-that isn't there, inside the box it invented. Restricting the attention sum to the proposal
-region is what separates the two. See [`docs/METHOD.md`](docs/METHOD.md) for the full method.
+A grounded prediction attends strongly to evidence inside its own region; a hallucination
+relies on context scattered elsewhere, so its localized attention stays low even when its
+*global* attention (the [SVAR](#acknowledgements) baseline, which sums over all of `X`) is comparable.
 
-## Results at a glance (hallucination-detection AUROC)
+**Multi-token aggregation.** A prediction spans several tokens (the digits of each coordinate,
+plus the label). Any single token's attention is noisy; averaging across the prediction's
+tokens `Q_p` is far more robust — this is **Multi-Token Localized Attention**:
+
+```
+MTLA[l,h](p) = (1/|Q_p|) * sum over q in Q_p of  LA[l,h](q)
+```
+
+**Layer and head reduction.** Average over heads and over a fixed band of middle layers to get
+one scalar:
+
+```
+s(p) = mean over l in band of  ( (1/H) * sum over h of  MTLA[l,h](p) )
+```
+
+The default band is **layers 8–21** (`mtla.DEFAULT_BAND`), used for every image and video model
+tested (Qwen3-VL, InternVL: 36 layers; Gemma-4: 42). Audio (Audio Flamingo 3, 28 layers) uses
+**all** layers. MTLA is not very sensitive to the exact band — see the [layer-band
+ablation](#layer-band-ablation) below. The whole reduction is `mtla.reduce_band`.
+
+**Self-consistency voting.** Sampling `N` stochastic rollouts per input enlarges the candidate
+pool (better recall). We pool predictions across rollouts, merge overlaps with non-maximum
+suppression, and score each kept prediction from its cluster's MTLA values (`mtla.nms_fuse`):
+
+- **max** (default): keep the single highest-scoring rollout. Used for video and audio.
+- **sum**: sum the cluster's scores, rewarding regions that recur across rollouts. Used for
+  **COCO detection only**, where each image yields many predictions; there it beats max.
+
+## Results
+
+Headline numbers reproduced by the example pipelines. MTLA is the inside-region attention score
+(ours); **SVAR** (Jiang et al.) is the global-attention baseline we compare against. All use the
+default middle-layer band (L8–21) except AudioSet, which uses all 28 layers. IoU ≥ 0.5 throughout.
+
+### Hallucination detection — AUROC (single rollout)
+
+How well the score separates grounded from hallucinated predictions.
 
 | Benchmark | Model | MTLA | SVAR baseline |
 |---|---|--:|--:|
-| COCO detection | Qwen3-VL-8B | **0.90** | 0.76 |
-| QVHighlights (video) | Qwen3-VL-8B | **0.80** | 0.42 |
-| Charades-STA (video) | Qwen3-VL-8B | **0.68** | 0.51 |
-| AudioSet-Strong (audio) | Audio Flamingo 3 | **0.81** | 0.61 |
+| COCO detection | Qwen3-VL-8B | **0.902** | 0.763 |
+| COCO detection | InternVL3.5-8B | **0.873** | 0.803 |
+| COCO detection | Gemma-4 E4B | **0.753** | 0.671 |
+| QVHighlights (video) | Qwen3-VL-8B | **0.800** | 0.415 |
+| Charades-STA (video) | Qwen3-VL-8B | **0.684** | 0.512 |
+| AudioSet-Strong (audio) | Audio Flamingo 3 | **0.813** | 0.608 |
 
-The same idea also improves task metrics via self-consistency voting (COCO **41.9** mAP at
-N=16; QVHighlights **36.6** mAP). One method, four modalities, no training. Full table:
-[`docs/RESULTS.md`](docs/RESULTS.md).
+`run.py --config configs/coco_internvl.yaml --stage score` reproduces the InternVL row and
+`configs/coco_qwen3vl.yaml` the Qwen3-VL row — same `CocoDataset`, different `model:`.
 
-## Quickstart (60 seconds, CPU, no GPU / no downloads)
+### Task metrics after MTLA re-ranking / self-consistency voting
 
-```bash
-pip install -e ".[demo,coco]"
-python examples/demo.py
-```
+One method, four modalities, no training. The same idea also improves task metrics:
 
-This loads a small bundled fixture of pre-extracted attention (InternVL3.5-8B on COCO) and:
+**COCO detection** (InternVL3.5-8B, val2017, sum-of-cluster fusion):
 
-1. scores ~800 predictions, printing MTLA vs SVAR AUROC (MTLA ≈ 0.87, SVAR ≈ 0.79);
-2. renders attention heatmaps for one image into `examples/output/`, showing the model
-   looking inside a grounded box but scattering on a hallucinated one.
+| N (rollouts) | mAP | AP50 | AP75 |
+|---|--:|--:|--:|
+| 1 | 36.1 | 55.9 | 37.1 |
+| 5 | 40.8 | 64.6 | 40.9 |
+| **16** | **41.9** | **66.9** | **41.5** |
+
+- **QVHighlights** (Qwen3-VL-8B, N=16, NMS-MTLA): mAP **36.6**, R@1@0.5 **55.1**, R@1@0.7 **39.5** (SVAR baseline mAP 28.1).
+- **Charades-STA** (Qwen3-VL-8B, N=16, max selection): R@1@0.3 **76.3**, R@1@0.5 **55.4**, R@1@0.7 **29.4**, mIoU 0.508 (SVAR R@1@0.5 43.8).
+- **AudioSet-Strong** (Audio Flamingo 3, N=16, PSDS1 @ DCASE Task 4): NMS-MTLA **0.255**, NMS-SVAR 0.229.
+
+### Layer-band ablation
+
+MTLA is not tuned to the L8–21 band. Using **all** layers (parameter-free) costs little:
+
+| Benchmark | Metric | band L8–21 | all layers | Δ |
+|---|---|--:|--:|--:|
+| COCO (InternVL) | AUROC | 0.873 | 0.867 | −0.006 |
+| COCO (InternVL) | mAP N=16 | 41.90 | 41.45 | −0.45 |
+| QVHighlights | AUROC | 0.800 | 0.754 | −0.046 |
+| QVHighlights | mAP N=16 | 36.71 | 36.15 | −0.56 |
+| Charades | AUROC | 0.684 | 0.632 | −0.051 |
+| Charades | R@1@0.5 N=16 | 55.40 | 53.66 | −1.74 |
+| AudioSet | AUROC | already all-layers | 0.813 | — |
+
+COCO is nearly band-insensitive; video AUROC drops ~0.05 because the video grounding signal
+concentrates in early/middle layers and the late third decays toward chance. The MTLA ≫ baseline
+ranking holds under either choice on every benchmark.
+
+> Numbers are from the project's evaluation logs; the COCO and QVHighlights rows are reproducible
+> end-to-end with the example scripts. The paper is the citable source of record (link to be added
+> on release).
 
 ## Use it on your own predictions
 
-MTLA scores a prediction from a `[L, H]` array (layers × heads): the attention its tokens pay
-to the modality tokens **inside** its proposed region. `reduce_band` reduces it to one scalar
-(mean over heads, sum over the layer band) — higher means more grounded.
-
-**If you have the attention arrays** (the extract stage produces them), scoring is CPU-only.
-Run it now on the bundled fixture — no GPU, no download:
+The extract stage saves, per prediction, a `[L, H]` array `local_attention`: the attention its
+tokens pay to the modality tokens **inside** its proposed region. Scoring it is CPU-only —
+`mtla_score` reduces the array to one scalar (mean over heads, mean over the layer band); higher
+means more grounded.
 
 ```python
-import numpy as np, torch
-from mtla import reduce_band, auroc
+import glob, torch
+from mtla import mtla_score, auroc
 
-data   = torch.load("fixtures/coco_demo.pt", weights_only=False)["scoring"]   # ~800 preds
-one    = reduce_band(data[0]["image_inside_sum"])                              # single -> scalar
-scores = reduce_band(np.stack([r["image_inside_sum"] for r in data]))         # batch  -> [N]
-labels = [r["is_hallucinated"] for r in data]                                  # IoU>=0.5 flags
-print(f"AUROC = {auroc(scores, labels):.3f}")                                  # ~0.87
+objs = [o for f in glob.glob("runs/coco/features/seed0/shard*.pt")
+        for r in torch.load(f, weights_only=False) for o in r["objects"]]
+scores = [mtla_score(o) for o in objs]                 # [L,H] -> scalar per prediction
+labels = [o["is_hallucinated"] for o in objs]          # IoU>=0.5 flags
+print(f"AUROC = {auroc(scores, labels):.3f}")
 ```
 
 **Starting from your own model?** Run it to write a `predictions.json`
@@ -100,8 +179,25 @@ The package is small and modular:
 ## Full reproduction — one config-driven pipeline
 
 Every benchmark runs through the same three stages; a YAML config picks the model + dataset.
-No bulk features are shipped; you regenerate them (GPU needed for `generate`/`extract`,
-`score` is CPU-only).
+No data or bulk features are shipped; you download the datasets and regenerate the features
+(GPU needed for `generate`/`extract`, `score` is CPU-only).
+
+**Prepare the data.** One script per dataset downloads the source and writes the files the
+adapters load, into a repo-relative `data/` directory (the default the configs point at). Each
+script prints the exact `paths:` to copy into your config; video clips are large and fetched
+separately (the scripts say where). Details: [`docs/DATA.md`](docs/DATA.md).
+
+```bash
+python scripts/prepare_coco.py          # images + instances_val2017.json + the open-vocab JSON
+python scripts/prepare_qvhighlights.py  # val annotations (jsonl); add the videos yourself
+python scripts/prepare_charades.py --from-annotations charades_sta_test.txt   # test parquet
+```
+
+`prepare_coco.py` builds the open-vocabulary detection JSON straight from the official COCO
+annotations (per-image present classes, GT boxes scaled to `[0, 1000]`, `iscrowd` excluded), so
+the dataset is fully reproducible rather than a shipped blob.
+
+**Run the three stages.** Swap the config to run another benchmark — same commands:
 
 ```bash
 python run.py --config configs/coco_internvl.yaml      --stage generate   # GPU
@@ -110,7 +206,7 @@ python run.py --config configs/coco_internvl.yaml      --stage score      # CPU
 ```
 
 Swap the config to run another benchmark — same commands. Configs default to a **single
-rollout**; the headline numbers below use N=16 self-consistency voting (run the GPU stages
+rollout**; the headline numbers above use N=16 self-consistency voting (run the GPU stages
 once per seed, e.g. `--seeds 0 1 ... 15`, then `score` with `n_rollouts: 16`):
 
 | Config | Benchmark / model | Single rollout | N=16 voting |
@@ -180,9 +276,8 @@ mtla/                  core package
   stages/              GPU drivers: image_extract / video_extract + per-model generate scripts
 run.py                 unified CLI: --config <yaml> --stage {generate,extract,score}
 configs/               one YAML per model x dataset
-examples/demo.py       CPU demo on the bundled fixture (no GPU, no download)
-fixtures/              small committed demo fixture
-docs/                  METHOD.md, DATA.md, RESULTS.md, EXTENDING.md
+scripts/               one dataset-prep script per benchmark (download + build)
+docs/                  DATA.md, EXTENDING.md, PARITY_GOLDEN.md
 third_party/           vendored Moment-DETR evaluation (MIT)
 ```
 

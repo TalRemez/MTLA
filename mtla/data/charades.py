@@ -48,9 +48,12 @@ class CharadesDataset(DatasetAdapter):
         return PROMPT.format(query=(item.get("caption") or item.get("query")).rstrip("."))
 
     def ground_truth(self, item):
-        # raw item carries [start, end] in `timestamp`; a normalized record carries `gt_span`.
-        ts = item.get("timestamp") or item.get("gt_span")
-        return [float(ts[0]), float(ts[1])] if ts else None
+        # raw item carries [start, end] in `timestamp` (may be a numpy array, so test `is None`,
+        # not truthiness); a normalized prediction record carries `gt_span`.
+        ts = item.get("timestamp")
+        if ts is None:
+            ts = item.get("gt_span")
+        return [float(ts[0]), float(ts[1])] if ts is not None and len(ts) == 2 else None
 
     def video_path(self, item, video_dir):
         import os
@@ -87,7 +90,7 @@ class CharadesDataset(DatasetAdapter):
         import numpy as np
 
         band = cfg.band_indices()
-        n = cfg.score.n_rollouts
+        n = cfg.n_rollouts
         signal = VIDEO_SIGNAL
 
         by_query = defaultdict(list)   # (video,query) -> [{seed, span, mtla}]
