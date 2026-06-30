@@ -175,12 +175,13 @@ class Qwen3VLAdapter(ModelAdapter):
             return _load_qwen_vllm_for_generate(gpu_id)
         return _load_qwen_for_generate(gpu_id)
 
-    def generate_video(self, ctx, video_path, query, vcfg, seed=None, rank=0):
-        """Generate one video response (greedy when seed is None, else sampled T=0.7/top-p=0.95).
+    def generate_video(self, ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=0):
+        """Generate one video response. Samples at `temperature` (>0) seeded by `seed` — so every
+        rollout, including seed 0, is a real stochastic draw; temperature==0 is greedy/deterministic.
         Dispatches on the engine recorded in `ctx`."""
         if ctx.get("engine") == "vllm":
-            return _generate_video_vllm(ctx, video_path, query, vcfg, seed, rank)
-        return _generate_video(ctx, video_path, query, vcfg, seed, rank)
+            return _generate_video_vllm(ctx, video_path, query, vcfg, seed, temperature, rank)
+        return _generate_video(ctx, video_path, query, vcfg, seed, temperature, rank)
 
     def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
         from ..mtla_attn import compute_mtla
@@ -417,9 +418,10 @@ def _load_qwen_for_generate(gpu_id):
     return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "device": device}
 
 
-def _generate_video(ctx, video_path, query, vcfg, seed=None, rank=0):
+def _generate_video(ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=0):
     """Run video preprocessing + model.generate for one clip; return the decoded response (or None
-    to skip). Deterministic preprocessing (fps/pixels from the dataset's `video` cfg)."""
+    to skip). Deterministic preprocessing (fps/pixels from the dataset's `video` cfg). Samples at
+    `temperature` (the worker pre-seeds the RNG per (seed, rank)); temperature==0 -> greedy."""
     from qwen_vl_utils import process_vision_info
     proc = ctx["proc"]; model = ctx["model"]; device = ctx["device"]
     msgs = [{"role": "user", "content": [
@@ -443,8 +445,8 @@ def _generate_video(ctx, video_path, query, vcfg, seed=None, rank=0):
         return None
     prompt_len = inputs["input_ids"].shape[1]
     gen_kwargs = {"max_new_tokens": vcfg["max_new_tokens"]}
-    if seed is not None:
-        gen_kwargs.update(do_sample=True, temperature=0.7, top_p=0.95)
+    if temperature and temperature > 0:
+        gen_kwargs.update(do_sample=True, temperature=temperature, top_p=0.95)
     else:
         gen_kwargs.update(do_sample=False)
     try:
@@ -472,9 +474,10 @@ def _load_qwen_vllm_for_generate(gpu_id):
     return {"llm": llm, "proc": proc, "tokenizer": proc.tokenizer, "engine": "vllm"}
 
 
-def _generate_video_vllm(ctx, video_path, query, vcfg, seed=None, rank=0):
+def _generate_video_vllm(ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=0):
     """vLLM counterpart of `_generate_video`: same prompt + same deterministic video preprocessing
-    (fps/pixels from the dataset cfg), returns the decoded response string (or None to skip)."""
+    (fps/pixels from the dataset cfg), returns the decoded response string (or None to skip).
+    Samples at `temperature` seeded by `seed` (temperature==0 -> greedy)."""
     from qwen_vl_utils import process_vision_info
     from vllm import SamplingParams
     proc = ctx["proc"]; llm = ctx["llm"]
@@ -497,8 +500,8 @@ def _generate_video_vllm(ctx, video_path, query, vcfg, seed=None, rank=0):
     # return_video_metadata, each `videos` entry already is that tuple.
     video_item = videos[0]  # (frames, metadata)
     mm_data = {"video": video_item}
-    sp = (SamplingParams(temperature=0.7, top_p=0.95, max_tokens=vcfg["max_new_tokens"], seed=seed)
-          if seed is not None
+    sp = (SamplingParams(temperature=temperature, top_p=0.95, max_tokens=vcfg["max_new_tokens"], seed=seed)
+          if temperature and temperature > 0
           else SamplingParams(temperature=0.0, max_tokens=vcfg["max_new_tokens"]))
     try:
         out = llm.generate([{"prompt": text, "multi_modal_data": mm_data,

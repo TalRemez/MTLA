@@ -353,8 +353,10 @@ def _make_internvl_hf_generate(model_id, gpu_id):
                                       trust_remote_code=True).to(device).eval()
     model.img_context_token_id = tok.convert_tokens_to_ids(IMG_CONTEXT_TOK)
 
-    def gen(item, dataset, seed=0, max_new_tokens=4096):
-        do_sample = seed is not None and seed > 0
+    def gen(item, dataset, seed=0, temperature=0.7, max_new_tokens=4096):
+        # Sample at `temperature` (>0) for EVERY rollout, including seed 0; the seed only varies the
+        # draw (reproducible per (seed, gpu)). temperature==0 -> greedy/deterministic.
+        do_sample = temperature and temperature > 0
         if do_sample:
             from transformers import set_seed
             set_seed(seed * 1000 + gpu_id)
@@ -368,7 +370,7 @@ def _make_internvl_hf_generate(model_id, gpu_id):
         prompt_text = chat.replace("<image>", "<img>" + (IMG_CONTEXT_TOK * n_img) + "</img>", 1)
         input_ids = tok(prompt_text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
         gk = dict(max_new_tokens=max_new_tokens)
-        gk.update(dict(do_sample=True, temperature=0.7, top_p=0.95) if do_sample else dict(do_sample=False))
+        gk.update(dict(do_sample=True, temperature=temperature, top_p=0.95) if do_sample else dict(do_sample=False))
         with torch.no_grad():
             out = model.generate(pixel_values=pixel_values, input_ids=input_ids,
                                  attention_mask=torch.ones_like(input_ids), **gk)

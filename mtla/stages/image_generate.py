@@ -208,11 +208,12 @@ def hf_worker(rank, gpu_id, items, pred_dir, config_path, seed):
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
     gen = model.make_hf_generate(gpu_id)
-    print(f"[worker {rank}] hf gpu={gpu_id} n={len(items)} seed={seed}", flush=True)
+    temperature = cfg.generate.temperature
+    print(f"[worker {rank}] hf gpu={gpu_id} n={len(items)} seed={seed} T={temperature}", flush=True)
     results = []
     for cnt, item in enumerate(items):
         try:
-            response, trunc = gen(item, dataset, seed)
+            response, trunc = gen(item, dataset, seed, temperature=temperature)
             rec = dataset.make_prediction(item, response, model, truncated=trunc)
         except Exception as e:
             print(f"[worker {rank}] error {item.get('id')}: {e}", flush=True)

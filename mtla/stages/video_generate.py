@@ -32,16 +32,15 @@ def worker(rank, gpu_id, items, pred_dir, config_path, video_dir, seed):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     from mtla.config import load_config
     from mtla.registry import resolve
-    if seed:
-        from transformers import set_seed
-        set_seed(seed * 1000 + rank)  # reproducible per (seed, rank) rollout
+    from transformers import set_seed
+    set_seed(seed * 1000 + rank)  # reproducible per (seed, rank) rollout
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
     ctx = model.load_for_generate(0, cfg.generate.engine)  # only one GPU visible -> cuda:0
     vcfg = dataset.video
-    sample_seed = seed if seed else None
+    temperature = cfg.generate.temperature
     print(f"[worker {rank}] generate model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
-          f"n={len(items)} seed={seed} engine={cfg.generate.engine}", flush=True)
+          f"n={len(items)} seed={seed} T={temperature} engine={cfg.generate.engine}", flush=True)
 
     preds = []
     n_done = n_skipped = 0
@@ -50,8 +49,10 @@ def worker(rank, gpu_id, items, pred_dir, config_path, video_dir, seed):
         if not os.path.exists(video_path):
             n_skipped += 1
             continue
+        # Every rollout samples at the config temperature; the seed only varies the draw (so seed 0
+        # is rollout #0, NOT a special greedy run). For deterministic decoding, set temperature: 0.
         response = model.generate_video(ctx, video_path, dataset.prompt(item), vcfg,
-                                        seed=sample_seed, rank=rank)
+                                        seed=seed, temperature=temperature, rank=rank)
         if response is None:
             n_skipped += 1
             continue
