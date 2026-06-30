@@ -9,7 +9,6 @@ Reproduces: NMS-MTLA mAP 36.6, R@1@0.5 55.1, R@1@0.7 39.5 (SVAR baseline mAP 28.
 """
 from __future__ import annotations
 
-import glob
 import json
 import os
 import sys
@@ -62,14 +61,7 @@ class QVHighlightsDataset(DatasetAdapter):
         return item.get("relevant_windows", [])
 
     # ---- GPU stages (decoupled): same stage script, --mode picks generate vs extract ----
-    def generate(self, cfg, model, seed=0):
-        self._run(cfg, model, seed, "generate")
-
-    def extract(self, cfg, model, seed=0):
-        self._run(cfg, model, seed, "extract")
-
-    def _run(self, cfg, model, seed, mode):
-        from ..stages import run_stage
+    def stage_cmd(self, cfg, model, seed, mode):
         n_items = (cfg.generate if mode == "generate" else cfg.extract).n_items
         args = [
             "--mode", mode,
@@ -83,13 +75,12 @@ class QVHighlightsDataset(DatasetAdapter):
             args += ["--limit", str(n_items)]
         if seed:
             args += ["--seed", str(seed)]
-        run_stage("qwen3vl_video.py", args)
+        return "qwen3vl_video.py", args
 
     def score(self, cfg, model=None) -> dict:
         # Video scoring uses the record's 4-slot [.,L,H,T] index mechanism directly (single
         # model family); `model` is accepted for interface uniformity but not needed here.
         import numpy as np
-        import torch
 
         band = cfg.band_indices()
         n = cfg.score.n_rollouts
@@ -107,10 +98,7 @@ class QVHighlightsDataset(DatasetAdapter):
         by_query = defaultdict(list)
         gt_of = {}
         for sd in range(n):
-            recs = []
-            for sp in sorted(glob.glob(f"{feat_root}/seed{sd}/shard*.pt")):
-                recs.extend(torch.load(sp, weights_only=False, map_location="cpu"))
-            for r in recs:
+            for r in self.load_shards(f"{feat_root}/seed{sd}"):
                 qid = r["qid"]
                 fs = r["attn"]["frame_sum"][slot_idx].astype(np.float32)
                 gsvar = reduce_band(r["attn"]["video_sum"][slot_idx].astype(np.float32), band)
@@ -130,7 +118,6 @@ class QVHighlightsDataset(DatasetAdapter):
                     ground_truth.append({"qid": d["qid"], "relevant_windows": d["relevant_windows"]})
         gt_qids = {d["qid"] for d in ground_truth}
         queries = sorted(q for q in by_query if q in gt_qids)
-        print(f"  queries={len(queries)} (GT matched)")
 
         def submission(key):
             """Pool windows across rollouts, fuse with NMS (agg), -> ranked submission."""
@@ -162,14 +149,7 @@ class QVHighlightsDataset(DatasetAdapter):
                 mtla_s.append(m); svar_s.append(gv); labels.append(0 if hit else 1)
         auroc_mtla = auroc(mtla_s, labels) if mtla_s else float("nan")
         auroc_svar = auroc(svar_s, labels) if svar_s else float("nan")
-        print(f"\nPer-window AUROC (seed 0): MTLA={auroc_mtla:.4f}  SVAR={auroc_svar:.4f}")
 
-        mtla_res = evaluate(submission("mtla"))
-        svar_res = evaluate(submission("svar"))
-        print(f"\nN={n} voting (agg={agg}, slot={cfg.score.slot})")
-        print(f"  NMS-MTLA : mAP {mtla_res['mAP']:.2f}  R1@.5 {mtla_res['R1@0.5']:.2f}  "
-              f"R1@.7 {mtla_res['R1@0.7']:.2f}")
-        print(f"  NMS-SVAR : mAP {svar_res['mAP']:.2f}  R1@.5 {svar_res['R1@0.5']:.2f}  "
-              f"R1@.7 {svar_res['R1@0.7']:.2f}")
         return {"auroc_mtla": auroc_mtla, "auroc_svar": auroc_svar,
-                "mtla": mtla_res, "svar": svar_res}
+                "nms_mtla": evaluate(submission("mtla")),
+                "nms_svar": evaluate(submission("svar"))}

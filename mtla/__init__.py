@@ -17,6 +17,7 @@ from .score import (
     ALL_LAYERS,
     DEFAULT_BAND,
     LAYER_BANDS,
+    apply_slot,
     mtla_score,
     reduce_band,
     svar_score,
@@ -31,7 +32,7 @@ from .eval import auroc, auroc_from_records, coco_map
 
 __all__ = [
     "DEFAULT_BAND", "ALL_LAYERS", "LAYER_BANDS",
-    "reduce_band", "mtla_score", "svar_score",
+    "reduce_band", "apply_slot", "mtla_score", "svar_score",
     "bbox_to_patch_indices", "bbox_to_internvl_token_indices", "span_to_token_indices",
     "nms_fuse", "iou", "tiou",
     "auroc", "auroc_from_records", "coco_map",

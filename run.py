@@ -16,8 +16,8 @@ CLI flags override the config's score stage for quick sweeps:
 import argparse
 
 from mtla.config import load_config
-from mtla.models import get_model_adapter
-from mtla.data import get_dataset_adapter
+from mtla.registry import resolve
+from mtla.data.base import print_metrics
 
 
 def main():
@@ -42,13 +42,14 @@ def main():
     if args.seeds is not None:
         cfg.generate.seeds = cfg.extract.seeds = args.seeds
 
-    dataset = get_dataset_adapter(cfg.dataset)
-    model = get_model_adapter(cfg.model)  # adapters are weightless; resolving is free
+    # resolve validates the (model x dataset) task pairing and returns both adapters.
+    model, dataset = resolve(cfg.model, cfg.dataset)
     print(f"[MTLA] model={cfg.model}  dataset={cfg.dataset}  stage={args.stage}")
 
     if args.stage == "score":
         # CPU-only; the model adapter supplies the signal slots (no model weights loaded).
-        dataset.score(cfg, model)
+        metrics = dataset.score(cfg, model)
+        print_metrics(f"{cfg.dataset}/{cfg.model}", metrics)
         return
 
     # generate / extract are GPU stages: the dataset asks the model adapter which stage script

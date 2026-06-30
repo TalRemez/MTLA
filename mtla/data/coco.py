@@ -7,7 +7,6 @@ Reproduces (InternVL3.5-8B, val2017): AUROC 0.873 (MTLA) / 0.803 (SVAR); mAP 41.
 """
 from __future__ import annotations
 
-import glob
 import json
 import os
 from collections import defaultdict
@@ -53,45 +52,40 @@ class CocoDataset(DatasetAdapter):
     def ground_truth(self, item):
         return json.loads(item["conversations"][1]["value"])
 
-    # ---- GPU stages: which script comes from the MODEL adapter (so COCO is model-agnostic) ----
-    def generate(self, cfg, model, seed=0):
-        from ..stages import run_stage
-        script = model.generate_script(self.task, cfg.generate.engine)
-        args = [
-            "--model", model.model_id,
-            "--dataset", cfg.path("data"),
-            "--output_dir", os.path.join(cfg.path("predictions"), f"seed{seed}"),
-            "--gpu_ids", *[str(g) for g in cfg.generate.gpus],
-            "--temperature", str(cfg.generate.temperature),
-            "--seed", str(seed),
-        ]
-        if cfg.generate.n_items:
-            args += ["--limit", str(cfg.generate.n_items)]
-        run_stage(script, args)
-
-    def extract(self, cfg, model, seed=0):
-        from ..stages import run_stage
-        run_stage(model.extract_script(self.task), [
-            "--pred_file", os.path.join(cfg.path("predictions"), f"seed{seed}", "predictions.json"),
+    # ---- GPU stages: the MODEL adapter names the script (so COCO is model-agnostic) ----
+    def stage_cmd(self, cfg, model, seed, mode):
+        pred_seed = os.path.join(cfg.path("predictions"), f"seed{seed}")
+        if mode == "generate":
+            args = [
+                "--model", model.model_id,
+                "--dataset", cfg.path("data"),
+                "--output_dir", pred_seed,
+                "--gpu_ids", *[str(g) for g in cfg.generate.gpus],
+                "--temperature", str(cfg.generate.temperature),
+                "--seed", str(seed),
+            ]
+            if cfg.generate.n_items:
+                args += ["--limit", str(cfg.generate.n_items)]
+            return model.generate_script(self.task, cfg.generate.engine), args
+        return model.extract_script(self.task), [
+            "--pred_file", os.path.join(pred_seed, "predictions.json"),
             "--dataset", cfg.path("data"),
             "--out_dir", os.path.join(cfg.path("features"), f"seed{seed}"),
             "--gpus", *[str(g) for g in cfg.extract.gpus],
             "--n_images", str(cfg.extract.n_items or 5000),
-        ])
+        ]
 
-    # ---- scoring (signal slots come from the model adapter, not hardcoded) ----
+    # ---- scoring (signal slots come from the model adapter; returns a dict, no prints) ----
     def _load_seed(self, features_dir, predictions_path, band, mtla_spec, svar_spec):
         preds = {r["id"]: r for r in json.load(open(predictions_path))}
         attn = {}
-        for sp in sorted(glob.glob(f"{features_dir}/shard*.pt")):
-            import torch
-            for r in torch.load(sp, weights_only=False, map_location="cpu"):
-                for o in r["objects"]:
-                    attn[(r["image_id"], o["pred_idx"])] = (
-                        apply_slot(o, mtla_spec, band),   # MTLA (inside-region)
-                        apply_slot(o, svar_spec, band),   # SVAR (global baseline)
-                        bool(o.get("is_hallucinated", False)),
-                    )
+        for r in self.load_shards(features_dir):
+            for o in r["objects"]:
+                attn[(r["image_id"], o["pred_idx"])] = (
+                    apply_slot(o, mtla_spec, band),   # MTLA (inside-region)
+                    apply_slot(o, svar_spec, band),   # SVAR (global baseline)
+                    bool(o.get("is_hallucinated", False)),
+                )
         return preds, attn
 
     def score(self, cfg, model) -> dict:
@@ -100,36 +94,26 @@ class CocoDataset(DatasetAdapter):
         agg = cfg.score.agg
         mtla_spec = model.mtla_slot(self.task, cfg.score.slot)
         svar_spec = model.svar_slot(self.task)
-        features_root = cfg.path("features")
         predictions_root = cfg.path("predictions")
         coco_gt = cfg.path("coco_gt")
 
-        data = []
-        for s in range(n):
-            fdir = os.path.join(features_root, f"seed{s}")
-            pj = os.path.join(predictions_root, f"seed{s}", "predictions.json")
-            data.append(self._load_seed(fdir, pj, band, mtla_spec, svar_spec))
-            print(f"  loaded seed {s}: {len(data[-1][0])} images")
+        data = [self._load_seed(os.path.join(cfg.path("features"), f"seed{s}"),
+                                os.path.join(predictions_root, f"seed{s}", "predictions.json"),
+                                band, mtla_spec, svar_spec)
+                for s in range(n)]
 
         # single-seed hallucination AUROC
-        _, attn0 = data[0]
-        mtla = [v[0] for v in attn0.values()]
-        svar = [v[1] for v in attn0.values()]
-        labels = [v[2] for v in attn0.values()]
-        auroc_mtla = auroc(mtla, labels) if mtla else float("nan")
-        auroc_svar = auroc(svar, labels) if svar else float("nan")
-        print(f"\nHallucination AUROC (seed 0, {len(mtla)} preds)")
-        print(f"   MTLA = {auroc_mtla:.4f}")
-        print(f"   SVAR = {auroc_svar:.4f}")
+        attn0 = data[0][1]
+        auroc_mtla = auroc([v[0] for v in attn0.values()], [v[2] for v in attn0.values()]) if attn0 else float("nan")
+        auroc_svar = auroc([v[1] for v in attn0.values()], [v[2] for v in attn0.values()]) if attn0 else float("nan")
 
         # N-seed voting mAP
         gt = json.load(open(coco_gt))
         name2cat = {c["name"].lower(): c["id"] for c in gt["categories"]}
         img_wh = {im["id"]: (im["width"], im["height"]) for im in gt["images"]}
-        preds0 = data[0][0]
 
         detections = []
-        for iid in preds0:
+        for iid in data[0][0]:
             by_label = defaultdict(list)
             for s, (preds, attn) in enumerate(data):
                 rec = preds.get(iid)
@@ -139,8 +123,8 @@ class CocoDataset(DatasetAdapter):
                     box, label = pb.get("box"), (pb.get("label") or "").strip().lower()
                     if not (label and box and len(box) == 4):
                         continue
-                    score = attn.get((iid, pi), (0.0, 0.0, False))[0]
-                    by_label[label].append((box, score, s))
+                    sc = attn.get((iid, pi), (0.0, 0.0, False))[0]
+                    by_label[label].append((box, sc, s))
             W, H = img_wh.get(iid, (1, 1))
             for label, cands in by_label.items():
                 cid = name2cat.get(label)
@@ -155,8 +139,6 @@ class CocoDataset(DatasetAdapter):
                         "score": float(sc),
                     })
 
-        res = coco_map(detections, coco_gt)
-        print(f"\nDetection mAP (N={n}, agg={agg}, {len(detections)} dets)")
-        for k in ("mAP", "mAP50", "mAP75", "AP_small", "AP_medium", "AP_large"):
-            print(f"   {k:<10} {res[k]:.2f}")
-        return {"auroc_mtla": auroc_mtla, "auroc_svar": auroc_svar, **res}
+        return {"auroc_mtla": auroc_mtla, "auroc_svar": auroc_svar,
+                "map": coco_map(detections, coco_gt), "n_dets": len(detections),
+                "n_rollouts": n, "agg": agg}

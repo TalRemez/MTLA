@@ -10,7 +10,6 @@ Requires slot=first_digit.
 """
 from __future__ import annotations
 
-import glob
 from collections import defaultdict
 
 from .base import DatasetAdapter
@@ -63,15 +62,8 @@ class CharadesDataset(DatasetAdapter):
         return [item.get("start"), item.get("end")]
 
     # ---- GPU stages (decoupled): same stage script, --mode picks generate vs extract ----
-    def generate(self, cfg, model, seed=0):
-        self._run(cfg, seed, "generate")
-
-    def extract(self, cfg, model, seed=0):
-        self._run(cfg, seed, "extract")
-
-    def _run(self, cfg, seed, mode):
+    def stage_cmd(self, cfg, model, seed, mode):
         import os
-        from ..stages import run_stage
         n_items = (cfg.generate if mode == "generate" else cfg.extract).n_items
         args = [
             "--mode", mode,
@@ -85,11 +77,10 @@ class CharadesDataset(DatasetAdapter):
             args += ["--limit", str(n_items)]
         if seed:
             args += ["--seed", str(seed)]
-        run_stage("qwen3vl_charades.py", args)
+        return "qwen3vl_charades.py", args
 
     def score(self, cfg, model=None) -> dict:
         import numpy as np
-        import torch
 
         band = cfg.band_indices()
         n = cfg.score.n_rollouts
@@ -99,10 +90,7 @@ class CharadesDataset(DatasetAdapter):
         by_query = defaultdict(list)   # (video,caption) -> [{seed, span, mtla, svar}]
         gt_of = {}
         for sd in range(n):
-            recs = []
-            for sp in sorted(glob.glob(f"{feat_root}/seed{sd}/shard*.pt")):
-                recs.extend(torch.load(sp, weights_only=False, map_location="cpu"))
-            for r in recs:
+            for r in self.load_shards(f"{feat_root}/seed{sd}"):
                 key = (r["video"], r["caption"])
                 mtla = _inside_sum(r["attn"]["frame_sum"][slot_idx].astype(np.float32),
                                    r["pred_span"], r["duration_s"], r["T_tokens"], band)
@@ -111,7 +99,6 @@ class CharadesDataset(DatasetAdapter):
                 by_query[key].append({"seed": sd, "span": span, "mtla": mtla, "svar": svar})
                 gt_of[key] = list(r["gt_span"])
         queries = sorted(by_query)
-        print(f"  queries={len(queries)}")
 
         # hallucination AUROC (single rollout, seed 0): grounded = IoU(pred,gt) >= 0.5
         mtla_s, svar_s, labels = [], [], []
@@ -121,7 +108,6 @@ class CharadesDataset(DatasetAdapter):
             mtla_s.append(c0["mtla"]); svar_s.append(c0["svar"]); labels.append(0 if hit else 1)
         auroc_mtla = auroc(mtla_s, labels) if mtla_s else float("nan")
         auroc_svar = auroc(svar_s, labels) if svar_s else float("nan")
-        print(f"\nAUROC (seed 0): MTLA={auroc_mtla:.4f}  SVAR={auroc_svar:.4f}")
 
         # span selection across rollouts. agg=max -> highest-MTLA span (headline).
         def select(cands, key):
@@ -138,9 +124,6 @@ class CharadesDataset(DatasetAdapter):
 
         mt = r_at("mtla")
         sv = r_at("svar")
-        print(f"\nN={n} selection (agg={cfg.score.agg}, slot={cfg.score.slot})")
-        print(f"  max-MTLA : R@.3 {mt[0]:.2f}  R@.5 {mt[1]:.2f}  R@.7 {mt[2]:.2f}  mIoU {mt[3]:.4f}")
-        print(f"  max-SVAR : R@.3 {sv[0]:.2f}  R@.5 {sv[1]:.2f}  R@.7 {sv[2]:.2f}  mIoU {sv[3]:.4f}")
         return {"auroc_mtla": auroc_mtla, "auroc_svar": auroc_svar,
                 "mtla": {"R@0.3": mt[0], "R@0.5": mt[1], "R@0.7": mt[2], "mIoU": mt[3]},
                 "svar": {"R@0.3": sv[0], "R@0.5": sv[1], "R@0.7": sv[2], "mIoU": sv[3]}}
