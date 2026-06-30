@@ -85,3 +85,56 @@ class ModelAdapter:
     def extract_script(self, task: str) -> str:
         """Filename in mtla/stages/ for the (always HF-eager) extract stage."""
         raise NotImplementedError(f"{type(self).__name__} has no extract for task {task}")
+
+    # ---- HF-eager extraction hooks (driven by the shared mtla/stages/*_extract.py) ----
+    def load_for_extract(self, gpu_id: int) -> dict:
+        """Load model + processor on `gpu_id`, install the eager-attention hook, and return a
+        ctx dict (model, processor/tokenizer, MTLAState, n_layers, n_heads, ...) the shared
+        driver passes back to `extract_one`."""
+        raise NotImplementedError(f"{type(self).__name__} has no load_for_extract")
+
+    def extract_one(self, pred_record: dict, ds_by_id: dict, ctx: dict, svar_shift: bool, rank: int = 0):
+        """Run one prediction record through HF-eager extraction and return its saved .pt record
+        (or None to skip). Image-det adapters delegate to `mtla.extract.compute_image_mtla`, which
+        drives the shared per-image MTLA computation and calls back the `ext_*` methods below for
+        the few model-specific pieces."""
+        raise NotImplementedError(f"{type(self).__name__} has no extract_one")
+
+    # ---- image_det model-specific callbacks invoked by mtla.extract.compute_image_mtla ----
+    # Each returns plain data; the shared orchestrator owns all the common flow (valid-pred
+    # filtering, query-position dedup, pred_specs, forward, buffer->record). Override these
+    # (not extract_one) to add an image_det model.
+    def ext_build_inputs(self, p, ds_item, ctx, rank):
+        """Preprocess image + build prompt. Return dict with keys: prompt_ids (1-D tensor),
+        response (str), image_idx_l (modality-token positions), meta (geometry), plus any keys
+        ext_forward_kwargs needs (e.g. pixel_values / inputs). Return None to skip."""
+        raise NotImplementedError
+
+    def ext_token_ranges(self, response, pred_bboxes, tokenizer):
+        """Per-prediction {first_label_tok, label_toks, coord_toks[, char_start]} or None."""
+        raise NotImplementedError
+
+    def ext_classify_keys(self, prompt_cpu, image_idx_l, specials_ids, tokenizer, prompt_len, total_len):
+        """Classify prompt tokens. Return {system, task, specials, response (lists),
+        user_turn_start, assistant_start}."""
+        raise NotImplementedError
+
+    def ext_region_mask(self, box, meta):
+        """(inside_idx, outside_idx) into the modality tokens for `box`."""
+        raise NotImplementedError
+
+    def ext_mentions(self, label, tokenizer, prompt_cpu, user_turn_start, end_pos):
+        """Prompt positions where `label` is mentioned (for mention attention)."""
+        raise NotImplementedError
+
+    def ext_forward_kwargs(self, full_ids, total_len, device, inp):
+        """kwargs dict for the patched `model(**fk)` forward."""
+        raise NotImplementedError
+
+    def ext_obj_extras(self, meta, tr) -> dict:
+        """Per-object record fields beyond the shared ones (e.g. tile_grid / grid_h)."""
+        return {}
+
+    def ext_rec_extras(self, meta) -> dict:
+        """Top-level record fields beyond the shared ones."""
+        return {}

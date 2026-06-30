@@ -3,10 +3,10 @@
 The whole method, once attention has been extracted, is a deterministic, parameter-free
 reduction. For a prediction ``p`` the extractor produces, for every transformer layer
 ``l`` and head ``h``, the attention that ``p``'s output tokens pay to the input-modality
-tokens that fall *inside* its proposal region. We average over heads and sum over a fixed
-band of middle layers:
+tokens that fall *inside* its proposal region. We average over heads and over a fixed
+band of middle layers (paper eq. 4):
 
-    s(p) = sum_{l in band}  mean_h  A[l, h]
+    s(p) = mean_{l in band}  mean_h  A[l, h]
 
 where ``A`` is one of the extracted ``[L, H]`` aggregates:
 
@@ -52,7 +52,7 @@ def reduce_band(
     Returns:
         A Python ``float`` for a single ``[L, H]`` input, or a ``[N]`` array for a batch.
 
-    The reduction is exactly ``attn[band].mean(axis=heads).sum(axis=layers)``.
+    The reduction is exactly ``attn[band].mean(axis=heads).mean(axis=layers)``.
     """
     if attn is None:
         return 0.0
@@ -71,7 +71,7 @@ def reduce_band(
         if not layers:
             raise ValueError(f"band {list(band)} has no valid layer for {n_layers}-layer tensor")
 
-    scores = a[:, layers, :].mean(axis=2).sum(axis=1)  # mean over heads, sum over band
+    scores = a[:, layers, :].mean(axis=2).mean(axis=1)  # mean over heads, mean over band
     return float(scores[0]) if single else scores
 
 
