@@ -168,7 +168,11 @@ def compute_mtla(adapter, p, ds_by_id, ctx, svar_shift, rank=0):
     # Model-specific: per prediction, the response-token spans for its Q_p. For images that is the
     # label + coordinate tokens; for video, the window's digit tokens (returned as `coord_toks`
     # with `first_label_tok` set to the first digit, so the assembly below is identical).
+    # Contract: token_ranges is index-aligned with `predictions` (one entry each), so `valid_pred_idx`
+    # below can index `predictions` directly.
     token_ranges = adapter.ext_token_ranges(response, predictions, tokenizer)
+    assert len(token_ranges) == len(predictions), (
+        f"ext_token_ranges must align with predictions: got {len(token_ranges)} vs {len(predictions)}")
 
     def _shift(pos):
         return max(0, pos - 1) if svar_shift else pos

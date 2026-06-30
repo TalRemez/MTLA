@@ -243,11 +243,10 @@ class Qwen3VLAdapter(ModelAdapter):
         return _vid_build_inputs(p, ds_by_id, ctx, rank)
 
     def _vid_token_ranges(self, response, predictions, tokenizer):
-        from ._qwen3vl_video import parse_windows_with_spans, perwindow_qp_tokens
-        _windows, spans = parse_windows_with_spans(response)
-        # predictions are the (already-parsed) windows from the prediction record; align Q_p to
-        # them by index (parse here reproduces the same dedup/order as the saved windows).
-        return perwindow_qp_tokens(response, predictions, spans, tokenizer)
+        # Q_p per stored predicted window, aligned index-for-index with `predictions` (keys off the
+        # stored windows, not an independent re-parse, so token_ranges[i] <-> predictions[i]).
+        from ._qwen3vl_video import perwindow_qp_tokens
+        return perwindow_qp_tokens(response, predictions, tokenizer)
 
     def _vid_region_mask(self, prediction, meta):
         from ._qwen3vl_video import span_to_frame_token_indices

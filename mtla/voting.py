@@ -14,8 +14,6 @@ matching overlap function via ``iou_fn``.
 """
 from __future__ import annotations
 
-from collections import defaultdict
-
 # Spatial/temporal IoU live in mtla.utils (the shared primitives home); re-exported here so
 # `from mtla.voting import iou, tiou` and `nms_fuse(..., iou_fn=iou)` keep working.
 from .utils import iou, tiou

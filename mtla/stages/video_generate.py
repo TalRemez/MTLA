@@ -34,11 +34,11 @@ def worker(rank, gpu_id, items, pred_dir, config_path, video_dir, seed):
         set_seed(seed * 1000 + rank)  # reproducible per (seed, rank) rollout
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
-    ctx = model.load_for_generate(gpu_id)
+    ctx = model.load_for_generate(gpu_id, cfg.generate.engine)
     vcfg = dataset.video
     sample_seed = seed if seed else None
     print(f"[worker {rank}] generate model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
-          f"n={len(items)} seed={seed}", flush=True)
+          f"n={len(items)} seed={seed} engine={cfg.generate.engine}", flush=True)
 
     preds = []
     n_done = n_skipped = 0

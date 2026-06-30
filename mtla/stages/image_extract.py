@@ -79,10 +79,17 @@ def main():
             continue
         p = Process(target=worker, args=(rank, gpu, list(chunk), out_dir, cfg.config_path,
                                          pred_file, args.svar_shift))
-        p.start(); procs.append(p)
-    for p in procs:
+        p.start(); procs.append((rank, p))
+    failed = []
+    for rank, p in procs:
         p.join()
-    print("all workers complete")
+        if p.exitcode != 0:
+            failed.append((rank, p.exitcode))
+    if failed:
+        # a crashed worker leaves its shard unwritten -> a silently incomplete run. Fail loudly.
+        raise SystemExit(f"[image_extract] {len(failed)} worker(s) failed (rank, exitcode): {failed}; "
+                         f"shards under {out_dir} are INCOMPLETE — fix the error and re-run.")
+    print(f"all {len(procs)} workers complete")
 
 
 if __name__ == "__main__":

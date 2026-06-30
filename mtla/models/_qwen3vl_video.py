@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from ..utils import tiou, tokens_overlapping_char_span, digit_token_positions
+from ..utils import tiou, tokens_overlapping_char_span
 
 _TIME = r'(\d{1,3}(?::\d{2})?(?:\.\d+)?)'
 _PATTERNS = [
@@ -57,23 +57,32 @@ def parse_windows_with_spans(text: str):
     return windows, spans
 
 
-def perwindow_qp_tokens(response: str, windows, spans, tokenizer):
-    """For each predicted window, the response digit-token indices whose char offsets fall inside
-    that window's [start,end] match (its Q_p). Returns a list aligned with `windows`, each a dict
-    {first_label_tok, label_toks=[], coord_toks=[...]} — the same shape the image adapter returns,
-    so the shared driver's Q_p assembly is identical. A window with no matched digits -> None."""
+def perwindow_qp_tokens(response: str, predictions, tokenizer):
+    """For each PREDICTED window (the stored `predictions`, the ones being scored), the response
+    digit-token indices whose char offsets fall inside that window's [start,end] match (its Q_p).
+    Returns a list ALIGNED WITH `predictions` (one entry each, index-for-index) — each a dict
+    {first_label_tok, label_toks=[], coord_toks=[...]} mirroring the image adapter, or None if the
+    window can't be located / has no digit tokens.
+
+    Crucially this keys off `predictions` (not an independent re-parse), so the returned list is
+    always `len(predictions)` long and aligns with `predictions[i]` — the shared driver indexes
+    both by the same i. (Re-parsing independently could yield a different count and misalign.)
+    """
     enc = tokenizer(response, add_special_tokens=False, return_offsets_mapping=True)
     offsets = enc["offset_mapping"]
+    # char-spans of every timestamp match in the response, keyed by rounded (start,end)
+    _windows, spans = parse_windows_with_spans(response)
+    span_by_key = {(round(w[0], 2), round(w[1], 2)): sp for w, sp in zip(_windows, spans)}
+
     out = []
-    for (cs, ce) in spans:
-        # digit tokens that lie within this window's char span
+    for w in predictions:
+        sp = span_by_key.get((round(w[0], 2), round(w[1], 2)))
+        if sp is None:
+            out.append(None); continue
+        cs, ce = sp
         toks = [ti for ti in tokens_overlapping_char_span(offsets, cs, ce)
                 if any(c.isdigit() for c in response[offsets[ti][0]:offsets[ti][1]])]
-        if not toks:
-            out.append(None); continue
-        out.append({"first_label_tok": toks[0], "label_toks": [], "coord_toks": toks})
-    # windows with no char span (shouldn't happen — spans aligns with windows) -> None
-    out += [None] * (len(windows) - len(out))
+        out.append({"first_label_tok": toks[0], "label_toks": [], "coord_toks": toks} if toks else None)
     return out
 
 

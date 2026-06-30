@@ -56,8 +56,3 @@ def repeat_kv(hidden_states, n_rep: int):
 def tokens_overlapping_char_span(offsets, lo: int, hi: int) -> list:
     """Token indices whose char span ``[ts, te)`` overlaps the char range ``[lo, hi)``."""
     return [ti for ti, (ts, te) in enumerate(offsets) if ts < hi and te > lo]
-
-
-def digit_token_positions(offsets, text: str) -> list:
-    """Token indices whose text contains a digit (the timestamp/coordinate digit tokens)."""
-    return [ti for ti, (ts, te) in enumerate(offsets) if any(c.isdigit() for c in text[ts:te])]
