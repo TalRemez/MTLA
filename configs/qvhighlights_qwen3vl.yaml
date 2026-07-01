@@ -1,6 +1,6 @@
 # QVHighlights temporal grounding with Qwen3-VL-8B  (single rollout).
 # Single-rollout MTLA mAP ~24.5; the headline NMS-MTLA mAP 36.6 / R@1@0.5 55.1 comes from
-# N=16 self-consistency voting (set n_rollouts: 16).
+# N=16 self-consistency voting (pass --n 16 at launch).
 model: qwen3vl
 dataset: qvhighlights
 
@@ -10,16 +10,12 @@ paths:
   predictions: runs/qvh/predictions
   features: runs/qvh/features                                 # seed{K}/shard*.pt
 
-n_rollouts: 1                                      # one knob: produce + vote over seeds 0..n-1 (16 for the headline)
-
 generate:
-  gpus: null                                        # null = all visible GPUs
   temperature: 0.7
   top_p: 0.95
   max_new_tokens: 128
 
 extract:
-  gpus: null
 
 score:
   agg: max                                          # video: max-of-cluster fusion

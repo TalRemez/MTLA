@@ -54,8 +54,7 @@ class CocoDataset(DatasetAdapter):
         return PROMPT.format(cats=", ".join(item.get("categories", COCO_CLASSES)))
 
     def ground_truth(self, item):
-        return [{"region": o["bbox_2d"], "label": o["label"]}
-                for o in json.loads(item["conversations"][1]["value"])]
+        return [{"region": o["bbox_2d"], "label": o["label"]} for o in item["gt"]]
 
     def gen_record(self, cfg, item, response, truncated=False):
         return {"id": item["id"], "prompt": self.prompt(item), "response": response,

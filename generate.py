@@ -14,11 +14,11 @@ Everything model/dataset specific lives behind the adapter contract:
     ``vllm_uses_seed`` (see mtla.models.base);
   - the DATASET owns items + the uniform record + the strategy: ``load_items``, ``gen_record``,
     ``gen_strategy``;
-  - the two strategies live in ``_gen_strategies.py``: ``run_pooled`` (async multi-engine pool,
+  - the two strategies live in ``gen_strategies.py``: ``run_pooled`` (async multi-engine pool,
     throughput on many small requests) and ``run_sharded`` (one engine per GPU, heavy per-item work).
 
-    python generate.py --config configs/coco_internvl.yaml            # seeds 0..n_rollouts-1
-    python generate.py --config configs/coco_internvl.yaml --seeds 0 1 2
+    python -m generate --config configs/coco_internvl.yaml            # 1 rollout
+    python -m generate --config configs/coco_internvl.yaml --n 16      # 16 rollouts (seeds 0..15)
 
 Writes ``<predictions>/seed{K}/predictions.json`` (merged + idx-sorted across workers).
 """
@@ -31,7 +31,7 @@ import multiprocessing as mp
 # Both strategies spawn CUDA subprocesses; the spawn start-method is required.
 mp.set_start_method("spawn", force=True)
 
-from _gen_strategies import run_pooled, run_sharded
+from gen_strategies import run_pooled, run_sharded
 
 from mtla.config import load_config
 from mtla.registry import resolve
@@ -74,9 +74,13 @@ def generate_seed(cfg, model, dataset, seed, tuning):
 def main():
     ap = argparse.ArgumentParser(description="MTLA generation stage (vLLM).")
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
-    ap.add_argument("--seeds", type=int, nargs="+", default=None,
-                    help="rollout seeds to produce (default: 0..n_rollouts-1)")
-    ap.add_argument("--n", type=int, default=None, help="override n_rollouts (sets the default seeds)")
+    ap.add_argument("--n", type=int, default=None,
+                    help="number of rollouts to produce (seeds 0..n-1; default 1)")
+    ap.add_argument("--gpus", type=int, nargs="+", default=None,
+                    help="GPU indices to run on (default: all visible GPUs)")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="run on only the first N items (e.g. 100 for a quick test); "
+                         "default: the full set")
     # Backend tuning knobs (not part of the run config; tune per box). The pool uses all of them;
     # the sharded path uses only the sampling knobs (temperature/top_p/max_new_tokens/seed).
     ap.add_argument("--tp", type=int, default=1, help="vLLM tensor-parallel size per engine (pooled)")
@@ -89,11 +93,25 @@ def main():
     cfg = load_config(args.config)
     if args.n is not None:
         cfg.n_rollouts = args.n
+    if args.gpus is not None:
+        cfg.generate.gpus = args.gpus
+    if args.limit is not None:
+        cfg.generate.n_items = args.limit
     model, dataset = resolve(cfg.model, cfg.dataset)
     tuning = {"tp": args.tp, "max_model_len": args.max_model_len, "gpu_mem_util": args.gpu_mem_util,
               "concurrency": args.concurrency, "num_cpu_workers": args.num_cpu_workers}
 
-    seeds = args.seeds if args.seeds is not None else cfg.seeds()
+    # Fetch the model ONCE in the parent (weights + config + processor), then go offline so the
+    # spawned workers load purely from the local snapshot. Without this each worker fetches
+    # independently: transformers pings the Hub even for a cached model, so 8+ concurrent workers get
+    # the IP rate-limited (HTTP 429). snapshot_download (not just the processor) is required because
+    # vLLM, once offline, resolves model_id to the local snapshot dir and needs config.json + weights.
+    from huggingface_hub import snapshot_download
+    snapshot_download(model.model_id)
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+    seeds = cfg.seeds()
     for i, seed in enumerate(seeds):
         print(f"[generate] seed {seed}  ({i + 1}/{len(seeds)})", flush=True)
         generate_seed(cfg, model, dataset, seed, tuning)

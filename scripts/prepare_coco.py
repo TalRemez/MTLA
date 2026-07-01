@@ -8,40 +8,22 @@ Downloads COCO val2017 images + annotations, then builds the open-vocabulary dat
 
 The open-vocab JSON has one entry per image:
   {id, image, categories (sorted class names present in the GT), num_objects,
-   conversations: [{from:human, value:<prompt>}, {from:gpt, value:<GT as bbox_2d JSON>}]}
+   gt: [{bbox_2d:[x1,y1,x2,y2], label}, ...]}
 Boxes are scaled to [0,1000] (Qwen/InternVL grounding convention); the GT list keeps COCO's
-annotation order. The prompt lists all 80 COCO classes (the model adapters either use it verbatim
-or build their own from `categories`).
+annotation order. No prompt is stored here — the prompt is the single source in the `coco` adapter
+(`mtla.data.coco.PROMPT`, filled from each entry's `categories`).
 
-    python scripts/prepare_coco.py            # -> data/coco/
-    python scripts/prepare_coco.py --out /data/coco
+    python -m scripts.prepare_coco            # -> data/coco/
+    python -m scripts.prepare_coco --out /data/coco
 """
 import argparse
 import json
 import os
 
-from _prep_utils import download, unzip, out_dir, done_banner
+from scripts._prep_utils import download, unzip, out_dir, done_banner
 
 IMAGES_URL = "http://images.cocodataset.org/zips/val2017.zip"
 ANNOS_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
-
-COCO_80 = [
-    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
-    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
-    "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
-    "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
-    "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
-    "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
-    "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
-    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
-    "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier",
-    "toothbrush",
-]
-
-PROMPT = ("<image>\nLocate all instances of " + ", ".join(COCO_80) +
-          " in this image and output the bbox coordinates in JSON format.")
-
 
 def build_openvocab(instances_json: str, images_dir: str, out_json: str) -> int:
     """Build coco_val_openvocab_80.json from instances_val2017.json (matches the paper's file)."""
@@ -74,10 +56,7 @@ def build_openvocab(instances_json: str, images_dir: str, out_json: str) -> int:
             "image": os.path.join(images_dir, img["file_name"]),
             "categories": categories,
             "num_objects": len(gt),
-            "conversations": [
-                {"from": "human", "value": PROMPT},
-                {"from": "gpt", "value": json.dumps(gt)},
-            ],
+            "gt": gt,                      # [{bbox_2d:[x1,y1,x2,y2] in [0,1000], label}, ...]
         })
     with open(out_json, "w") as f:
         json.dump(records, f)

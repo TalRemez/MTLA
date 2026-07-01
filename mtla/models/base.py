@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from transformers import AutoProcessor
+
 
 @dataclass
 class Prediction:
@@ -64,8 +66,10 @@ class ModelAdapter:
 
     # ---- generation (vLLM only; driven by generate.py) ----
     def gen_processor(self):
-        """Load + return the processor/tokenizer used to build vLLM requests (once per worker)."""
-        raise NotImplementedError(f"{type(self).__name__} has no gen_processor")
+        """Load + return the processor/tokenizer used to build vLLM requests (once per worker).
+        Default: ``AutoProcessor.from_pretrained(self.model_id)``; override only if a family needs
+        non-default processor kwargs."""
+        return AutoProcessor.from_pretrained(self.model_id)
 
     def vllm_engine_args(self, dataset) -> dict:
         """Model/modality-specific vLLM engine kwargs (e.g. ``limit_mm_per_prompt``,

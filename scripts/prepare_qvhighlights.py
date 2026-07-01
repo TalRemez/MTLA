@@ -7,27 +7,34 @@ places `highlight_val_release.jsonl` where the `qvhighlights` adapter loads it
 
 Produces, under `--out` (default `data/qvhighlights/`):
   - highlight_val_release.jsonl    val annotations          (config `paths.ann`)
-  - videos/                        you provide the clips    (config `paths.video_dir`)
+  - videos/                        the clips as `{vid}.mp4`  (config `paths.video_dir`)
 
-Videos are large and distributed separately (Google Drive); see the printed instructions and the
-Moment-DETR README. Place the val clips as `{vid}.mp4` under the `videos/` dir.
+The raw videos are one large tarball (~134GB, all splits) from the QVHighlights authors; it is
+downloaded + extracted by default. Pass `--skip-videos` to skip it (annotations only) and provide
+the clips yourself under the `videos/` dir.
 
-    python scripts/prepare_qvhighlights.py        # -> data/qvhighlights/
+    python -m scripts.prepare_qvhighlights                # annotations + videos (~134GB)
+    python -m scripts.prepare_qvhighlights --skip-videos  # annotations only
 """
 import argparse
+import glob
 import os
 
-from _prep_utils import download, out_dir, done_banner
+from scripts._prep_utils import download, untar, out_dir, done_banner
 
 # Official annotations ship in the Moment-DETR repo's data.zip (MIT). This is the upstream raw URL.
 ANNO_ZIP_URL = "https://raw.githubusercontent.com/jayleicn/moment_detr/main/data/highlight_val_release.jsonl"
 VAL_JSONL = "highlight_val_release.jsonl"
+# Raw videos (all splits) from the QVHighlights authors; the tarball extracts to `videos/{vid}.mp4`.
+VIDEOS_URL = "https://nlp.cs.unc.edu/data/jielei/qvh/qvhilights_videos.tar.gz"
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=None, help="output dir (default: <repo>/data/qvhighlights)")
+    ap.add_argument("--skip-videos", action="store_true",
+                    help="skip the ~134GB raw-video download (annotations only)")
     args = ap.parse_args()
     root = out_dir(args.out, "qvhighlights")
 
@@ -40,10 +47,15 @@ def main():
               f"\n        (data/ dir) and place it at {ann}")
 
     videos = os.path.join(root, "videos")
-    os.makedirs(videos, exist_ok=True)
-    print(f"\n  Videos: QVHighlights clips are distributed separately (large; Google Drive).")
-    print(f"  Follow the Moment-DETR README data instructions, then place the val clips as")
-    print(f"  {{vid}}.mp4 under: {videos}")
+    if args.skip_videos:
+        os.makedirs(videos, exist_ok=True)
+        print(f"\n  [skip] videos (--skip-videos); place the {{vid}}.mp4 clips under: {videos}")
+    elif glob.glob(os.path.join(videos, "*.mp4")):
+        print(f"\n  [skip] videos already present under {videos}")
+    else:
+        # tarball extracts `videos/{vid}.mp4` into the dataset root -> exactly paths.video_dir
+        tar = download(VIDEOS_URL, os.path.join(root, "qvhilights_videos.tar.gz"))
+        untar(tar, root)
 
     done_banner("QVHighlights", [f"paths.ann:       {ann}",
                                  f"paths.video_dir: {videos}"])

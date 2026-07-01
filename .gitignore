@@ -35,6 +35,8 @@ results*/
 
 # Scratch output
 *.tmp
+*.bak
+*.bak_*
 
 # Agent handover notes — local only, never push
 HANDOVER_AGENT.md

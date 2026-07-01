@@ -17,12 +17,14 @@ Example (configs/coco_internvl.yaml)::
       coco_gt: data/coco/annotations/instances_val2017.json
       predictions: runs/coco/predictions
       features: runs/coco/features
-    n_rollouts: 1              # one knob: generate/extract produce seeds 0..n-1, score votes
-    generate: {temperature: 0.7, top_p: 1.0, max_new_tokens: 4096, gpus: null}
-    extract:  {gpus: null, n_items: 5000}
+    generate: {temperature: 0.7, top_p: 1.0, max_new_tokens: 4096}
     score:    {agg: sum}
     band: [8, 21]              # inclusive middle-layer band; null = all layers
     preprocess: {}             # video runs set {fps, min_pixels, max_pixels}
+
+The rollout count, GPUs, and item limit are set at launch, not in the config: ``--n``
+(n_rollouts), ``--gpus``, and ``--limit`` (first N items; default: all) on generate.py /
+extract.py (defaults: 1 rollout, all visible GPUs, all items).
 """
 from __future__ import annotations
 
@@ -46,7 +48,7 @@ def all_visible_gpus() -> list:
 class StageCfg:
     """Per-stage knobs. Not every field applies to every stage; unknown YAML keys are ignored."""
     gpus: list | None = None           # None = all visible GPUs (see RunConfig.stage_gpus)
-    n_items: int = 0                   # extract/generate: 0 = all items
+    n_items: int = 0                   # 0 = all items; set at launch via --limit, not in configs
     agg: str = "max"                   # score: voting fusion (max | sum | support | mean)
     temperature: float = 0.7           # generate: sampling temperature for stochastic rollouts
     top_p: float = 1.0                 # generate: nucleus sampling top-p

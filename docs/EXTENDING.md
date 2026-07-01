@@ -139,7 +139,7 @@ score:    {agg: max}
 band: [8, 21]
 ```
 
-`python score.py --config configs/mybench_myvlm.yaml` now works. `mtla/data/coco.py` is the
+`python -m score --config configs/mybench_myvlm.yaml` now works. `mtla/data/coco.py` is the
 smallest complete `image_det` example; `mtla/data/charades.py` the smallest `video_span` one.
 
 ### Reusing vs. adding a metric

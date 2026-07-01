@@ -245,9 +245,6 @@ class Qwen3VLAdapter(ModelAdapter):
         # COCO did NOT seed vLLM (matches the validated paper preds); video DOES (per-rollout draw).
         return task == "video_span"
 
-    def gen_processor(self):
-        return AutoProcessor.from_pretrained(self.model_id)
-
     def build_request(self, proc, item, dataset, cfg):
         # `item` is a raw dataset item (from load_items); the dataset owns its prompt + media path.
         if dataset.task == "video_span":

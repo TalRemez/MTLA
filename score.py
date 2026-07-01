@@ -4,8 +4,8 @@ Reads ``<features>/seed{K}/shard*.pt`` for seeds ``0..n_rollouts-1`` and compute
 AUROC + the benchmark's task metric. No GPU and no model weights: all the work (band reduction,
 self-consistency voting, NMS, metric evaluation) lives in ``mtla.evaluate`` / ``mtla.metrics``.
 
-    python score.py --config configs/coco_internvl.yaml
-    python score.py --config configs/coco_internvl_voting.yaml --n 16 --agg sum
+    python -m score --config configs/coco_internvl.yaml
+    python -m score --config configs/coco_internvl.yaml --n 16 --agg sum   # N=16 voting headline
 """
 import argparse
 

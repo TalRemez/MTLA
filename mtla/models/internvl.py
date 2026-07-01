@@ -178,9 +178,6 @@ class InternVLAdapter(ModelAdapter):
     def vllm_uses_seed(self, task):
         return True
 
-    def gen_processor(self):
-        return AutoProcessor.from_pretrained(self.model_id)
-
     def build_request(self, proc, item, dataset, cfg):
         # `item` is a raw dataset item (from load_items), not a generation record.
         image = Image.open(item["image"]).convert("RGB")

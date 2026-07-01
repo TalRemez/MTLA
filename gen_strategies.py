@@ -73,7 +73,9 @@ def _pooled_gpu_worker(engine_id, gpu_ids_str, ready_queue, result_queue, config
     try:
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_ids_str
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        cache_dir = f"/tmp/vllm_cache_mtla/engine_{engine_id}"
+        # User-scoped cache root: on shared boxes a dir owned by another user under /tmp is not
+        # writable, so per-user paths avoid cross-user PermissionErrors.
+        cache_dir = f"/tmp/vllm_cache_mtla_{os.environ.get('USER', 'u')}/engine_{engine_id}"
         os.makedirs(cache_dir, exist_ok=True)
         os.environ["VLLM_CACHE_ROOT"] = cache_dir
         from vllm import AsyncLLMEngine, AsyncEngineArgs, SamplingParams

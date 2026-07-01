@@ -12,8 +12,8 @@ the full per-token spatial attention `[n_token, L, H, n_patch]`, then reduces ea
 Unlike the `extract` stage it keeps the map *spatial* (no inside-region masking) — the figure is
 about where attention lands. Rendering reuses `mtla.viz` (turbo overlay).
 
-    python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml
-    python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml \
+    python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml
+    python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml \
         --targets 64499:0:grounded 60823:3:hallu --out fig3.pdf
 
 Default targets are the paper's Fig. 3 (grounded zebra + bird; hallucinated cow→"horse" + phantom
@@ -124,11 +124,21 @@ def main():
     targets = parse_targets(args.targets) if args.targets else DEFAULT_TARGETS
     cfg = load_config(args.config)
     model, dataset = resolve(cfg.model, cfg.dataset)
-    if cfg.dataset != "coco":
-        print(f"[warn] figure_pertoken is written for COCO detection; got dataset={cfg.dataset}")
+    # This figure is Qwen3-VL-specific: it loads the model with the Qwen3-VL classes and patches the
+    # Qwen3-VL attention module. Other model configs would load the wrong weights into that class.
+    if cfg.model != "qwen3vl" or cfg.dataset != "coco":
+        raise SystemExit(
+            f"figure_pertoken only supports the Qwen3-VL COCO config, got model={cfg.model} "
+            f"dataset={cfg.dataset}. Run: python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml")
+
+    preds_path = os.path.join(cfg.pred_dir(0), "predictions.json")
+    if not os.path.exists(preds_path):
+        raise SystemExit(
+            f"no predictions at {preds_path}. Generate them first:\n"
+            f"    python -m generate --config {args.config}")
 
     ds_by_id = {d["id"]: d for d in dataset.load_items(cfg)}
-    preds_by_id = {p["id"]: p for p in json.load(open(os.path.join(cfg.pred_dir(0), "predictions.json")))}
+    preds_by_id = {p["id"]: p for p in json.load(open(preds_path))}
 
     # load model + install the capture hook
     dev = f"cuda:{args.gpu}"
@@ -151,7 +161,7 @@ def main():
         pbs = pr.get("pred_bboxes") or []
         if pi >= len(pbs):
             print(f"[skip] {iid} pi={pi}: only {len(pbs)} predictions"); continue
-        prompt = di["conversations"][0]["value"].replace("<image>\n", "")
+        prompt = dataset.prompt(di)     # canonical COCO prompt (mtla.data.coco), same as the pipeline
         img = Image.open(di["image"]).convert("RGB")
         text = proc.apply_chat_template(
             [{"role": "user", "content": [{"type": "image", "image": img},

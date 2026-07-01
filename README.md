@@ -1,102 +1,89 @@
-# Propose and Attend: Training-free MLLM Grounding Confidence via Multi-Token Localized Attention
+# MTLA: Multi-Token Localized Attention
 
 **Does a multimodal LLM actually look where it says it's looking?**
 
 When a vision, video, or audio LLM grounds a prediction (a bounding box, a time span) it also
-produces internal attention over the input. MTLA reads that attention and asks a simple
-question: *did the prediction's tokens attend to evidence **inside** the region they claim?*
-Grounded predictions do, while hallucinations attend elsewhere. The result is a
-**training-free, post-hoc** confidence score that needs no fine-tuning, no extra model, and
-no labels, just one forward pass of the model you already have.
+produces internal attention over the input. MTLA reads that attention and asks one question:
+*did the prediction's tokens attend to evidence **inside** the region they claim?* Grounded
+predictions do; hallucinations attend elsewhere. The result is a **training-free, post-hoc**
+confidence score — no fine-tuning, no extra model, no labels, just the model's own attention from
+the forward pass that produced the prediction.
+
+Used as a confidence for self-consistency re-ranking, MTLA lifts an open-source 8B generalist from
+**27.6 → 41.9 AP** on COCO detection, matching a supervised DETR detector (42.0 AP) — zero-shot.
 
 <p align="center">
   <img src="assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects, then MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
 </p>
-<p align="center"><em>An MLLM emits box and label predictions. MTLA reads the decoder's attention
-from each prediction's tokens, restricts it to the patches inside the proposed region, and scores
-the prediction by how much attention falls inside, high when grounded and low when hallucinated.</em></p>
 
 ## Method
 
-MTLA is a **training-free, post-hoc** confidence score for grounding predictions from
-multimodal LLMs. It needs no extra parameters, no fine-tuning, and no auxiliary model: it
-reads the model's own attention from the same forward pass that produced the prediction.
+MTLA is a **training-free, post-hoc** confidence score for grounding predictions from multimodal
+LLMs. It needs no extra parameters, no fine-tuning, and no auxiliary model: it reads the model's
+own attention from the same forward pass that produced the prediction.
 
-**Problem setup.** A grounding MLLM autoregressively emits one or more localized predictions.
-Each prediction `p` has a **proposal region** `R_p` and a label. Depending on the modality, `R_p` is
+**Problem setup.** A grounding MLLM autoregressively emits one or more localized predictions. Each
+prediction $p$ has a **proposal region** $R_p$ and a label. Depending on the modality, $R_p$ is a
+bounding box $[x_1, y_1, x_2, y_2]$ in an image (coordinates in $[0, 1000]$) or a temporal interval
+$[t_{\text{start}}, t_{\text{end}}]$ in video or audio. A prediction is **hallucinated** if its region
+matches no ground-truth region under the task's criterion ($\text{IoU} \geq 0.5$ throughout). The goal
+is a scalar score $s(p)$, computed from the model's attention, high for grounded predictions and low
+for hallucinations.
 
-- a bounding box `[x1, y1, x2, y2]` in an image (coordinates in `[0, 1000]`), or
-- a temporal interval `[t_start, t_end]` in video or audio.
+**Localized Attention (LA).** Let the transformer have $L$ layers and $H$ heads, and let
+$X = \{k_1, \dots, k_N\}$ be the input-modality tokens (image patches or video/audio frames). For a
+response token at position $q$, the model produces attention weights $a^{(l,h)}_{q \to k}$ over
+$k \in X$. The key idea is to restrict the attention sum to the tokens *inside* the proposal region
+$M(R_p)$:
 
-A prediction is **hallucinated** if its region matches no ground-truth region under the task's
-criterion (IoU ≥ 0.5 throughout). The goal is a scalar score `s(p)`, computed from the model's
-attention, that is high for grounded predictions and low for hallucinations.
+$$\mathrm{LA}^{(l,h)}(q) = \sum_{k \in M(R_p)} a^{(l,h)}_{q \to k}$$
 
-**Localized Attention (LA).** Let the transformer have `L` layers and `H` heads, and let
-`X = {k_1, ..., k_N}` be the input-modality tokens (image patches, video frames, or audio
-frames). For a response token at position `q`, the model produces attention weights
-`a[l,h](q -> k)` over `k ∈ X`. The key idea is to restrict the attention sum to the tokens
-*inside* the proposal region, `M(R_p)` (image patches overlapping the box; frames whose
-timestamps fall in the span):
+A grounded prediction attends strongly to evidence inside its own region; a hallucination relies on
+context scattered elsewhere, so its localized attention stays low even when its *global* attention
+(the [SVAR](#acknowledgements) baseline, summed over all of $X$) is comparable.
 
-```
-LA[l,h](q) = sum over k in M(R_p) of  a[l,h](q -> k)
-```
+**Multi-token aggregation.** A prediction spans several tokens (the digits of each coordinate plus
+the label). Any single token's attention is noisy; averaging across the prediction's tokens $Q_p$
+is far more robust — this is **Multi-Token Localized Attention**:
 
-A grounded prediction attends strongly to evidence inside its own region; a hallucination
-relies on context scattered elsewhere, so its localized attention stays low even when its
-*global* attention (the [SVAR](#acknowledgements) baseline, which sums over all of `X`) is comparable.
+$$\mathrm{MTLA}^{(l,h)}(p) = \frac{1}{|Q_p|} \sum_{q \in Q_p} \mathrm{LA}^{(l,h)}(q)$$
 
-**Multi-token aggregation.** A prediction spans several tokens (the digits of each coordinate,
-plus the label). Any single token's attention is noisy; averaging across the prediction's
-tokens `Q_p` is far more robust — this is **Multi-Token Localized Attention**:
+**Layer and head reduction.** Average over heads and over a fixed band of middle layers to get one
+scalar:
 
-```
-MTLA[l,h](p) = (1/|Q_p|) * sum over q in Q_p of  LA[l,h](q)
-```
-
-**Layer and head reduction.** Average over heads and over a fixed band of middle layers to get
-one scalar:
-
-```
-s(p) = mean over l in band of  ( (1/H) * sum over h of  MTLA[l,h](p) )
-```
+$$s(p) = \frac{1}{|\mathcal{L}|} \sum_{l \in \mathcal{L}} \frac{1}{H} \sum_{h=1}^{H} \mathrm{MTLA}^{(l,h)}(p)$$
 
 The default band is **layers 8–21** (`mtla.DEFAULT_BAND`), used for every image and video model
-tested (Qwen3-VL, InternVL: 36 layers; Gemma-4: 42). Audio (Audio Flamingo 3, 28 layers) uses
-**all** layers. MTLA is not very sensitive to the exact band (see the paper's ablation). The whole
-reduction is `mtla.reduce_band`.
+tested (Qwen3-VL, InternVL: 36 layers; Gemma-4: 42). MTLA is not sensitive to the exact band. The
+whole reduction is `mtla.reduce_band`.
 
-**Self-consistency voting.** Sampling `N` stochastic rollouts per input enlarges the candidate
-pool (better recall). We pool predictions across rollouts, merge overlaps with non-maximum
-suppression, and score each kept prediction from its cluster's MTLA values (`mtla.nms_fuse`):
+**Self-consistency voting.** Sampling `N` stochastic rollouts per input enlarges the candidate pool
+(better recall). We pool predictions across rollouts, merge overlaps with non-maximum suppression,
+and score each kept prediction from its cluster's MTLA values (`mtla.nms_fuse`):
 
-- **max** (default): keep the single highest-scoring rollout. Used for video and audio.
-- **sum**: sum the cluster's scores, rewarding regions that recur across rollouts. Used for
-  **COCO detection only**, where each image yields many predictions; there it beats max.
+- **max** (default): keep the single highest-scoring rollout.
+- **sum**: sum the cluster's scores, rewarding regions that recur across rollouts — used for **COCO
+  detection**, where each image yields many predictions and sum beats max.
 
 ## Results
 
-Headline numbers reproduced by the example pipelines. MTLA is the inside-region attention score
+Headline numbers reproduced by the example configs. MTLA is the inside-region attention score
 (ours); **SVAR** (Jiang et al.) is the global-attention baseline we compare against. All use the
-default middle-layer band (L8–21) except AudioSet, which uses all 28 layers. IoU ≥ 0.5 throughout.
+default middle-layer band (L8–21); $\text{IoU} \geq 0.5$ throughout.
 
 ### Task accuracy after MTLA re-ranking / self-consistency voting
 
-One method, four modalities, no training. Re-ranking each benchmark's `N=16` stochastic rollouts
-by MTLA also improves the **standard task metric** — the paper reports AP for COCO detection and
-QVHighlights, R@1@0.5 for Charades-STA, and PSDS1 for AudioSet-Strong:
+One method, no training. Re-ranking each benchmark's `N=16` stochastic rollouts by MTLA improves
+the **standard task metric** — AP for COCO detection and QVHighlights, R@1@0.5 for Charades-STA:
 
 | Benchmark | Model | Metric | MTLA | SVAR baseline | Supervised reference |
 |---|---|---|--:|--:|--:|
 | COCO detection | InternVL3.5-8B | AP | **41.9** | 32.7 | 42.0 *(DETR)* |
-| QVHighlights (video) | Qwen3-VL-8B | mAP | **36.6** | 28.1 | — |
-| Charades-STA (video) | Qwen3-VL-8B | R@1@0.5 | **55.4** | 43.8 | — |
-| AudioSet-Strong (audio) | Audio Flamingo 3 | PSDS1 | **0.26** | 0.23 | 0.33 *(BEATs)* |
+| QVHighlights (video) | Qwen3-VL-8B | mAP | **36.6** | 28.1 | 30.7–39.9 *(Moment-DETR / QD-DETR)* |
+| Charades-STA (video) | Qwen3-VL-8B | R@1@0.5 | **55.4** | 43.8 | 52.1–57.3 *(Moment-DETR / QD-DETR)* |
 
-Zero-shot and training-free, MTLA reaches the supervised range: it matches DETR on COCO, lands
-between Moment-DETR and QD-DETR on the video benchmarks, and approaches a supervised sound-event
-detector on AudioSet.
+Zero-shot and training-free, MTLA reaches the supervised range: it matches DETR on COCO and lands
+between Moment-DETR and QD-DETR on the video benchmarks.
 
 ### Hallucination detection — AUROC (single rollout)
 
@@ -109,200 +96,189 @@ How well the score separates grounded from hallucinated predictions.
 | COCO detection | Gemma-4 E4B | **0.753** | 0.671 |
 | QVHighlights (video) | Qwen3-VL-8B | **0.800** | 0.415 |
 | Charades-STA (video) | Qwen3-VL-8B | **0.684** | 0.512 |
-| AudioSet-Strong (audio) | Audio Flamingo 3 | **0.813** | 0.608 |
 
-`score.py --config configs/coco_internvl.yaml` reproduces the InternVL row and
-`configs/coco_qwen3vl.yaml` the Qwen3-VL row — same `CocoDataset`, different `model:`.
+> Numbers are from the paper (the citable source of record). The COCO and QVHighlights rows are
+> reproducible end-to-end with the example configs below.
 
-> Numbers are from the paper (the citable source of record; link to be added on release); the COCO
-> and QVHighlights rows are reproducible end-to-end with the example scripts.
-
-## Use it on your own predictions
-
-The extract stage saves, per prediction, a `[L, H]` array `local_attention`: the attention its
-tokens pay to the modality tokens **inside** its proposed region. Scoring it is CPU-only —
-`mtla_score` reduces the array to one scalar (mean over heads, mean over the layer band); higher
-means more grounded.
-
-```python
-import glob, torch
-from mtla import mtla_score, auroc
-
-objs = [o for f in glob.glob("runs/coco/features/seed0/shard*.pt")
-        for r in torch.load(f, weights_only=False) for o in r["objects"]]
-scores = [mtla_score(o) for o in objs]                 # [L,H] -> scalar per prediction
-labels = [o["is_hallucinated"] for o in objs]          # IoU>=0.5 flags
-print(f"AUROC = {auroc(scores, labels):.3f}")
-```
-
-**Starting from your own model?** The generate stage writes a `predictions.json` of uniform,
-model-agnostic records — `[{id, prompt, response, gt, extra}, ...]`, where `response` is the raw
-model output (parsing happens later) and `gt` is a list of `{region, label}`. Then the extract
-stage does the GPU forward pass that captures attention, and score:
+## Setup
 
 ```bash
-python extract.py --config configs/coco_internvl.yaml   # GPU: predictions -> [L,H] shards
-python score.py   --config configs/coco_internvl.yaml   # CPU: shards -> AUROC / mAP
+git clone https://github.com/TalRemez/MTLA.git
+cd MTLA
+conda create -n mtla python=3.10 -y
+conda activate mtla
+pip install uv
+uv pip install -r requirements.txt
 ```
 
-To plug in a different model or task, see [Extending](#extending-add-a-new-model-or-task).
+## Full reproduction — the three-stage pipeline
 
-The package is small and modular:
+Every benchmark runs through the same three stages; a YAML config picks the model + dataset. No data
+or bulk features ship with the repo — you download the datasets and regenerate the features (GPU for
+`generate`/`extract`, CPU for `score`).
 
-| Module | What it does |
-|---|---|
-| `mtla.mtla_attn` | `mtla_localized_attention` (the paper's eqs. 2–3) + the attention-capture hook + per-item driver |
-| `mtla.score` | `reduce_band`, `mtla_score` — the layer-band + head reduction (eq. 4) |
-| `mtla.voting` | self-consistency NMS fusion across rollouts (`max` / `sum` / ...) |
-| `mtla.evaluate` | the score stage: shards → band reduction → voting → metrics (all computation) |
-| `mtla.metrics` | pure metric computers: AUROC, COCO mAP, moment-retrieval, recall@IoU |
-| `mtla.utils` | shared primitives: `iou` / `tiou`, `repeat_kv`, token-span helpers |
-| `mtla.viz` | attention heatmap overlays |
+### 1. Prepare the data
 
-## Full reproduction — one config-driven pipeline
-
-Every benchmark runs through the same three stages; a YAML config picks the model + dataset.
-No data or bulk features are shipped; you download the datasets and regenerate the features
-(GPU needed for `generate`/`extract`, `score` is CPU-only).
-
-**Prepare the data.** One script per dataset downloads the source and writes the files the
-adapters load, into a repo-relative `data/` directory (the default the configs point at). Each
-script prints the exact `paths:` to copy into your config; video clips are large and fetched
-separately (the scripts say where). Details: [`docs/DATA.md`](docs/DATA.md).
+One script per dataset, into the repo-relative `data/` directory the configs point at. Each prints
+the `paths:` to copy into your config and downloads everything it needs, **including the video
+clips** (large; pass `--skip-videos` to fetch annotations only). Sources, JSON schema, and sizes:
+[`docs/DATA.md`](docs/DATA.md).
 
 ```bash
-python scripts/prepare_coco.py          # images + instances_val2017.json + the open-vocab JSON
-python scripts/prepare_qvhighlights.py  # val annotations (jsonl); add the videos yourself
-python scripts/prepare_charades.py --from-annotations charades_sta_test.txt   # test parquet
+python -m scripts.prepare_coco
+python -m scripts.prepare_qvhighlights   # ~134GB of video; --skip-videos for annotations only
+python -m scripts.prepare_charades       # ~15GB of video;  --skip-videos for annotations only
 ```
 
-`prepare_coco.py` builds the open-vocabulary detection JSON straight from the official COCO
-annotations (per-image present classes, GT boxes scaled to `[0, 1000]`, `iscrowd` excluded), so
-the dataset is fully reproducible rather than a shipped blob.
+### 2. Run the three stages
 
-**Run the three stages.** Swap the config to run another benchmark — same commands:
+Each stage is one config-driven command; they chain by writing files the next stage reads:
+
+```
+┌────────────────────────────────────────────────────┐
+│  generate.py    vLLM decoding              (GPU)   │
+└─────────────────────────┬──────────────────────────┘
+                          │  predictions.json   (per rollout seed K)
+                          v
+┌────────────────────────────────────────────────────┐
+│  extract.py     HF eager-attention         (GPU)   │
+│  MTLA: attention inside the region R_p             │
+└─────────────────────────┬──────────────────────────┘
+                          │  [L, H] attention shards   (per seed K)
+                          v
+┌────────────────────────────────────────────────────┐
+│  score.py       band + voting              (CPU)   │
+└────────────────────────────────────────────────────┘
+```
+
+The rollout count, GPUs, and item count are set **at launch**, not in the config: `--n` (rollouts,
+default 1), `--gpus` (default: all visible GPUs), and `--limit N` (run only the first N items — e.g.
+`--limit 100` for a quick smoke test; default: the full set). Every benchmark uses the **same three
+commands** — only the `--config` (and, for voting, `--n` / `--agg`) changes. The runnable examples
+below cover COCO detection and the two video benchmarks.
+
+### COCO detection — quick smoke test (2 rollouts, 50 images)
+
+A fast end-to-end check of all three stages on a small slice — `--n 2` rollouts over the first
+`--limit 50` images. Drop both flags to run the full benchmark.
 
 ```bash
-python generate.py --config configs/coco_internvl.yaml   # GPU
-python extract.py  --config configs/coco_internvl.yaml   # GPU
-python score.py    --config configs/coco_internvl.yaml   # CPU
+python -m generate --config configs/coco_internvl.yaml --n 2 --limit 50
+python -m extract --config configs/coco_internvl.yaml --n 2 --limit 50
+python -m score --config configs/coco_internvl.yaml --n 2
 ```
 
-Swap the config to run another benchmark — same commands. Configs default to a **single
-rollout**; the headline numbers above use N=16 self-consistency voting (bump `n_rollouts: 16`,
-so each stage produces/votes over seeds 0..15, or pass `--seeds 0 1 ... 15` / `--n 16`):
+The full single-rollout run (`python -m generate --config configs/coco_internvl.yaml`, then
+`extract` / `score` with no flags) reproduces the hallucination-detection AUROC (0.873 for
+InternVL3.5-8B; 0.902 with `--config configs/coco_qwen3vl.yaml`).
 
-| Config | Benchmark / model | Single rollout | N=16 voting |
-|---|---|---|---|
-| `configs/coco_internvl.yaml` (+ `_voting`) | COCO det / InternVL3.5-8B | AUROC 0.873; mAP 36.2 | **mAP 41.9** |
-| `configs/coco_qwen3vl.yaml` | COCO det / Qwen3-VL-8B | AUROC 0.902 | — |
-| `configs/qvhighlights_qwen3vl.yaml` | QVHighlights / Qwen3-VL-8B | mAP 24.5 | **mAP 36.6, R@1@0.5 55.1** |
-| `configs/charades_qwen3vl.yaml` | Charades-STA / Qwen3-VL-8B | R@1@0.5 44 | **R@1@0.5 55.4, R@1@0.3 76.3** |
+### COCO detection — N=16 self-consistency voting
 
+The headline detection result: **mAP 41.9** (COCO uses sum-of-cluster fusion, `--agg sum`).
+
+```bash
+python -m generate --config configs/coco_internvl.yaml --n 16
+python -m extract --config configs/coco_internvl.yaml --n 16
+python -m score --config configs/coco_internvl.yaml --n 16 --agg sum
+```
+
+### Video (QVHighlights & Charades-STA) — N=16 self-consistency voting
+
+Same three commands; video uses the default `max` fusion (no `--agg`). **QVHighlights**: mAP 36.6,
+R@1@0.5 55.1. **Charades-STA**: R@1@0.5 55.4, R@1@0.3 76.3.
+
+```bash
+python -m generate --config configs/qvhighlights_qwen3vl.yaml --n 16
+python -m extract --config configs/qvhighlights_qwen3vl.yaml --n 16
+python -m score --config configs/qvhighlights_qwen3vl.yaml --n 16
+```
+
+```bash
+python -m generate --config configs/charades_qwen3vl.yaml --n 16
+python -m extract --config configs/charades_qwen3vl.yaml --n 16
+python -m score --config configs/charades_qwen3vl.yaml --n 16
+```
+
+Add `--gpus 0 1 2 3 ...` to any `generate`/`extract` command to pick GPUs (default: all visible).
 COCO runs on **either model** — same `CocoDataset`, just a different `model:` — because models and
-datasets are independent adapters (see [Extending](#extending-add-a-new-model-or-task)). Every
-benchmark uses the same **decoupled** stages: `generate` runs vLLM (fast batched decoding);
-`extract` re-runs the model with HF eager attention (vLLM can't expose attention weights, so the
-split is what lets generation stay fast while extraction stays faithful). `configs/coco_internvl_voting.yaml`
-ships the 16-seed COCO setup ready to run. CLI flags override any config for quick sweeps:
-`--seeds 0 1 2 3`, `--n 16`, `--agg sum`. Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
+datasets are independent adapters.
 
 ## Visualize the per-token attention
 
 `scripts/figure_pertoken.py` shows *why* MTLA works: for a chosen prediction it runs one HF-eager
 forward and renders where **each** of the prediction's response tokens attends over the image — the
-four bounding-box coordinates `x1,y1,x2,y2`, the `label` token, and (right of the dashed rule) their
+four bounding-box coordinates $x_1, y_1, x_2, y_2$, the `label` token, and (right of the dashed rule) their
 per-token **mean** (the quantity MTLA scores). Grounded predictions concentrate attention **inside**
 the proposed box; hallucinations scatter it across the scene.
 
 ```bash
-python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml       # the paper's Fig. 3 rows
-python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml \
-    --targets 64499:0:grounded 60823:3:hallu --out fig.pdf                 # your own predictions
+python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml
 ```
 
 <p align="center">
   <img src="assets/figure_pertoken.png" width="100%" alt="Per-token attention: a grounded zebra concentrates attention inside its box; a hallucinated cow labeled horse scatters it across the scene"/>
 </p>
 
-Each `<image_id>:<pred_idx>:<grounded|hallu>` target picks one prediction from the COCO
-`predictions.json`; the overlay reuses `mtla.viz` (turbo heatmap, peak-normalized so the falloff at
-the edges of the attended region stays visible).
+## Extending: add a model or a task
 
-## Extending: add a new model or task
-
-Models and datasets are **independent registries**; any valid (model × dataset) pair runs from a
-config. You ask for a `(model, dataset)` pair and, if either is missing, the error tells you how
-to add it. A model adapter never appears in a dataset adapter and vice versa — the dataset asks
-the model, per `task` family (`"image_det"` | `"video_span"`), how to parse, mask, and read its
-attention.
-
-Adapters **self-register** with a decorator and are auto-discovered, so adding one is just a new
-file — no central registry to edit:
+Models and datasets are **independent registries**; any valid `(model × dataset)` pair runs from a
+config. Adapters **self-register** with a decorator and are auto-discovered, so adding one is just a
+new file — no central registry to edit.
 
 ```python
-from mtla.registry import register_model
-@register_model("myvlm")
-class MyVLMAdapter(ModelAdapter):
-    tasks = ("image_det",)
-    ...
+from mtla import resolve, available_models, available_datasets
+available_models()      # ['internvl', 'qwen3vl']
+available_datasets()    # ['charades', 'coco', 'qvhighlights']
+model, dataset = resolve("qwen3vl", "coco")   # unknown key -> error listing what's available
 ```
 
-```python
-from mtla import resolve
-model, dataset = resolve("myvlm", "coco")   # unknown key -> error listing what's available
-```
-
-**A new model family** (`mtla/models/<name>.py`): subclass `ModelAdapter`, decorate it with
-`@register_model("<name>")`, declare `tasks` / `model_id` / `attn_module_path`, implement `parse`,
-the vLLM request builder (`gen_processor`, `build_request`), and the `ext_*` extraction callbacks
-(build inputs + parse predictions, find each prediction's tokens `Q_p`, mask the proposal region).
-
-**A new task / dataset** (`mtla/data/<name>.py`): subclass `DatasetAdapter`, decorate it with
-`@register_dataset("<name>")`, and set the declarative fields — `task`, the scoring descriptors
-(`signal` / `overlap` / `select` / `metric`) — then implement `load_items(cfg)`, `prompt`,
-`ground_truth`, and `gen_record`. A dataset does **no** computation: all scoring is done by
-`mtla.evaluate` per its descriptors. Add a `configs/<name>.yaml`.
-
-**Decoupled stages.** Every stage is split: `generate` (vLLM) writes `predictions.json`; `extract`
-(HF eager attention) re-runs the model to capture attention. vLLM can't expose attention weights,
-so this split is what lets generation stay fast while extraction stays faithful.
-
-Full walkthrough with the exact contract and the smallest examples: [`docs/EXTENDING.md`](docs/EXTENDING.md).
+**Decoupled stages.** `generate` (vLLM) writes `predictions.json`; `extract` (always HF-eager)
+re-runs the model to capture attention. vLLM can't expose attention, so this split lets generation
+stay fast while extraction stays faithful. Full walkthrough with the exact adapter contract:
+[`docs/EXTENDING.md`](docs/EXTENDING.md).
 
 ## Repository layout
 
+Run everything from the repo root with `python -m` (no install; `mtla` is imported in place).
+
 ```
-generate.py            stage 1: vLLM generation      (config-driven, --config/--seeds)
-extract.py             stage 2: HF-eager MTLA extraction
-score.py               stage 3: shards -> metrics     (CPU only)
-_gen_strategies.py     the two generation strategies (async pool | one engine per GPU)
-mtla/                  core importable library (pip install mtla)
-  mtla_attn.py         the MTLA math (mtla_localized_attention) + attention-capture hook + driver
-  score / voting / utils / viz     parameter-free MTLA building blocks
-  metrics.py           pure metric computers: AUROC, COCO mAP, moment-retrieval, recall@IoU
-  evaluate.py          the score stage: shards -> band reduction -> voting -> metrics
+generate.py            stage 1 CLI  (python -m generate)  — vLLM decoding
+extract.py             stage 2 CLI  (python -m extract)   — HF eager-attention capture
+score.py               stage 3 CLI  (python -m score)     — band + voting + metrics (CPU)
+gen_strategies.py      vLLM execution strategies for generate (pooled / sharded)
+
+mtla/                  core library (imported in place, no pip install)
+  mtla_attn.py         the MTLA computation: eager-attn capture + per-item driver
+  score.py             reduce_band / mtla_score — layer-band + head reduction
+  voting.py            self-consistency NMS fusion (max / sum / support / mean)
+  evaluate.py          CPU scoring driver (band -> voting -> metrics)
+  metrics.py           AUROC, COCO mAP, moment-retrieval / R@1
+  utils.py  viz.py     iou/tiou + token-span helpers; attention heatmap overlays
   registry.py          @register_model / @register_dataset + resolve(model, dataset)
   config.py            YAML -> RunConfig
-  models/              model adapters: internvl, qwen3vl  (parse, region mask, attn capture)
-  data/                dataset adapters: coco, qvhighlights, charades  (declarative)
-configs/               one YAML per model x dataset
+  models/              model adapters: internvl.py, qwen3vl.py  (+ base.py)
+  data/                dataset adapters: coco.py, qvhighlights.py, charades.py  (+ base.py)
+
+configs/               one YAML per (model x dataset): coco_internvl, coco_qwen3vl,
+                       qvhighlights_qwen3vl, charades_qwen3vl
 scripts/
-  prepare_*.py         one dataset-prep script per benchmark (download + build)
-  figure_pertoken.py   per-token attention figure (paper Fig. 3)
-assets/                figures used in this README
+  prepare_*.py         one dataset-prep script per benchmark  (python -m scripts.prepare_coco, ...)
+  figure_pertoken.py   per-token attention visualization      (python -m scripts.figure_pertoken)
 docs/                  DATA.md, EXTENDING.md
 third_party/           vendored Moment-DETR evaluation (MIT)
 ```
 
 ## Citation
 
-A paper describing MTLA is in preparation; citation and link will be added here on release.
-See [`CITATION.cff`](CITATION.cff).
+A paper describing MTLA is in preparation; citation and link will be added here on release. See
+[`CITATION.cff`](CITATION.cff).
 
 ## Acknowledgements
 
-Builds on **SVAR** (Jiang et al., *Devils in Middle Layers ...*) as the global-attention
-baseline, and uses **Qwen3-VL**, **InternVL**, and **Audio Flamingo 3** as the grounding
-models. Video evaluation uses the **Moment-DETR** standalone evaluator (MIT, vendored under
-`third_party/`).
+Builds on **SVAR** (Jiang et al., *Devils in Middle Layers of Large Vision-Language Models*) as the
+global-attention baseline, and uses **Qwen3-VL** and **InternVL** as the grounding models. Video
+evaluation uses the **Moment-DETR** standalone evaluator (MIT, vendored under `third_party/`).
+
+## License
+
+See [`LICENSE`](LICENSE).

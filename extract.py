@@ -7,8 +7,8 @@ model/task specific lives behind the adapter's extraction callbacks; this file i
 multi-GPU harness. The generation records are self-contained (``{id, prompt, response, gt, extra}``),
 so a worker just streams ``predictions.json`` — no dataset item lookup.
 
-    python extract.py --config configs/coco_internvl.yaml            # seeds 0..n_rollouts-1
-    python extract.py --config configs/coco_internvl.yaml --seeds 0 1 2
+    python -m extract --config configs/coco_internvl.yaml            # 1 rollout
+    python -m extract --config configs/coco_internvl.yaml --n 16      # 16 rollouts (seeds 0..15)
 
 Reads ``<predictions>/seed{K}/predictions.json``; writes ``<features>/seed{K}/shard{rank}.pt``.
 """
@@ -87,16 +87,35 @@ def extract_seed(cfg, seed):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
-    ap.add_argument("--seeds", type=int, nargs="+", default=None,
-                    help="rollout seeds to extract (default: 0..n_rollouts-1)")
-    ap.add_argument("--n", type=int, default=None, help="override n_rollouts (sets the default seeds)")
+    ap.add_argument("--n", type=int, default=None,
+                    help="number of rollouts to extract (seeds 0..n-1; default 1)")
+    ap.add_argument("--gpus", type=int, nargs="+", default=None,
+                    help="GPU indices to run on (default: all visible GPUs)")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="run on only the first N items (e.g. 100 for a quick test); "
+                         "default: the full set")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     if args.n is not None:
         cfg.n_rollouts = args.n
+    if args.gpus is not None:
+        cfg.extract.gpus = args.gpus
+    if args.limit is not None:
+        cfg.extract.n_items = args.limit
+
+    # Fetch the model ONCE in the parent (weights + config + processor), then go offline so the
+    # per-GPU workers load purely from the local snapshot. Otherwise each worker fetches concurrently
+    # and transformers pings the Hub even for a cached model -> HTTP 429 rate-limit. snapshot_download
+    # (not just the processor) so the offline workers find config.json + weights on disk.
+    from huggingface_hub import snapshot_download
+    model, _ = resolve(cfg.model, cfg.dataset)
+    snapshot_download(model.model_id)
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
     set_start_method("spawn", force=True)
-    seeds = args.seeds if args.seeds is not None else cfg.seeds()
+    seeds = cfg.seeds()
     for i, seed in enumerate(seeds):
         print(f"[extract] seed {seed}  ({i + 1}/{len(seeds)})", flush=True)
         extract_seed(cfg, seed)

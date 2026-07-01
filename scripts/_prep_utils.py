@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tarfile
 import urllib.request
 import zipfile
 
@@ -55,6 +56,18 @@ def unzip(zip_path: str, dest_dir: str, skip_marker: str | None = None) -> str:
     print(f"  extracting {zip_path} -> {dest_dir}")
     with zipfile.ZipFile(zip_path) as z:
         z.extractall(dest_dir)
+    return dest_dir
+
+
+def untar(tar_path: str, dest_dir: str, skip_marker: str | None = None) -> str:
+    """Extract ``tar_path`` (``.tar`` / ``.tar.gz``) into ``dest_dir``. If ``skip_marker`` exists, skip."""
+    if skip_marker and os.path.exists(skip_marker):
+        print(f"  [skip] {skip_marker} already present")
+        return dest_dir
+    os.makedirs(dest_dir, exist_ok=True)
+    print(f"  extracting {tar_path} -> {dest_dir}")
+    with tarfile.open(tar_path, "r:*") as t:
+        t.extractall(dest_dir)
     return dest_dir
 
 
