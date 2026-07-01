@@ -1,5 +1,5 @@
 # COCO detection with InternVL3.5-8B  (single rollout).
-# Reproduces: hallucination AUROC 0.873 (MTLA) / 0.803 (SVAR); single-rollout mAP 36.2.
+# Reproduces: hallucination AUROC 0.873 (MTLA); single-rollout mAP 36.2.
 # For the 41.9 mAP headline with N=16 self-consistency voting, use coco_internvl_voting.yaml.
 model: internvl
 dataset: coco
@@ -13,7 +13,6 @@ paths:
 n_rollouts: 1                                      # one knob: produce + vote over seeds 0..n-1
 
 generate:
-  engine: vllm                                     # vllm (fast, needs .[generate]) or hf (slower)
   gpus: null                                       # null = all visible GPUs (respects CUDA_VISIBLE_DEVICES)
   temperature: 0.7
 

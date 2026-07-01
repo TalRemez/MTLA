@@ -16,7 +16,6 @@ paths:
 n_rollouts: 16                                     # 16 stochastic rollouts: produce + vote over seeds 0..15
 
 generate:
-  engine: vllm                                     # or hf (transformers only, slower)
   gpus: null                                       # null = all visible GPUs
   temperature: 0.7
 

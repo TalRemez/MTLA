@@ -1,5 +1,5 @@
 # COCO detection with Qwen3-VL-8B  (single rollout).
-# Reproduces: hallucination AUROC 0.902 (MTLA) / 0.763 (SVAR).
+# Reproduces: hallucination AUROC 0.902 (MTLA).
 # Demonstrates COCO running on a second model: same dataset adapter, different model:.
 model: qwen3vl
 dataset: coco
@@ -13,7 +13,6 @@ paths:
 n_rollouts: 1                                      # one knob: produce + vote over seeds 0..n-1
 
 generate:
-  engine: vllm                                     # Qwen3-VL COCO generation is vLLM-only
   gpus: null                                       # null = all visible GPUs
   temperature: 0.7
 

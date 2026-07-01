@@ -42,6 +42,9 @@ HANDOVER_AGENT.md
 # Internal parity-golden reference — kept locally, not published
 docs/PARITY_GOLDEN.md
 
+# Throwaway verification helper (old-golden-preds -> new-schema converter); local only
+scripts/_verify_convert.py
+
 # OS / editor
 .DS_Store
 .vscode/

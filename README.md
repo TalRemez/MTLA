@@ -10,7 +10,7 @@ Grounded predictions do, while hallucinations attend elsewhere. The result is a
 no labels, just one forward pass of the model you already have.
 
 <p align="center">
-  <img src="docs/assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects, then MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
+  <img src="assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects, then MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
 </p>
 <p align="center"><em>An MLLM emits box and label predictions. MTLA reads the decoder's attention
 from each prediction's tokens, restricts it to the patches inside the proposed region, and scores
@@ -111,7 +111,7 @@ How well the score separates grounded from hallucinated predictions.
 | Charades-STA (video) | Qwen3-VL-8B | **0.684** | 0.512 |
 | AudioSet-Strong (audio) | Audio Flamingo 3 | **0.813** | 0.608 |
 
-`run.py --config configs/coco_internvl.yaml --stage score` reproduces the InternVL row and
+`score.py --config configs/coco_internvl.yaml` reproduces the InternVL row and
 `configs/coco_qwen3vl.yaml` the Qwen3-VL row — same `CocoDataset`, different `model:`.
 
 > Numbers are from the paper (the citable source of record; link to be added on release); the COCO
@@ -135,13 +135,14 @@ labels = [o["is_hallucinated"] for o in objs]          # IoU>=0.5 flags
 print(f"AUROC = {auroc(scores, labels):.3f}")
 ```
 
-**Starting from your own model?** Run it to write a `predictions.json`
-(`[{id, status, response, pred_bboxes:[{box, label}]}, ...]`), then let the extract stage do the
-GPU forward pass that captures attention, and score:
+**Starting from your own model?** The generate stage writes a `predictions.json` of uniform,
+model-agnostic records — `[{id, prompt, response, gt, extra}, ...]`, where `response` is the raw
+model output (parsing happens later) and `gt` is a list of `{region, label}`. Then the extract
+stage does the GPU forward pass that captures attention, and score:
 
 ```bash
-python run.py --config configs/coco_internvl.yaml --stage extract   # GPU: predictions -> [L,H] shards
-python run.py --config configs/coco_internvl.yaml --stage score     # CPU: shards -> AUROC / mAP
+python extract.py --config configs/coco_internvl.yaml   # GPU: predictions -> [L,H] shards
+python score.py   --config configs/coco_internvl.yaml   # CPU: shards -> AUROC / mAP
 ```
 
 To plug in a different model or task, see [Extending](#extending-add-a-new-model-or-task).
@@ -150,10 +151,11 @@ The package is small and modular:
 
 | Module | What it does |
 |---|---|
-| `mtla.score` | `reduce_band`, `mtla_score` — the layer-band + head reduction |
-| `mtla.mtla_attn` | the eager-attention monkeypatch + per-item driver that capture localized attention |
+| `mtla.mtla_attn` | `mtla_localized_attention` (the paper's eqs. 2–3) + the attention-capture hook + per-item driver |
+| `mtla.score` | `reduce_band`, `mtla_score` — the layer-band + head reduction (eq. 4) |
 | `mtla.voting` | self-consistency NMS fusion across rollouts (`max` / `sum` / ...) |
-| `mtla.eval` | hallucination AUROC and COCO mAP |
+| `mtla.evaluate` | the score stage: shards → band reduction → voting → metrics (all computation) |
+| `mtla.metrics` | pure metric computers: AUROC, COCO mAP, moment-retrieval, recall@IoU |
 | `mtla.utils` | shared primitives: `iou` / `tiou`, `repeat_kv`, token-span helpers |
 | `mtla.viz` | attention heatmap overlays |
 
@@ -181,14 +183,14 @@ the dataset is fully reproducible rather than a shipped blob.
 **Run the three stages.** Swap the config to run another benchmark — same commands:
 
 ```bash
-python run.py --config configs/coco_internvl.yaml      --stage generate   # GPU
-python run.py --config configs/coco_internvl.yaml      --stage extract    # GPU
-python run.py --config configs/coco_internvl.yaml      --stage score      # CPU
+python generate.py --config configs/coco_internvl.yaml   # GPU
+python extract.py  --config configs/coco_internvl.yaml   # GPU
+python score.py    --config configs/coco_internvl.yaml   # CPU
 ```
 
 Swap the config to run another benchmark — same commands. Configs default to a **single
-rollout**; the headline numbers above use N=16 self-consistency voting (run the GPU stages
-once per seed, e.g. `--seeds 0 1 ... 15`, then `score` with `n_rollouts: 16`):
+rollout**; the headline numbers above use N=16 self-consistency voting (bump `n_rollouts: 16`,
+so each stage produces/votes over seeds 0..15, or pass `--seeds 0 1 ... 15` / `--n 16`):
 
 | Config | Benchmark / model | Single rollout | N=16 voting |
 |---|---|---|---|
@@ -199,10 +201,11 @@ once per seed, e.g. `--seeds 0 1 ... 15`, then `score` with `n_rollouts: 16`):
 
 COCO runs on **either model** — same `CocoDataset`, just a different `model:` — because models and
 datasets are independent adapters (see [Extending](#extending-add-a-new-model-or-task)). Every
-benchmark uses the same **decoupled** stages (`generate` may use vLLM or HF; `extract` is always
-HF-eager). `configs/coco_internvl_voting.yaml` ships the 16-seed COCO setup ready to run. CLI flags
-override any config for quick sweeps: `--seeds 0 1 2 3`, `--n 16`, `--agg sum`.
-Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
+benchmark uses the same **decoupled** stages: `generate` runs vLLM (fast batched decoding);
+`extract` re-runs the model with HF eager attention (vLLM can't expose attention weights, so the
+split is what lets generation stay fast while extraction stays faithful). `configs/coco_internvl_voting.yaml`
+ships the 16-seed COCO setup ready to run. CLI flags override any config for quick sweeps:
+`--seeds 0 1 2 3`, `--n 16`, `--agg sum`. Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
 
 ## Visualize the per-token attention
 
@@ -219,7 +222,7 @@ python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml \
 ```
 
 <p align="center">
-  <img src="docs/assets/figure_pertoken.png" width="100%" alt="Per-token attention: a grounded zebra concentrates attention inside its box; a hallucinated cow labeled horse scatters it across the scene"/>
+  <img src="assets/figure_pertoken.png" width="100%" alt="Per-token attention: a grounded zebra concentrates attention inside its box; a hallucinated cow labeled horse scatters it across the scene"/>
 </p>
 
 Each `<image_id>:<pred_idx>:<grounded|hallu>` target picks one prediction from the COCO
@@ -252,16 +255,17 @@ model, dataset = resolve("myvlm", "coco")   # unknown key -> error listing what'
 
 **A new model family** (`mtla/models/<name>.py`): subclass `ModelAdapter`, decorate it with
 `@register_model("<name>")`, declare `tasks` / `model_id` / `attn_module_path`, implement `parse`,
-the `ext_*` extraction callbacks (build inputs + enumerate predictions, find each prediction's
-tokens `Q_p`, mask the proposal region, assemble the record), and `generate_script`/`extract_script`.
+the vLLM request builder (`gen_processor`, `build_request`), and the `ext_*` extraction callbacks
+(build inputs + parse predictions, find each prediction's tokens `Q_p`, mask the proposal region).
 
 **A new task / dataset** (`mtla/data/<name>.py`): subclass `DatasetAdapter`, decorate it with
-`@register_dataset("<name>")`, set `task`, and implement `load_items(cfg)` (owns file I/O),
-`ground_truth`, `score(cfg, model)` (reuse `mtla.reduce_band` + `mtla.nms_fuse` + `mtla.eval`), and
-`stage_cmd`. Add a `configs/<name>.yaml`.
+`@register_dataset("<name>")`, and set the declarative fields — `task`, the scoring descriptors
+(`signal` / `overlap` / `select` / `metric`) — then implement `load_items(cfg)`, `prompt`,
+`ground_truth`, and `gen_record`. A dataset does **no** computation: all scoring is done by
+`mtla.evaluate` per its descriptors. Add a `configs/<name>.yaml`.
 
-**Decoupled stages.** Every stage is split: `generate` (vLLM or HF) writes `predictions.json`;
-`extract` (always HF-eager) re-runs the model to capture attention. vLLM can't expose attention,
+**Decoupled stages.** Every stage is split: `generate` (vLLM) writes `predictions.json`; `extract`
+(HF eager attention) re-runs the model to capture attention. vLLM can't expose attention weights,
 so this split is what lets generation stay fast while extraction stays faithful.
 
 Full walkthrough with the exact contract and the smallest examples: [`docs/EXTENDING.md`](docs/EXTENDING.md).
@@ -269,19 +273,24 @@ Full walkthrough with the exact contract and the smallest examples: [`docs/EXTEN
 ## Repository layout
 
 ```
+generate.py            stage 1: vLLM generation      (config-driven, --config/--seeds)
+extract.py             stage 2: HF-eager MTLA extraction
+score.py               stage 3: shards -> metrics     (CPU only)
+_gen_strategies.py     the two generation strategies (async pool | one engine per GPU)
 mtla/                  core importable library (pip install mtla)
-  mtla_attn.py         the MTLA computation: eager-attn monkeypatch + per-item driver (image+video)
-  score / mask / voting / eval / utils / viz     parameter-free MTLA building blocks
+  mtla_attn.py         the MTLA math (mtla_localized_attention) + attention-capture hook + driver
+  score / voting / utils / viz     parameter-free MTLA building blocks
+  metrics.py           pure metric computers: AUROC, COCO mAP, moment-retrieval, recall@IoU
+  evaluate.py          the score stage: shards -> band reduction -> voting -> metrics
   registry.py          @register_model / @register_dataset + resolve(model, dataset)
   config.py            YAML -> RunConfig
-  pipeline.py          run_stage: launch a GPU stage script as a subprocess
-  models/              model adapters: internvl, qwen3vl  (parse, region mask, attn hook)
-  data/                dataset adapters: coco, qvhighlights, charades  (load, score)
-run.py                 unified CLI: --config <yaml> --stage {generate,extract,score}
+  models/              model adapters: internvl, qwen3vl  (parse, region mask, attn capture)
+  data/                dataset adapters: coco, qvhighlights, charades  (declarative)
 configs/               one YAML per model x dataset
 scripts/
   prepare_*.py         one dataset-prep script per benchmark (download + build)
-  stages/              GPU pipeline drivers: image/video_{generate,extract} (config-driven)
+  figure_pertoken.py   per-token attention figure (paper Fig. 3)
+assets/                figures used in this README
 docs/                  DATA.md, EXTENDING.md
 third_party/           vendored Moment-DETR evaluation (MIT)
 ```
