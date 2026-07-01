@@ -1,4 +1,4 @@
-"""Two reusable vLLM generation strategies, shared by scripts/stages/generate.py.
+"""Two reusable vLLM generation strategies, shared by generate.py.
 
 Both drive the SAME adapter contract (``model.build_request`` / ``model.vllm_*`` +
 ``dataset.gen_record``); they differ only in HOW work is spread over GPUs. A dataset picks one via

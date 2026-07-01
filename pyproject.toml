@@ -8,41 +8,33 @@ version = "0.1.0"
 description = "Multi-Token Localized Attention: a training-free grounding-verification score for multimodal LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
+# The library imports its full stack at import time (no lazy imports): the extract stage runs an
+# HF eager-attention forward, the score stage loads .pt shards + evaluates with pycocotools/
+# sklearn, and adapter discovery imports every adapter. Pinned to the validated versions.
 dependencies = [
     "numpy>=1.24",
     "scikit-learn>=1.2",
     "pyyaml>=6.0",
-    "pandas>=2.0",        # Charades adapter reads/scores its parquet split
-    "pyarrow>=14.0",      # parquet engine for pandas.read_parquet (Charades)
-]
-
-[project.optional-dependencies]
-# Attention-heatmap visualization (mtla.viz; CPU only, no model weights needed).
-viz = [
-    "torch>=2.1",
-    "matplotlib>=3.6",
-    "scipy>=1.10",
-    "pillow>=9.0",
-]
-# COCO detection evaluation.
-coco = ["pycocotools>=2.0"]
-# Attention extraction (the extract stage): HF eager-attention forward pass on a GPU.
-# Pinned to the versions the pipeline was validated with. `decord`/`qwen-vl-utils` are only
-# needed for the video (Qwen3-VL) benchmarks.
-extract = [
+    "pandas>=2.0",              # Charades adapter reads its parquet split
+    "pyarrow>=14.0",            # parquet engine for pandas.read_parquet
+    "pycocotools>=2.0",         # COCO detection mAP
     "torch>=2.1",
     "transformers==4.57.6",
     "accelerate==1.13.0",
     "torchvision==0.25.0",
-    "timm>=1.0",            # InternVL's InternViT vision encoder (trust_remote_code)
-    "qwen-vl-utils==0.0.14",
-    "decord>=0.6.0",
-]
-# Fast batched generation for the COCO generate stage (no attention). GPU only; large install.
-generate = [
-    "vllm==0.19.0",
+    "qwen-vl-utils==0.0.14",    # Qwen3-VL vision preprocessing (image + video)
+    "decord>=0.6.0",            # video frame decoding
+    "pillow>=9.0",
 ]
 
+[project.optional-dependencies]
+# Fast batched generation (the generate stage). GPU only; large install. Imported by the stage
+# subprocess (scripts/stages/), not the mtla package, so it's optional for extract/score.
+generate = ["vllm==0.19.0"]
+# Attention-heatmap visualization (mtla.viz, scripts/figure_pertoken.py).
+viz = ["matplotlib>=3.6", "scipy>=1.10"]
+
 [tool.setuptools]
+# Only the mtla package is installable; generate.py / extract.py / score.py are repo-root
+# executables (run in-place, not imported), so they are not packaged.
 packages = ["mtla", "mtla.models", "mtla.data"]
-py-modules = ["run"]
