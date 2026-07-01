@@ -39,6 +39,9 @@ results*/
 # Agent handover notes — local only, never push
 HANDOVER_AGENT.md
 
+# Internal parity-golden reference — kept locally, not published
+docs/PARITY_GOLDEN.md
+
 # OS / editor
 .DS_Store
 .vscode/

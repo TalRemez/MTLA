@@ -64,8 +64,8 @@ s(p) = mean over l in band of  ( (1/H) * sum over h of  MTLA[l,h](p) )
 
 The default band is **layers 8–21** (`mtla.DEFAULT_BAND`), used for every image and video model
 tested (Qwen3-VL, InternVL: 36 layers; Gemma-4: 42). Audio (Audio Flamingo 3, 28 layers) uses
-**all** layers. MTLA is not very sensitive to the exact band — see the [layer-band
-ablation](#layer-band-ablation) below. The whole reduction is `mtla.reduce_band`.
+**all** layers. MTLA is not very sensitive to the exact band (see the paper's ablation). The whole
+reduction is `mtla.reduce_band`.
 
 **Self-consistency voting.** Sampling `N` stochastic rollouts per input enlarges the candidate
 pool (better recall). We pool predictions across rollouts, merge overlaps with non-maximum
@@ -80,6 +80,23 @@ suppression, and score each kept prediction from its cluster's MTLA values (`mtl
 Headline numbers reproduced by the example pipelines. MTLA is the inside-region attention score
 (ours); **SVAR** (Jiang et al.) is the global-attention baseline we compare against. All use the
 default middle-layer band (L8–21) except AudioSet, which uses all 28 layers. IoU ≥ 0.5 throughout.
+
+### Task accuracy after MTLA re-ranking / self-consistency voting
+
+One method, four modalities, no training. Re-ranking each benchmark's `N=16` stochastic rollouts
+by MTLA also improves the **standard task metric** — the paper reports AP for COCO detection and
+QVHighlights, R@1@0.5 for Charades-STA, and PSDS1 for AudioSet-Strong:
+
+| Benchmark | Model | Metric | MTLA | SVAR baseline | Supervised reference |
+|---|---|---|--:|--:|--:|
+| COCO detection | InternVL3.5-8B | AP | **41.9** | 32.7 | 42.0 *(DETR)* |
+| QVHighlights (video) | Qwen3-VL-8B | mAP | **36.6** | 28.1 | — |
+| Charades-STA (video) | Qwen3-VL-8B | R@1@0.5 | **55.4** | 43.8 | — |
+| AudioSet-Strong (audio) | Audio Flamingo 3 | PSDS1 | **0.26** | 0.23 | 0.33 *(BEATs)* |
+
+Zero-shot and training-free, MTLA reaches the supervised range: it matches DETR on COCO, lands
+between Moment-DETR and QD-DETR on the video benchmarks, and approaches a supervised sound-event
+detector on AudioSet.
 
 ### Hallucination detection — AUROC (single rollout)
 
@@ -97,43 +114,8 @@ How well the score separates grounded from hallucinated predictions.
 `run.py --config configs/coco_internvl.yaml --stage score` reproduces the InternVL row and
 `configs/coco_qwen3vl.yaml` the Qwen3-VL row — same `CocoDataset`, different `model:`.
 
-### Task metrics after MTLA re-ranking / self-consistency voting
-
-One method, four modalities, no training. The same idea also improves task metrics:
-
-**COCO detection** (InternVL3.5-8B, val2017, sum-of-cluster fusion):
-
-| N (rollouts) | mAP | AP50 | AP75 |
-|---|--:|--:|--:|
-| 1 | 36.1 | 55.9 | 37.1 |
-| 5 | 40.8 | 64.6 | 40.9 |
-| **16** | **41.9** | **66.9** | **41.5** |
-
-- **QVHighlights** (Qwen3-VL-8B, N=16, NMS-MTLA): mAP **36.6**, R@1@0.5 **55.1**, R@1@0.7 **39.5** (SVAR baseline mAP 28.1).
-- **Charades-STA** (Qwen3-VL-8B, N=16, max selection): R@1@0.3 **76.3**, R@1@0.5 **55.4**, R@1@0.7 **29.4**, mIoU 0.508 (SVAR R@1@0.5 43.8).
-- **AudioSet-Strong** (Audio Flamingo 3, N=16, PSDS1 @ DCASE Task 4): NMS-MTLA **0.255**, NMS-SVAR 0.229.
-
-### Layer-band ablation
-
-MTLA is not tuned to the L8–21 band. Using **all** layers (parameter-free) costs little:
-
-| Benchmark | Metric | band L8–21 | all layers | Δ |
-|---|---|--:|--:|--:|
-| COCO (InternVL) | AUROC | 0.873 | 0.867 | −0.006 |
-| COCO (InternVL) | mAP N=16 | 41.90 | 41.45 | −0.45 |
-| QVHighlights | AUROC | 0.800 | 0.754 | −0.046 |
-| QVHighlights | mAP N=16 | 36.71 | 36.15 | −0.56 |
-| Charades | AUROC | 0.684 | 0.632 | −0.051 |
-| Charades | R@1@0.5 N=16 | 55.40 | 53.66 | −1.74 |
-| AudioSet | AUROC | already all-layers | 0.813 | — |
-
-COCO is nearly band-insensitive; video AUROC drops ~0.05 because the video grounding signal
-concentrates in early/middle layers and the late third decays toward chance. The MTLA ≫ baseline
-ranking holds under either choice on every benchmark.
-
-> Numbers are from the project's evaluation logs; the COCO and QVHighlights rows are reproducible
-> end-to-end with the example scripts. The paper is the citable source of record (link to be added
-> on release).
+> Numbers are from the paper (the citable source of record; link to be added on release); the COCO
+> and QVHighlights rows are reproducible end-to-end with the example scripts.
 
 ## Use it on your own predictions
 
@@ -169,7 +151,6 @@ The package is small and modular:
 | Module | What it does |
 |---|---|
 | `mtla.score` | `reduce_band`, `mtla_score` — the layer-band + head reduction |
-| `mtla.mask` | map a box / time-span to the modality-token indices inside it (`M(R_p)`) |
 | `mtla.mtla_attn` | the eager-attention monkeypatch + per-item driver that capture localized attention |
 | `mtla.voting` | self-consistency NMS fusion across rollouts (`max` / `sum` / ...) |
 | `mtla.eval` | hallucination AUROC and COCO mAP |
@@ -266,18 +247,20 @@ Full walkthrough with the exact contract and the smallest examples: [`docs/EXTEN
 ## Repository layout
 
 ```
-mtla/                  core package
+mtla/                  core importable library (pip install mtla)
   mtla_attn.py         the MTLA computation: eager-attn monkeypatch + per-item driver (image+video)
   score / mask / voting / eval / utils / viz     parameter-free MTLA building blocks
   registry.py          @register_model / @register_dataset + resolve(model, dataset)
   config.py            YAML -> RunConfig
+  pipeline.py          run_stage: launch a GPU stage script as a subprocess
   models/              model adapters: internvl, qwen3vl  (parse, region mask, attn hook)
   data/                dataset adapters: coco, qvhighlights, charades  (load, score)
-  stages/              GPU drivers: image_extract / video_extract + per-model generate scripts
 run.py                 unified CLI: --config <yaml> --stage {generate,extract,score}
 configs/               one YAML per model x dataset
-scripts/               one dataset-prep script per benchmark (download + build)
-docs/                  DATA.md, EXTENDING.md, PARITY_GOLDEN.md
+scripts/
+  prepare_*.py         one dataset-prep script per benchmark (download + build)
+  stages/              GPU pipeline drivers: image/video_{generate,extract} (config-driven)
+docs/                  DATA.md, EXTENDING.md
 third_party/           vendored Moment-DETR evaluation (MIT)
 ```
 

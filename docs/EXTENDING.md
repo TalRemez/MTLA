@@ -56,7 +56,7 @@ class MyVLMAdapter(ModelAdapter):
     tasks = ("image_det",)
 
     def parse(self, response, task=None, **kw) -> list: ...        # raw text -> [Prediction]
-    def generate_script(self, task, engine) -> str: ...            # filename in mtla/stages/
+    def generate_script(self, task, engine) -> str: ...            # filename in scripts/stages/
     def extract_script(self, task) -> str: return "image_extract.py"
 
     # HF-eager extraction: delegate to the shared driver, which calls the ext_* below.
@@ -73,7 +73,7 @@ single forward, and the buffer→record step):
 |---|---|
 | `ext_build_inputs(p, ds_by_id, ctx, rank)` | dict with `prompt_ids`, `response`, `modality_idx_l` (the modality-token positions), `predictions` (boxes/windows), `hallu_flags` (aligned bools), `meta`, plus anything `ext_forward_kwargs` needs — or `None` to skip |
 | `ext_token_ranges(response, predictions, tokenizer)` | per prediction `{first_label_tok, label_toks, coord_toks}` (the tokens `Q_p`) or `None` |
-| `ext_region_mask(prediction, meta)` | the modality-token indices inside that prediction's region `M(R_p)` (delegate to `mtla.mask`) |
+| `ext_region_mask(prediction, meta)` | the modality-token indices inside that prediction's region `M(R_p)` — specific to your model's token layout, defined in the adapter |
 | `ext_forward_kwargs(full_ids, total_len, device, inp)` | kwargs for the single patched `model(**fk)` forward |
 | `ext_obj_record(prediction, pred_idx, meta)` | the per-prediction record fields (the driver adds `is_hallucinated` / `n_qp_tokens` / `local_attention` / `first_digit`) |
 | `ext_record(p, meta, objects, n_predictions)` | the top-level saved record (id keys + counts + `objects`) |
