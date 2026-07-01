@@ -24,6 +24,17 @@ class DatasetAdapter:
     # `generate.greedy_seed0` overrides it. See RunConfig.gen_temperature.
     greedy_seed0: bool = False
 
+    # ---- generation-stage properties (read by scripts/stages/generate.py) ----
+    # Execution strategy: "pooled" = async multi-engine vLLM pool (throughput on many small
+    # requests, e.g. 5k COCO images); "sharded" = one blocking engine per GPU (heavy per-item
+    # work, e.g. video clips). Either modality may use either; forced to "sharded" for engine: hf.
+    gen_strategy: str = "sharded"
+    # Sampling knobs the generation driver passes to whichever engine runs (both are here so the
+    # model stays engine-agnostic). `gen_max_new_tokens` caps the decode; `gen_top_p` is the
+    # nucleus for stochastic rollouts (temperature comes from cfg.gen_temperature).
+    gen_max_new_tokens: int = 4096
+    gen_top_p: float = 1.0
+
     # ---- per-benchmark: subclasses implement ----
     def load_items(self, cfg) -> list:
         """Load the work items (images or video queries) for generation/extraction."""

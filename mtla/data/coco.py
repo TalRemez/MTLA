@@ -43,6 +43,9 @@ PROMPT = (
 class CocoDataset(DatasetAdapter):
     name = "coco"
     task = "image_det"
+    # 5000 small image requests -> async multi-engine vLLM pool (throughput). Sampling knobs keep
+    # the base defaults (max_new_tokens 4096, top_p 1.0).
+    gen_strategy = "pooled"
 
     def load_items(self, cfg):
         return json.load(open(cfg.path("data")))

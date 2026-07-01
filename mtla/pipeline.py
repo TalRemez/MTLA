@@ -5,12 +5,13 @@ code. They live at the repo root under ``scripts/stages/`` (outside the importab
 package) and are invoked as subprocesses, never imported. A dataset adapter's ``stage_cmd``
 declares which script + args each stage needs; ``run_stage`` runs it.
 
-The four shared drivers are config-driven (``--config <yaml> --seed <K>``): they resolve the
+The shared drivers are config-driven (``--config <yaml> --seed <K>``): they resolve the
 (model, dataset) adapters and delegate the model/task specifics to adapter callbacks.
 
-  scripts/stages/image_generate.py   shared image_det generation (any image model; vLLM or HF)
+  scripts/stages/generate.py         shared generation, ANY modality (vLLM or HF); picks the
+                                     dataset's execution strategy from `_gen_strategies.py`
+                                     (pooled async pool | one engine per GPU)
   scripts/stages/image_extract.py    shared image_det MTLA extraction (any image model) — HF eager
-  scripts/stages/video_generate.py   shared video_span generation (any video model; vLLM or HF)
   scripts/stages/video_extract.py    shared video_span MTLA extraction (any video model) — HF eager
 """
 import os

@@ -79,35 +79,42 @@ class InternVLAdapter(ModelAdapter):
 
     # ---- stage scripts ----
     def generate_script(self, task: str, engine: str) -> str:
-        return "image_generate.py"
+        return "generate.py"
 
     def extract_script(self, task: str) -> str:
         return "image_extract.py"
 
-    # ---- generation callbacks (image_generate.py) ----
-    def vllm_engine_kwargs(self):
-        return {"trust_remote_code": True}        # InternVL ships custom modeling code
+    # ---- generation contract (scripts/stages/generate.py) ----
+    def gen_engines(self, task):
+        return ("vllm", "hf")                      # vLLM (fast) or a plain HF forward (reference)
 
-    def vllm_uses_seed(self):
+    def vllm_engine_args(self, dataset):
+        return {"trust_remote_code": True, "limit_mm_per_prompt": {"image": 1}}  # custom modeling
+
+    def vllm_uses_seed(self, task):
         return True                                # InternVL vLLM supports per-request seeding
 
-    def make_vllm_prep(self):
-        """Closure: (item, dataset) -> {prompt, multi_modal_data} for vLLM. Builds the native
-        InternVL grounding prompt and passes the raw PIL image (vLLM does InternVL preprocessing)."""
+    def gen_processor(self):
         from transformers import AutoTokenizer
+        return AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True, use_fast=False)
+
+    def build_vllm_request(self, proc, item, dataset, cfg):
+        """Native InternVL grounding prompt + the raw PIL image (vLLM does InternVL preprocessing)."""
         from PIL import Image as _PILImage
-        tok = AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True, use_fast=False)
+        cats = ", ".join(item["categories"])
+        chat = proc.apply_chat_template(
+            [{"role": "user", "content": "<image>\n" + PROMPT_TMPL.format(cats=cats)}],
+            tokenize=False, add_generation_prompt=True)
+        return {"prompt": chat, "multi_modal_data": {"image": _PILImage.open(item["image"]).convert("RGB")}}
 
-        def prep(item, dataset):
-            cats = ", ".join(item["categories"])
-            chat = tok.apply_chat_template([{"role": "user", "content": "<image>\n" + PROMPT_TMPL.format(cats=cats)}],
-                                           tokenize=False, add_generation_prompt=True)
-            return {"prompt": chat, "multi_modal_data": {"image": _PILImage.open(item["image"]).convert("RGB")}}
-        return prep
+    def load_hf_gen(self, gpu_id):
+        return _load_internvl_for_generate(self.model_id, gpu_id)
 
-    def make_hf_generate(self, gpu_id):
-        """Closure: (item, dataset, seed) -> (response, truncated) via a plain HF forward."""
-        return _make_internvl_hf_generate(self.model_id, gpu_id)
+    def generate_hf(self, ctx, item, dataset, cfg, seed, temperature):
+        """One plain HF forward (dynamic-tiling preprocessing + grounding prompt) -> (response,
+        truncated). Samples at `temperature` (>0) for every rollout incl. seed 0 — the seed only
+        varies the draw; temperature==0 is greedy."""
+        return _internvl_generate_hf(ctx, item, seed, temperature, dataset.gen_max_new_tokens)
 
     # ---- HF-eager extraction (image_det) ----
     # The per-item flow (extract_one) is shared in the base class; this adapter supplies only the
@@ -383,9 +390,9 @@ def _load_internvl_for_extract(gpu_id):
             "img_pad_id": tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOK)}
 
 
-def _make_internvl_hf_generate(model_id, gpu_id):
-    """HF (no vLLM) generation closure for InternVL: (item, dataset, seed) -> (response, truncated).
-    Loads the model once on `gpu_id`; reuses the dynamic-tiling preprocessing + grounding prompt."""
+def _load_internvl_for_generate(model_id, gpu_id):
+    """Load InternVL + tokenizer for HF generation on `gpu_id` (stock attention, no MTLA hook).
+    Returns the ctx the shared generate driver hands back to `_internvl_generate_hf`."""
     from transformers import AutoModel, AutoTokenizer, modeling_utils
     # transformers v5 compat: InternVL's modeling code expects an attr v5 dropped.
     if not hasattr(modeling_utils.PreTrainedModel, "_compat_done"):
@@ -405,30 +412,30 @@ def _make_internvl_hf_generate(model_id, gpu_id):
     model = AutoModel.from_pretrained(model_id, dtype=torch.bfloat16,
                                       trust_remote_code=True).to(device).eval()
     model.img_context_token_id = tok.convert_tokens_to_ids(IMG_CONTEXT_TOK)
+    return {"model": model, "tokenizer": tok, "device": device}
 
-    def gen(item, dataset, seed=0, temperature=0.7, max_new_tokens=4096):
-        # Sample at `temperature` (>0) for EVERY rollout, including seed 0; the seed only varies the
-        # draw (reproducible per (seed, gpu)). temperature==0 -> greedy/deterministic.
-        do_sample = temperature and temperature > 0
-        if do_sample:
-            from transformers import set_seed
-            set_seed(seed * 1000 + gpu_id)
-        pixel_values, tile_grid, has_thumb = load_image_internvl(item["image"])
-        pixel_values = pixel_values.to(device, dtype=torch.bfloat16)
-        n_tiles = tile_grid[0] * tile_grid[1]
-        n_img = n_tiles * NUM_IMAGE_TOKEN_PER_TILE + (NUM_IMAGE_TOKEN_PER_TILE if has_thumb else 0)
-        cats = ", ".join(item["categories"])
-        chat = tok.apply_chat_template([{"role": "user", "content": "<image>\n" + PROMPT_TMPL.format(cats=cats)}],
-                                       tokenize=False, add_generation_prompt=True)
-        prompt_text = chat.replace("<image>", "<img>" + (IMG_CONTEXT_TOK * n_img) + "</img>", 1)
-        input_ids = tok(prompt_text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
-        gk = dict(max_new_tokens=max_new_tokens)
-        gk.update(dict(do_sample=True, temperature=temperature, top_p=0.95) if do_sample else dict(do_sample=False))
-        with torch.no_grad():
-            out = model.generate(pixel_values=pixel_values, input_ids=input_ids,
-                                 attention_mask=torch.ones_like(input_ids), **gk)
-        response = tok.decode(out[0], skip_special_tokens=True).strip()
-        return response, bool(out.shape[1] >= max_new_tokens)
-    return gen
+
+def _internvl_generate_hf(ctx, item, seed, temperature, max_new_tokens):
+    """One InternVL HF forward for one image -> (response, truncated). Dynamic-tiling preprocessing
+    + the native grounding prompt. Samples at `temperature` (>0) for every rollout incl. seed 0;
+    the seed only varies the draw (the worker pre-seeds per (seed, rank)); temperature==0 = greedy."""
+    model, tok, device = ctx["model"], ctx["tokenizer"], ctx["device"]
+    do_sample = bool(temperature and temperature > 0)
+    pixel_values, tile_grid, has_thumb = load_image_internvl(item["image"])
+    pixel_values = pixel_values.to(device, dtype=torch.bfloat16)
+    n_tiles = tile_grid[0] * tile_grid[1]
+    n_img = n_tiles * NUM_IMAGE_TOKEN_PER_TILE + (NUM_IMAGE_TOKEN_PER_TILE if has_thumb else 0)
+    cats = ", ".join(item["categories"])
+    chat = tok.apply_chat_template([{"role": "user", "content": "<image>\n" + PROMPT_TMPL.format(cats=cats)}],
+                                   tokenize=False, add_generation_prompt=True)
+    prompt_text = chat.replace("<image>", "<img>" + (IMG_CONTEXT_TOK * n_img) + "</img>", 1)
+    input_ids = tok(prompt_text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
+    gk = dict(max_new_tokens=max_new_tokens)
+    gk.update(dict(do_sample=True, temperature=temperature, top_p=0.95) if do_sample else dict(do_sample=False))
+    with torch.no_grad():
+        out = model.generate(pixel_values=pixel_values, input_ids=input_ids,
+                             attention_mask=torch.ones_like(input_ids), **gk)
+    response = tok.decode(out[0], skip_special_tokens=True).strip()
+    return response, bool(out.shape[1] >= max_new_tokens)
 
 

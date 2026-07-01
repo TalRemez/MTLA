@@ -116,44 +116,82 @@ class Qwen3VLAdapter(ModelAdapter):
         return parse_spans(response, multi=multi)
 
     def generate_script(self, task: str, engine: str) -> str:
-        if task == "image_det":
-            if engine != "vllm":
-                raise NotImplementedError("Qwen3-VL COCO generation is vLLM-only (engine: vllm)")
-            return "image_generate.py"
-        return "video_generate.py"
+        if task == "image_det" and engine != "vllm":
+            raise NotImplementedError("Qwen3-VL COCO generation is vLLM-only (engine: vllm)")
+        return "generate.py"
 
     def extract_script(self, task: str) -> str:
         if task == "image_det":
             return "image_extract.py"
         return "video_extract.py"
 
-    # ---- image generation callbacks (image_generate.py, vLLM) ----
-    def vllm_engine_kwargs(self):
-        return {}
+    # ---- generation contract (scripts/stages/generate.py); image_det + video_span ----
+    def gen_engines(self, task):
+        # COCO detection is vLLM-only (that is how the paper preds were produced); video grounding
+        # runs under vLLM (fast) or HF (reference).
+        return ("vllm",) if task == "image_det" else ("vllm", "hf")
 
-    def vllm_uses_seed(self):
-        return False                               # the validated Qwen COCO run did not seed vLLM
+    def vllm_engine_args(self, dataset):
+        if dataset.task == "video_span":
+            return {"limit_mm_per_prompt": {"video": 1}, "max_model_len": 32768}
+        return {"limit_mm_per_prompt": {"image": 1}}
 
-    def make_vllm_prep(self):
-        """Closure: (item, dataset) -> {prompt, multi_modal_data} for vLLM. Uses the dataset's
-        prompt (stored on the item) and `process_vision_info` for the image payload."""
+    def vllm_uses_seed(self, task):
+        # COCO did NOT seed vLLM (matches the validated paper preds); video DOES (per-rollout draw).
+        return task == "video_span"
+
+    def gen_processor(self):
         from transformers import AutoProcessor
+        return AutoProcessor.from_pretrained(self.model_id)
+
+    def build_vllm_request(self, proc, item, dataset, cfg):
+        """(item, dataset) -> {prompt, multi_modal_data, mm_processor_kwargs?} for vLLM. Dispatches
+        on the dataset's task: an image payload for detection, a (frames, metadata) video payload
+        for grounding — both via `process_vision_info` so the prompt matches the HF/extract path."""
         from qwen_vl_utils import process_vision_info
-        from PIL import Image as _PILImage
-        proc = AutoProcessor.from_pretrained(self.model_id)
-
-        def prep(item, dataset):
-            image = _PILImage.open(item["image"]).convert("RGB")
-            prompt_text = item["conversations"][0]["value"].replace("<image>\n", "")
-            msgs = [{"role": "user", "content": [{"type": "image", "image": image},
-                                                 {"type": "text", "text": prompt_text}]}]
+        if dataset.task == "video_span":
+            video_path = dataset.video_path(item, cfg.path("video_dir"))
+            import os
+            if not os.path.exists(video_path):
+                return None
+            vcfg = dataset.video
+            msgs = [{"role": "user", "content": [
+                {"type": "video", "video": f"file://{video_path}",
+                 "min_pixels": vcfg["min_pixels"], "max_pixels": vcfg["max_pixels"], "fps": vcfg["fps"]},
+                {"type": "text", "text": dataset.prompt(item)}]}]
             text = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-            image_inputs, _, _ = process_vision_info(msgs, return_video_kwargs=True)
-            return {"prompt": text, "multi_modal_data": {"image": image_inputs} if image_inputs else {}}
-        return prep
+            _, videos, video_kwargs = process_vision_info(
+                msgs, image_patch_size=16, return_video_kwargs=True, return_video_metadata=True)
+            if not videos:
+                return None
+            # vLLM's Qwen3-VL wants the video as a (frames, metadata) tuple in multi_modal_data.
+            return {"prompt": text, "multi_modal_data": {"video": videos[0]},
+                    "mm_processor_kwargs": video_kwargs}
+        # image_det
+        from PIL import Image as _PILImage
+        image = _PILImage.open(item["image"]).convert("RGB")
+        prompt_text = item["conversations"][0]["value"].replace("<image>\n", "")
+        msgs = [{"role": "user", "content": [{"type": "image", "image": image},
+                                             {"type": "text", "text": prompt_text}]}]
+        text = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        image_inputs, _, _ = process_vision_info(msgs, return_video_kwargs=True)
+        return {"prompt": text, "multi_modal_data": {"image": image_inputs} if image_inputs else {}}
 
-    def make_hf_generate(self, gpu_id):
-        raise NotImplementedError("Qwen3-VL COCO generation is vLLM-only (engine: vllm)")
+    def load_hf_gen(self, gpu_id):
+        """HF video generation (image_det is vLLM-only). Stock attention, no MTLA hook."""
+        return _load_qwen_for_generate(gpu_id)
+
+    def generate_hf(self, ctx, item, dataset, cfg, seed, temperature):
+        if dataset.task != "video_span":
+            raise NotImplementedError("Qwen3-VL image_det generation is vLLM-only (engine: vllm)")
+        video_path = dataset.video_path(item, cfg.path("video_dir"))
+        import os
+        if not os.path.exists(video_path):
+            return None, False
+        resp = _generate_video(ctx, video_path, dataset.prompt(item), dataset.video,
+                               seed=seed, temperature=temperature,
+                               max_new_tokens=dataset.gen_max_new_tokens, top_p=dataset.gen_top_p)
+        return (resp, False) if resp is not None else (None, False)
 
     # ---- HF-eager extraction ----
     # The per-item flow (extract_one) is shared in the base class; this adapter supplies the
@@ -165,24 +203,6 @@ class Qwen3VLAdapter(ModelAdapter):
         ctx = _load_qwen_for_extract(gpu_id, task)
         ctx["task"] = task
         return ctx
-
-    # ---- video_span generation (no attention hook) ----
-    # Two engines produce the same thing — a decoded response string the extract stage re-runs
-    # under HF-eager. vllm (default) is fast; hf is the reference. Either way generation needs no
-    # attention readout, so both use stock attention.
-    def load_for_generate(self, gpu_id, engine="vllm"):
-        """Load Qwen3-VL for video generation. engine: "vllm" (fast) | "hf" (reference)."""
-        if engine == "vllm":
-            return _load_qwen_vllm_for_generate(gpu_id)
-        return _load_qwen_for_generate(gpu_id)
-
-    def generate_video(self, ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=0):
-        """Generate one video response. Samples at `temperature` (>0) seeded by `seed` — so every
-        rollout, including seed 0, is a real stochastic draw; temperature==0 is greedy/deterministic.
-        Dispatches on the engine recorded in `ctx`."""
-        if ctx.get("engine") == "vllm":
-            return _generate_video_vllm(ctx, video_path, query, vcfg, seed, temperature, rank)
-        return _generate_video(ctx, video_path, query, vcfg, seed, temperature, rank)
 
     # ---- ext_* dispatch (image_det <-> video_span); extract_one is inherited from the base ----
     def ext_build_inputs(self, p, ds_by_id, ctx, rank):
@@ -414,10 +434,12 @@ def _load_qwen_for_generate(gpu_id):
     return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "device": device}
 
 
-def _generate_video(ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=0):
+def _generate_video(ctx, video_path, query, vcfg, seed=0, temperature=0.7,
+                    max_new_tokens=128, top_p=0.95):
     """Run video preprocessing + model.generate for one clip; return the decoded response (or None
     to skip). Deterministic preprocessing (fps/pixels from the dataset's `video` cfg). Samples at
-    `temperature` (the worker pre-seeds the RNG per (seed, rank)); temperature==0 -> greedy."""
+    `temperature` (the sharded worker pre-seeds the RNG per (seed, rank)); temperature==0 -> greedy.
+    The vLLM counterpart of this path is `Qwen3VLAdapter.build_vllm_request` + the shared strategy."""
     from qwen_vl_utils import process_vision_info
     proc = ctx["proc"]; model = ctx["model"]; device = ctx["device"]
     msgs = [{"role": "user", "content": [
@@ -437,75 +459,22 @@ def _generate_video(ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=
         inputs = proc(text=text, images=images, videos=videos, video_metadata=video_metadatas,
                       do_resize=False, return_tensors="pt", **video_kwargs).to(device)
     except Exception as e:
-        print(f"[worker {rank}] skip {video_path}: processor {e}", flush=True)
+        print(f"[generate] skip {video_path}: processor {e}", flush=True)
         return None
     prompt_len = inputs["input_ids"].shape[1]
-    gen_kwargs = {"max_new_tokens": vcfg["max_new_tokens"]}
+    gen_kwargs = {"max_new_tokens": max_new_tokens}
     if temperature and temperature > 0:
-        gen_kwargs.update(do_sample=True, temperature=temperature, top_p=0.95)
+        gen_kwargs.update(do_sample=True, temperature=temperature, top_p=top_p)
     else:
         gen_kwargs.update(do_sample=False)
     try:
         with torch.no_grad():
             gen_ids = model.generate(**inputs, **gen_kwargs)
     except Exception as e:
-        print(f"[worker {rank}] skip {video_path}: gen {e}", flush=True)
+        print(f"[generate] skip {video_path}: gen {e}", flush=True)
         torch.cuda.empty_cache()
         return None
     return proc.tokenizer.decode(gen_ids[0, prompt_len:], skip_special_tokens=True).strip()
-
-
-def _load_qwen_vllm_for_generate(gpu_id):
-    """Load Qwen3-VL under vLLM for video generation (one offline engine per worker/GPU).
-
-    vLLM only needs the decoded *text*; the extract stage re-runs the clip under HF-eager to read
-    attention, so the response is the only thing that crosses between stages. We keep the HF
-    processor alongside to build the chat prompt identically to the HF path. GPU pinning is done by
-    the worker (CUDA_VISIBLE_DEVICES set before torch import), so this engine sees one GPU as 0."""
-    from vllm import LLM
-    from transformers import AutoProcessor
-    proc = AutoProcessor.from_pretrained(MODEL_ID)
-    llm = LLM(model=MODEL_ID, limit_mm_per_prompt={"video": 1}, max_model_len=32768,
-              gpu_memory_utilization=0.90, enforce_eager=False, disable_log_stats=True)
-    return {"llm": llm, "proc": proc, "tokenizer": proc.tokenizer, "engine": "vllm"}
-
-
-def _generate_video_vllm(ctx, video_path, query, vcfg, seed=0, temperature=0.7, rank=0):
-    """vLLM counterpart of `_generate_video`: same prompt + same deterministic video preprocessing
-    (fps/pixels from the dataset cfg), returns the decoded response string (or None to skip).
-    Samples at `temperature` seeded by `seed` (temperature==0 -> greedy)."""
-    from qwen_vl_utils import process_vision_info
-    from vllm import SamplingParams
-    proc = ctx["proc"]; llm = ctx["llm"]
-    msgs = [{"role": "user", "content": [
-        {"type": "video", "video": f"file://{video_path}",
-         "min_pixels": vcfg["min_pixels"], "max_pixels": vcfg["max_pixels"], "fps": vcfg["fps"]},
-        {"type": "text", "text": query},
-    ]}]
-    text = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-    try:
-        images, videos, video_kwargs = process_vision_info(
-            msgs, image_patch_size=16, return_video_kwargs=True, return_video_metadata=True)
-    except Exception as e:
-        print(f"[worker {rank}] skip {video_path}: processor {e}", flush=True)
-        return None
-    if not videos:
-        return None
-    # vLLM's Qwen3-VL needs per-clip metadata; it wants the video passed as a (frames, metadata)
-    # TUPLE inside multi_modal_data (a len-2 tuple is parsed as one video item). With
-    # return_video_metadata, each `videos` entry already is that tuple.
-    video_item = videos[0]  # (frames, metadata)
-    mm_data = {"video": video_item}
-    sp = (SamplingParams(temperature=temperature, top_p=0.95, max_tokens=vcfg["max_new_tokens"], seed=seed)
-          if temperature and temperature > 0
-          else SamplingParams(temperature=0.0, max_tokens=vcfg["max_new_tokens"]))
-    try:
-        out = llm.generate([{"prompt": text, "multi_modal_data": mm_data,
-                             "mm_processor_kwargs": video_kwargs}], sp, use_tqdm=False)
-    except Exception as e:
-        print(f"[worker {rank}] skip {video_path}: vllm gen {e}", flush=True)
-        return None
-    return out[0].outputs[0].text.strip() if out and out[0].outputs else None
 
 
 def _vid_build_inputs(p, ds_by_id, ctx, rank):

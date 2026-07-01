@@ -72,6 +72,50 @@ class ModelAdapter:
         """Filename in scripts/stages/ for the (always HF-eager) extract stage."""
         raise NotImplementedError(f"{type(self).__name__} has no extract for task {task}")
 
+    # ---- generation contract (driven by scripts/stages/generate.py) ----
+    # One uniform surface for BOTH modalities and BOTH engines. The driver owns the orchestration
+    # (which GPUs, which strategy, shard-merge); the model owns only "how do I turn an item into a
+    # request / a response". Two backends:
+    #   vLLM (fast): build a request dict, the strategy runs the engine + SamplingParams + decode.
+    #   HF (reference): the model owns the whole forward and returns the decoded text.
+    # Both `run_pooled` (async multi-engine, best for many small image requests) and `run_sharded`
+    # (one blocking engine per GPU, best for heavy video clips) drive these SAME methods.
+    def gen_engines(self, task: str) -> tuple:
+        """Engines this model supports for `task`, e.g. ("vllm",) or ("vllm", "hf")."""
+        return ("vllm",)
+
+    def gen_processor(self):
+        """Load + return the processor/tokenizer used to build vLLM requests and chat prompts
+        (called once per worker). vLLM path only."""
+        raise NotImplementedError(f"{type(self).__name__} has no gen_processor")
+
+    def vllm_engine_args(self, dataset) -> dict:
+        """Model/modality-specific vLLM engine kwargs beyond the strategy's tuning knobs — e.g.
+        `limit_mm_per_prompt`, `max_model_len`, `trust_remote_code`. May read `dataset.task` to pick
+        the modality limit ({"image":1} vs {"video":1})."""
+        return {}
+
+    def vllm_uses_seed(self, task: str) -> bool:
+        """Whether to pass the rollout seed into vLLM SamplingParams (per-request reproducibility).
+        Task-aware: e.g. Qwen COCO does NOT seed (matches the paper preds) but Qwen video does."""
+        return False
+
+    def build_vllm_request(self, proc, item, dataset, cfg):
+        """(proc, item, dataset, cfg) -> {prompt, multi_modal_data, mm_processor_kwargs?} or None to
+        skip. Builds the model-specific prompt + multimodal payload; `cfg` resolves paths (e.g. the
+        video dir)."""
+        raise NotImplementedError(f"{type(self).__name__} has no build_vllm_request")
+
+    def load_hf_gen(self, gpu_id: int) -> dict:
+        """Load model + processor for HF generation on `gpu_id` and return a ctx dict. The sharded
+        worker pins one GPU via CUDA_VISIBLE_DEVICES before importing torch, so `gpu_id` is 0."""
+        raise NotImplementedError(f"{type(self).__name__} has no load_hf_gen")
+
+    def generate_hf(self, ctx, item, dataset, cfg, seed, temperature):
+        """(ctx, item, dataset, cfg, seed, temperature) -> (response, truncated) or (None, False) to
+        skip. The worker pre-seeds the RNG per (seed, rank); temperature==0 means greedy."""
+        raise NotImplementedError(f"{type(self).__name__} has no generate_hf")
+
     # ---- HF-eager MTLA extraction (driven by scripts/stages/{image,video}_extract.py) ----
     def load_for_extract(self, gpu_id: int) -> dict:
         """Load model + processor on `gpu_id`, install the MTLA attention forward, and return a

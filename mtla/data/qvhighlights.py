@@ -40,11 +40,14 @@ class QVHighlightsDataset(DatasetAdapter):
     name = "qvhighlights"
     task = "video_span"
     greedy_seed0 = True   # N=16 recipe: rollout 0 greedy anchor + 15 stochastic (paper headline)
-    # Video sampling for the Qwen3-VL video ext_* (deterministic, paper-faithful). `multi=True`:
-    # QVHighlights emits MULTIPLE [start,end] windows per query. Dataset properties (not user
-    # knobs), read by mtla.models.qwen3vl during extraction.
-    video = {"fps": 1.0, "min_pixels": 4 * 32 * 32, "max_pixels": 64 * 32 * 32,
-             "max_new_tokens": 128, "multi": True}
+    # Heavy per-clip video work -> one blocking engine per GPU (sharded), 128-token spans, top-p 0.95.
+    gen_strategy = "sharded"
+    gen_max_new_tokens = 128
+    gen_top_p = 0.95
+    # Video PREPROCESSING (fps/pixels) + `multi` — read by the Qwen3-VL video ext_* at BOTH generate
+    # and extract time, so it must stay identical across stages. `multi=True`: QVHighlights emits
+    # MULTIPLE [start,end] windows per query. (Sampling knobs live on gen_* above, not here.)
+    video = {"fps": 1.0, "min_pixels": 4 * 32 * 32, "max_pixels": 64 * 32 * 32, "multi": True}
 
     def load_items(self, cfg):
         items = []
@@ -63,8 +66,9 @@ class QVHighlightsDataset(DatasetAdapter):
         import os
         return os.path.join(video_dir, f"{item['vid']}.mp4")
 
-    def make_prediction(self, item, response, model):
-        """Raw QVH item + model response -> a prediction record (multi-window generate schema)."""
+    def make_prediction(self, item, response, model, truncated=False):
+        """Raw QVH item + model response -> a prediction record (multi-window generate schema).
+        `truncated` is accepted for a uniform signature across datasets (video ignores it)."""
         from ..voting import tiou
         windows = [list(s.region) for s in model.parse(response, task="video_span", multi=True)]
         gt = [list(w) for w in self.ground_truth(item)]

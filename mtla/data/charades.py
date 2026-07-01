@@ -34,11 +34,14 @@ class CharadesDataset(DatasetAdapter):
     name = "charades"
     task = "video_span"
     greedy_seed0 = True   # N=16 recipe: rollout 0 greedy anchor + 15 stochastic (paper headline)
-    # Video sampling for the Qwen3-VL video ext_* (deterministic, paper-faithful). `multi=False`:
-    # Charades emits ONE span per query. These are dataset properties (not user knobs), read by
-    # mtla.models.qwen3vl during extraction.
-    video = {"fps": 2.0, "min_pixels": 4 * 32 * 32, "max_pixels": 128 * 32 * 32,
-             "max_new_tokens": 128, "multi": False}
+    # Heavy per-clip video work -> one blocking engine per GPU (sharded), 128-token spans, top-p 0.95.
+    gen_strategy = "sharded"
+    gen_max_new_tokens = 128
+    gen_top_p = 0.95
+    # Video PREPROCESSING (fps/pixels) + `multi` — read by the Qwen3-VL video ext_* at BOTH generate
+    # and extract time, so it must stay identical across stages. `multi=False`: Charades emits ONE
+    # span per query. (Sampling knobs live on gen_* above, not here.)
+    video = {"fps": 2.0, "min_pixels": 4 * 32 * 32, "max_pixels": 128 * 32 * 32, "multi": False}
 
     def load_items(self, cfg):
         import pandas as pd
@@ -60,8 +63,9 @@ class CharadesDataset(DatasetAdapter):
         import os
         return os.path.join(video_dir, item["video"])
 
-    def make_prediction(self, item, response, model):
-        """Raw Charades item + model response -> a prediction record (the generate-stage schema)."""
+    def make_prediction(self, item, response, model, truncated=False):
+        """Raw Charades item + model response -> a prediction record (the generate-stage schema).
+        `truncated` is accepted for a uniform signature across datasets (video ignores it)."""
         from ..utils import tiou
         spans = model.parse(response, task="video_span", multi=False)
         gt = self.ground_truth(item)
