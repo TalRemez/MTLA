@@ -30,8 +30,9 @@ Public API:
     windows); builds inputs, runs one captured forward, returns the saved record.
 
 The model/task-specific pieces (prompt build, prediction parsing + hallucination flags,
-Q_p token finding, region mask, forward kwargs, record fields) live in the model adapters' `ext_*`
-methods; this module is the common math and plumbing.
+Q_p token finding, region mask, forward kwargs, record fields) live in the model adapters'
+callbacks (build_inputs / query_tokens / region_mask / forward_kwargs / prediction_record /
+item_record); this module is the common math and plumbing.
 """
 from __future__ import annotations
 
@@ -123,28 +124,32 @@ def install_capture(module_path: str, state: CaptureState):
 # The flow is identical across modalities: build the full token sequence, find each prediction's
 # response tokens Q_p, run one captured forward, then apply the MTLA math per prediction. A
 # "prediction" is a bbox (image) or a [t0,t1] window (video); its region M(R_p) is the modality
-# tokens inside it. All model/task specifics come from the adapter's ext_* callbacks:
-#   ext_build_inputs   -> preprocess input, build prompt, PARSE the response into predictions +
-#                         hallucination flags, locate modality tokens  (None to skip the item)
-#   ext_token_ranges   -> per prediction, its response tokens Q_p (label/coord or window digits)
-#   ext_region_mask    -> the modality-token indices inside one prediction's region M(R_p)
-#   ext_forward_kwargs -> kwargs for the single captured forward
-#   ext_obj_record     -> per-prediction record fields (box/window + geometry)
-#   ext_record         -> the top-level record wrapper (id keys, counts, objects)
+# tokens inside it. All model/task specifics come from the adapter callbacks:
+#   build_inputs      -> preprocess input, build prompt, PARSE the response into predictions +
+#                        hallucination flags, locate modality tokens  (None to skip the item)
+#   query_tokens      -> per prediction, its response tokens Q_p (label/coord or window digits)
+#   region_mask       -> the modality-token indices inside one prediction's region M(R_p)
+#   forward_kwargs    -> kwargs for the single captured forward
+#   prediction_record -> per-prediction record fields (box/window + geometry)
+#   item_record       -> the top-level record wrapper (id keys, counts, objects)
 
 
 def compute_mtla(adapter, record, ctx, rank=0):
     """Compute MTLA for one item's predictions via a single captured forward.
 
-    Works for both image detection (predictions = boxes) and video grounding (predictions =
-    time-span windows): the math is identical, only the ``ext_*`` callbacks differ. The ``record``
-    (a generation record: ``{id, prompt, response, gt, extra}``) is self-contained — everything the
-    extraction needs is on it. Returns the saved .pt record or None to skip the item.
+    This is the entry point the extract stage calls directly (``compute_mtla(model, record, ctx)``):
+    the model is a bag of callbacks, not a mediator. Works for both image detection (predictions =
+    boxes) and video grounding (predictions = time-span windows): the math is identical, only the
+    adapter callbacks differ. The ``record`` (a generation record ``{id, prompt, response, gt,
+    extra}``) is self-contained. Returns the saved .pt record, or None to skip the item.
     """
     state = ctx["state"]; device = ctx["device"]; tokenizer = ctx["tokenizer"]
     model = ctx["model"]; n_layers, n_heads = ctx["n_layers"], ctx["n_heads"]
+    # Record the task on the adapter so a multi-task model's callbacks can dispatch on it (a
+    # single-task model ignores it). ctx["task"] is set by load_for_extract.
+    adapter._task = ctx.get("task", adapter.tasks[0] if adapter.tasks else None)
 
-    inp = adapter.ext_build_inputs(record, ctx, rank)
+    inp = adapter.build_inputs(record, ctx, rank)
     if inp is None:
         return None
     prompt_ids = inp["prompt_ids"]; response = inp["response"]
@@ -159,9 +164,9 @@ def compute_mtla(adapter, record, ctx, rank=0):
 
     # Per-prediction Q_p tokens (index-aligned with `predictions`): label + coordinate tokens for
     # images, the window's digit tokens for video.
-    token_ranges = adapter.ext_token_ranges(response, predictions, tokenizer)
+    token_ranges = adapter.query_tokens(response, predictions, tokenizer)
     assert len(token_ranges) == len(predictions), (
-        f"ext_token_ranges must align with predictions: {len(token_ranges)} vs {len(predictions)}")
+        f"query_tokens must align with predictions: {len(token_ranges)} vs {len(predictions)}")
 
     # Absolute Q_p positions per prediction; x1 = the first coordinate/digit token.
     valid, qp_abs_list, x1_abs_list = [], [], []
@@ -187,7 +192,7 @@ def compute_mtla(adapter, record, ctx, rank=0):
     state.modidx = torch.tensor(modality_idx_l, dtype=torch.long, device=device)
     state.captured = [None] * n_layers
 
-    fk = adapter.ext_forward_kwargs(full_ids, total_len, device, inp)
+    fk = adapter.forward_kwargs(full_ids, total_len, device, inp)
     try:
         state.active = True
         with torch.no_grad():
@@ -206,7 +211,7 @@ def compute_mtla(adapter, record, ctx, rank=0):
     # Localized attention for the predictions whose Q_p we located, keyed by prediction index.
     la_by_i, fd_by_i = {}, {}
     for i, orig_i in enumerate(valid):
-        region_idx = torch.tensor(adapter.ext_region_mask(predictions[orig_i], meta),
+        region_idx = torch.tensor(adapter.region_mask(predictions[orig_i], meta),
                                   dtype=torch.long, device=device)
         qp_rows = torch.tensor([row_of[x] for x in qp_abs_list[i]], dtype=torch.long, device=device)
         la_by_i[orig_i] = mtla_localized_attention(attn.index_select(2, qp_rows), region_idx).cpu()
@@ -222,14 +227,14 @@ def compute_mtla(adapter, record, ctx, rank=0):
     out_objs = []
     for i, pred in enumerate(predictions):
         la = la_by_i.get(i, zeros); fd = fd_by_i.get(i, la_by_i.get(i, zeros))
-        obj = adapter.ext_obj_record(pred, i, meta)
+        obj = adapter.prediction_record(pred, i, meta)
         obj["is_hallucinated"] = bool(hallu_flags[i])
         obj["extracted"] = i in la_by_i
         obj["local_attention"] = la.to(torch.float16).numpy()
         obj["first_digit"] = fd.to(torch.float16).numpy()
         out_objs.append(obj)
 
-    rec = adapter.ext_record(record, meta, out_objs, n_predictions=len(predictions))
+    rec = adapter.item_record(record, meta, out_objs, n_predictions=len(predictions))
     del attn
     state.qpos = state.modidx = state.captured = None
     torch.cuda.empty_cache(); gc.collect()

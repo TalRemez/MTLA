@@ -1,26 +1,20 @@
 """Charades-STA single-span temporal-grounding dataset adapter.
 
-Scoring (CPU): hallucination AUROC + R@1 @ IoU{0.3,0.5,0.7} + mIoU. Charades emits ONE span
-per query, so "voting" is span SELECTION across N rollouts: with agg=max we pick the single
-highest-MTLA span (the headline rule; clustering does not help single-span tasks).
+Declarative: loads items, builds the prompt + ground truth, emits the uniform generation record.
+Scoring (hallucination AUROC + R@1 @ IoU{0.3,0.5,0.7} + mIoU) is done by ``mtla.evaluate`` /
+``mtla.metrics``. Charades emits ONE span per query, so voting is span SELECTION across rollouts
+(``select="argmax"``: keep the single highest-MTLA span — the headline rule).
 
-The MTLA signal is read straight from each window's stored `first_digit` array (the validated
-video signal — see configs); `local_attention` (mean over the window's digits) is also stored.
-
-Reproduces: R@1@0.3 76.3, R@1@0.5 55.4, R@1@0.7 29.4, mIoU 0.508.
+Reproduces: R@1@0.3 76.3, R@1@0.5 55.4, R@1@0.7 29.4, mIoU 0.508 (N=16 self-consistency).
 """
 from __future__ import annotations
 
-from collections import defaultdict
+import os
+
+import pandas as pd
 
 from .base import DatasetAdapter
 from ..registry import register_dataset
-from ..score import reduce_band
-from ..eval import auroc
-from ..utils import tiou
-
-# Default MTLA signal for video scoring (the paper/validated choice; images use local_attention).
-VIDEO_SIGNAL = "first_digit"
 
 PROMPT = (
     "Locate the segment where the following event happens. "
@@ -33,103 +27,32 @@ PROMPT = (
 class CharadesDataset(DatasetAdapter):
     name = "charades"
     task = "video_span"
-    greedy_seed0 = True   # N=16 recipe: rollout 0 greedy anchor + 15 stochastic (paper headline)
-    # Heavy per-clip video work -> one blocking engine per GPU (sharded), 128-token spans, top-p 0.95.
+    # scoring: first-digit MTLA; temporal overlap; single-span selection; recall @ IoU + mIoU.
+    signal = "first_digit"
+    overlap = "tiou"
+    select = "argmax"
+    metric = "recall_at_iou"
+    greedy_seed0 = True   # N=16 recipe: rollout 0 greedy anchor + N-1 stochastic (paper headline)
     gen_strategy = "sharded"
-    gen_max_new_tokens = 128
-    gen_top_p = 0.95
-    # Video PREPROCESSING (fps/pixels) + `multi` — read by the Qwen3-VL video ext_* at BOTH generate
-    # and extract time, so it must stay identical across stages. `multi=False`: Charades emits ONE
-    # span per query. (Sampling knobs live on gen_* above, not here.)
-    video = {"fps": 2.0, "min_pixels": 4 * 32 * 32, "max_pixels": 128 * 32 * 32, "multi": False}
 
     def load_items(self, cfg):
-        import pandas as pd
-        df = pd.read_parquet(cfg.path("data"))
-        return df.to_dict("records")
+        return pd.read_parquet(cfg.path("data")).to_dict("records")
 
     def prompt(self, item):
         return PROMPT.format(query=(item.get("caption") or item.get("query")).rstrip("."))
 
     def ground_truth(self, item):
-        # raw item carries [start, end] in `timestamp` (may be a numpy array, so test `is None`,
-        # not truthiness); a normalized prediction record carries `gt_span`.
         ts = item.get("timestamp")
-        if ts is None:
-            ts = item.get("gt_span")
-        return [float(ts[0]), float(ts[1])] if ts is not None and len(ts) == 2 else None
+        if ts is None or len(ts) != 2:
+            return []
+        return [{"region": [float(ts[0]), float(ts[1])], "label": ""}]
 
-    def video_path(self, item, video_dir):
-        import os
-        return os.path.join(video_dir, item["video"])
+    def video_path(self, cfg, item):
+        return os.path.join(cfg.path("video_dir"), item["video"])
 
-    def make_prediction(self, item, response, model, truncated=False):
-        """Raw Charades item + model response -> a prediction record (the generate-stage schema).
-        `truncated` is accepted for a uniform signature across datasets (video ignores it)."""
-        from ..utils import tiou
-        spans = model.parse(response, task="video_span", multi=False)
-        gt = self.ground_truth(item)
-        pred_span = list(spans[0].region) if spans else None
-        iou_val = tiou(pred_span, gt) if (pred_span and gt) else 0.0
-        return {"video": item["video"], "caption": item.get("caption") or item.get("query"),
-                "gt_span": gt, "pred_span": pred_span, "response": response,
-                "iou": float(iou_val), "is_correct": iou_val >= 0.5}
-
-    def video_item(self, p, video_dir):
-        """Normalize one Charades prediction record for the video extractor (single span)."""
-        import os
-        sp = p.get("pred_span")
-        return {"video_path": os.path.join(video_dir, p["video"]),
-                "query": self.prompt(p),
-                "pred_windows": [list(sp)] if sp else [],
-                "gt_windows": [list(p["gt_span"])] if p.get("gt_span") else []}
-
-    # ---- GPU stages: config-driven (the model adapter names the video_span script) ----
-    def stage_cmd(self, cfg, model, seed, mode):
-        args = ["--config", cfg.config_path, "--seed", str(seed)]
-        if mode == "generate":
-            return model.generate_script(self.task, cfg.generate.engine), args
-        return model.extract_script(self.task), args
-
-    def score(self, cfg, model=None) -> dict:
-        import numpy as np
-
-        band = cfg.band_indices()
-        n = cfg.n_rollouts
-        signal = VIDEO_SIGNAL
-
-        by_query = defaultdict(list)   # (video,query) -> [{seed, span, mtla}]
-        gt_of = {}
-        for sd in range(n):
-            for r in self.load_shards(cfg.feat_dir(sd)):
-                key = (r.get("video"), r.get("query"))
-                # one span per Charades query -> one object per record
-                obj = r["objects"][0] if r["objects"] else None
-                if obj is None:
-                    continue
-                mtla = reduce_band(obj[signal].astype(np.float32), band)
-                by_query[key].append({"seed": sd, "span": list(obj["window"]), "mtla": mtla})
-                gt_of[key] = list(r["gt_windows"][0]) if r.get("gt_windows") else None
-        queries = sorted(by_query)
-
-        # hallucination AUROC (single rollout, seed 0): grounded = IoU(pred,gt) >= 0.5
-        mtla_s, labels = [], []
-        for k in queries:
-            c0 = next((c for c in by_query[k] if c["seed"] == 0), by_query[k][0])
-            hit = tiou(c0["span"], gt_of[k]) >= 0.5 if gt_of[k] else False
-            mtla_s.append(c0["mtla"]); labels.append(0 if hit else 1)
-        auroc_mtla = auroc(mtla_s, labels) if mtla_s else float("nan")
-
-        # span selection across rollouts. agg=max -> highest-MTLA span (headline).
-        def r_at():
-            ious = []
-            for k in queries:
-                span = max(by_query[k], key=lambda c: c["mtla"])["span"]
-                ious.append(tiou(span, gt_of[k]) if gt_of[k] else 0.0)
-            ious = np.array(ious)
-            return (100 * np.mean(ious >= 0.3), 100 * np.mean(ious >= 0.5),
-                    100 * np.mean(ious >= 0.7), float(ious.mean()))
-
-        mt = r_at()
-        return {"auroc_mtla": auroc_mtla,
-                "mtla": {"R@0.3": mt[0], "R@0.5": mt[1], "R@0.7": mt[2], "mIoU": mt[3]}}
+    def gen_record(self, cfg, item, response, truncated=False):
+        # A video appears under several captions, so the query id must include the caption.
+        caption = item.get("caption") or item.get("query")
+        return {"id": f"{item['video']}::{caption}", "prompt": self.prompt(item),
+                "response": response, "gt": self.ground_truth(item),
+                "extra": {"video": self.video_path(cfg, item)}}

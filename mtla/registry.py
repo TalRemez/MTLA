@@ -9,9 +9,9 @@ Models and datasets self-register with a decorator, so adding one never means ed
 
 `resolve("qwen3vl", "coco")` returns `(model_adapter, dataset_adapter)` after checking the
 dataset's task family is one the model supports — an unsupported pairing fails fast with a clear
-message instead of deep inside a stage. This is the single entry point `run.py` uses to turn a
-config's `model:` / `dataset:` keys into the objects that carry every task-specific function
-(parse, the MTLA extraction callbacks, stage scripts, score).
+message instead of deep inside a stage. This is the single entry point the stage scripts use to
+turn a config's `model:` / `dataset:` keys into the objects that carry every task-specific piece
+(parse, the vLLM request builder, the MTLA extraction callbacks).
 
 Adapters are discovered lazily: the first lookup imports every submodule under `mtla/models/`
 and `mtla/data/`, which runs their `@register_*` decorators. Keeping discovery lazy means

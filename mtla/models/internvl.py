@@ -1,37 +1,42 @@
 """InternVL3.5-8B model adapter (image detection).
 
-InternVL emits native grounding: ``<ref>label</ref><box>[[x1,y1,x2,y2], ...]</box>`` with
-coordinates in [0,1000]. Images are encoded with dynamic tiling (variable tiles + optional
-thumbnail), so the region mask (`_bbox_to_internvl_token_indices`, defined below) is specific to
-this token layout.
+Uses the native HF checkpoint ``OpenGVLab/InternVL3_5-8B-HF`` — ``InternVLForConditionalGeneration``
+with a standard ``AutoProcessor`` (no ``trust_remote_code``). The LLM backbone is Qwen3, so the
+attention capture hooks ``transformers.models.qwen3.modeling_qwen3``.
 
-This adapter holds the output `parse` and the `attn_module_path` to monkeypatch during extraction,
-plus the InternVL-specific `ext_*` extraction callbacks (build inputs, find prediction tokens, mask
-the proposal region) that feed the shared MTLA driver in `mtla.mtla_attn`. The heavy GPU work runs
-via the config-driven stage scripts under `scripts/stages/`.
+InternVL emits native grounding — ``<ref>label</ref><box>[[x1,y1,x2,y2], ...]</box>`` in [0,1000].
+Images are encoded with dynamic tiling (a ``n_cols x n_rows`` grid of 448px tiles + a thumbnail),
+so the region mask (bbox → image-token indices) depends on that tile grid. The processor doesn't
+return the grid, so we recompute it with the processor's own ``get_optimal_tiled_canvas`` helper —
+reusing HF's tiling decision rather than reimplementing it.
 """
 from __future__ import annotations
 
 import re
 
-from .base import ModelAdapter, Prediction
+import numpy as np
+import torch
+from PIL import Image
+from transformers import AutoProcessor, AutoModelForImageTextToText
+from transformers.models.got_ocr2.image_processing_got_ocr2 import get_optimal_tiled_canvas
+
+from .base import ModelAdapter, Prediction, hallucinated
 from ..registry import register_model
+from ..mtla_attn import CaptureState, install_capture
+from ..utils import iou
 
-MODEL_ID = "OpenGVLab/InternVL3_5-8B"
-IMG_CONTEXT_TOK = "<IMG_CONTEXT>"
-NUM_IMAGE_TOKEN_PER_TILE = 16 * 16  # 256, InternVL per-tile patches after pixel-shuffle 0.5
-
-PROMPT_TMPL = (
-    "Please detect all instances of {cats} in the image. "
-    "Output the bounding boxes in the format <ref>category</ref><box>[[x1, y1, x2, y2], ...]</box> "
-    "with coordinates normalized to [0, 1000]."
-)
+MODEL_ID = "OpenGVLab/InternVL3_5-8B-HF"
+IMAGE_TOKEN = "<IMG_CONTEXT>"
+TILE_SIZE = 448
+TOKENS_PER_TILE = 256          # 16x16 patches per tile after pixel-shuffle 0.5
+PATCH_GRID = 16                # per-tile patch grid side
+MIN_TILES, MAX_TILES = 1, 12
 
 
 def parse_internvl(response: str) -> list:
-    """Parse InternVL native grounding output into [Prediction(region=[x1,y1,x2,y2], label)].
+    """Parse InternVL native grounding output into ``[Prediction([x1,y1,x2,y2], label)]``.
 
-    Handles both `<ref>label</ref><box>[[...]]</box>` and the bare `label[[...]]` form.
+    Handles both ``<ref>label</ref><box>[[...]]</box>`` and the bare ``label[[...]]`` form.
     """
     preds = []
     for m in re.finditer(r'<ref>([^<]+)</ref><box>\s*\[(.+?)\]\s*</box>', response, flags=re.DOTALL):
@@ -48,9 +53,8 @@ def parse_internvl(response: str) -> list:
         if not m:
             break
         label = m.group(1).strip().lower()
-        outer_open = m.start(2)
         depth = 0; outer_close = -1
-        for i in range(outer_open, len(cleaned)):
+        for i in range(m.start(2), len(cleaned)):
             if cleaned[i] == '[':
                 depth += 1
             elif cleaned[i] == ']':
@@ -59,167 +63,36 @@ def parse_internvl(response: str) -> list:
                     outer_close = i; break
         if outer_close == -1:
             break
-        chunk = cleaned[outer_open:outer_close + 1]
+        chunk = cleaned[m.start(2):outer_close + 1]
         for b in re.finditer(r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]', chunk):
             preds.append(Prediction([int(b.group(i)) for i in range(1, 5)], label))
         pos = outer_close + 1
     return preds
 
 
-@register_model("internvl")
-class InternVLAdapter(ModelAdapter):
-    model_id = MODEL_ID
-    # InternVL's LLM backbone is Qwen3; that is the module we monkeypatch for attention.
-    attn_module_path = "transformers.models.qwen3.modeling_qwen3"
-    tasks = ("image_det",)
-
-    def parse(self, response: str, task: str = None, **kw) -> list:
-        self._check_task(task)
-        return parse_internvl(response)
-
-    # ---- stage scripts ----
-    def generate_script(self, task: str, engine: str) -> str:
-        return "generate.py"
-
-    def extract_script(self, task: str) -> str:
-        return "image_extract.py"
-
-    # ---- generation contract (scripts/stages/generate.py) ----
-    def gen_engines(self, task):
-        return ("vllm", "hf")                      # vLLM (fast) or a plain HF forward (reference)
-
-    def vllm_engine_args(self, dataset):
-        return {"trust_remote_code": True, "limit_mm_per_prompt": {"image": 1}}  # custom modeling
-
-    def vllm_uses_seed(self, task):
-        return True                                # InternVL vLLM supports per-request seeding
-
-    def gen_processor(self):
-        from transformers import AutoTokenizer
-        return AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True, use_fast=False)
-
-    def build_vllm_request(self, proc, item, dataset, cfg):
-        """Native InternVL grounding prompt + the raw PIL image (vLLM does InternVL preprocessing)."""
-        from PIL import Image as _PILImage
-        cats = ", ".join(item["categories"])
-        chat = proc.apply_chat_template(
-            [{"role": "user", "content": "<image>\n" + PROMPT_TMPL.format(cats=cats)}],
-            tokenize=False, add_generation_prompt=True)
-        return {"prompt": chat, "multi_modal_data": {"image": _PILImage.open(item["image"]).convert("RGB")}}
-
-    def load_hf_gen(self, gpu_id):
-        return _load_internvl_for_generate(self.model_id, gpu_id)
-
-    def generate_hf(self, ctx, item, dataset, cfg, seed, temperature):
-        """One plain HF forward (dynamic-tiling preprocessing + grounding prompt) -> (response,
-        truncated). Samples at `temperature` (>0) for every rollout incl. seed 0 — the seed only
-        varies the draw; temperature==0 is greedy."""
-        return _internvl_generate_hf(ctx, item, seed, temperature, dataset.gen_max_new_tokens)
-
-    # ---- HF-eager extraction (image_det) ----
-    # The per-item flow (extract_one) is shared in the base class; this adapter supplies only the
-    # InternVL-specific pieces via the `ext_*` callbacks below.
-    def load_for_extract(self, gpu_id):
-        return _load_internvl_for_extract(gpu_id)
-
-    def ext_build_inputs(self, p, ds_by_id, ctx, rank):
-        """Tile the image, build the InternVL grounding prompt, re-insert the <ref>/<box>
-        tags vLLM stripped, locate the <IMG_CONTEXT> tokens, and flag hallucinations against the
-        GT. Returns None to skip."""
-        import torch, json
-        from .base import label_hallu_bbox
-        tokenizer = ctx["tokenizer"]; device = ctx["device"]; img_pad_id = ctx["img_pad_id"]
-        if p.get("status") != "success" or not p.get("pred_bboxes"):
-            return None
-        ds_item = ds_by_id.get(p["id"])
-        if ds_item is None:
-            return None
-        try:
-            pixel_values, tile_grid, has_thumb = load_image_internvl(ds_item["image"])
-            pixel_values = pixel_values.to(device, dtype=torch.bfloat16)
-        except Exception as e:
-            print(f"[worker {rank}] skip {p['id']}: image load {e}", flush=True)
-            return None
-        n_tiles = tile_grid[0] * tile_grid[1]
-        n_image_tokens = n_tiles * NUM_IMAGE_TOKEN_PER_TILE + (NUM_IMAGE_TOKEN_PER_TILE if has_thumb else 0)
-        cats = ", ".join(p["categories"])
-        user_text = "<image>\n" + PROMPT_TMPL.format(cats=cats)
-        chat = tokenizer.apply_chat_template([{"role": "user", "content": user_text}],
-                                             tokenize=False, add_generation_prompt=True)
-        image_token_block = "<img>" + (IMG_CONTEXT_TOK * n_image_tokens) + "</img>"
-        prompt_text = chat.replace("<image>", image_token_block, 1)
-        prompt_ids = tokenizer(prompt_text, return_tensors="pt", add_special_tokens=False).input_ids[0].to(device)
-        # RAW-RESPONSE FIX: vLLM stripped the <ref>/<box> tags; reconstruct so re-tokenization aligns.
-        response = re.sub(r'([A-Za-z][A-Za-z _]*?)(\[\[.+?\]\])',
-                          lambda m: f'<ref>{m.group(1)}</ref><box>{m.group(2)}</box>',
-                          p["response"], flags=re.DOTALL)
-        prompt_cpu = prompt_ids.cpu().tolist()
-        image_idx_l = [i for i, t in enumerate(prompt_cpu) if t == img_pad_id]
-        if len(image_idx_l) != n_image_tokens:
-            return None
-        gt_objs = json.loads(ds_item["conversations"][1]["value"])
-        hallu_flags = [label_hallu_bbox(pb["box"], pb["label"], gt_objs) for pb in p["pred_bboxes"]]
-        return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx_l,
-                "predictions": p["pred_bboxes"], "hallu_flags": hallu_flags,
-                "pixel_values": pixel_values,
-                "meta": {"tile_grid": tile_grid, "has_thumb": has_thumb, "n_image_tokens": n_image_tokens}}
-
-    def ext_token_ranges(self, response, predictions, tokenizer):
-        return find_pred_token_ranges(response, predictions, tokenizer)
-
-    def ext_region_mask(self, prediction, meta):
-        """Modality-token indices inside the proposal box M(R_p) (InternVL dynamic tiling)."""
-        return _bbox_to_internvl_token_indices(prediction["box"], meta["tile_grid"], meta["has_thumb"])[0]
-
-    def ext_forward_kwargs(self, full_ids, total_len, device, inp):
-        import torch
-        pv = inp["pixel_values"]
-        return {"input_ids": full_ids, "pixel_values": pv,
-                "image_flags": torch.ones(pv.shape[0], dtype=torch.long, device=device),
-                "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
-
-    def ext_obj_record(self, prediction, pred_idx, meta):
-        return {"pred_idx": pred_idx, "label": prediction["label"], "box": prediction["box"],
-                "tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
-
-    def ext_record(self, p, meta, objects, n_predictions):
-        return {"image_id": p["id"], "n_pred_bboxes": n_predictions, "n_extracted": len(objects),
-                "objects": objects, "tile_grid": meta["tile_grid"], "has_thumb": meta["has_thumb"]}
+def tile_grid_for(width: int, height: int):
+    """The InternVL tile grid ``(n_cols, n_rows)`` for an image, via HF's own tiling decision.
+    Returns ``(n_cols, n_rows, has_thumb)``; a thumbnail tile is appended whenever >1 tile."""
+    n_cols, n_rows = get_optimal_tiled_canvas((height, width), (TILE_SIZE, TILE_SIZE),
+                                              MIN_TILES, MAX_TILES)
+    return n_cols, n_rows, (n_cols * n_rows) != 1
 
 
-# ============================================================================
-# HF-eager MTLA extraction implementation (image_det) for InternVL3.5.
-# Supplies the InternVL-specific pieces of mtla.mtla_attn.compute_mtla.
-# ============================================================================
-import numpy as np  # noqa: E402
-import torch  # noqa: E402
-import torchvision.transforms as _T  # noqa: E402
-from torchvision.transforms.functional import InterpolationMode as _Interp  # noqa: E402
-from PIL import Image as _Image  # noqa: E402
-from ..mtla_attn import MTLAState, make_mtla_attention_forward, install  # noqa: E402
-
-_IMAGENET_MEAN = (0.485, 0.456, 0.406); _IMAGENET_STD = (0.229, 0.224, 0.225)
-
-
-def _bbox_to_internvl_token_indices(bbox, tile_grid, has_thumb: bool, patch_grid: int = 16):
+def bbox_region_mask(bbox, n_cols, n_rows, has_thumb) -> list:
     """Image-token indices overlapping ``bbox`` M(R_p) under InternVL's dynamic tiling.
 
-    InternVL splits an image into ``n_cols x n_rows`` tiles plus an optional thumbnail. The
-    image-token sequence is ``tile_0[0..G-1], ..., tile_{N-1}[0..G-1], [thumbnail[0..G-1]]``, each
-    tile a ``patch_grid x patch_grid`` row-major grid of ``G = patch_grid**2`` tokens (16 for
-    InternVL3.5, i.e. 16x16=256 tokens per 448px tile after pixel-shuffle 0.5). ``tile_grid`` is
-    ``(n_cols, n_rows)``; ``bbox`` is ``[x1,y1,x2,y2]`` in ``[0, 1000]``. Returns ``(inside, outside)``.
+    The token sequence is ``tile_0[0..255], ..., tile_{N-1}[0..255], [thumbnail[0..255]]``, each
+    tile a row-major ``PATCH_GRID x PATCH_GRID`` grid. ``bbox`` is ``[x1,y1,x2,y2]`` in [0,1000].
     """
     x1, y1, x2, y2 = bbox
-    n_cols, n_rows = tile_grid
     n_tiles = n_cols * n_rows
-    per_tile = patch_grid * patch_grid
+    per_tile = PATCH_GRID * PATCH_GRID
     total = n_tiles * per_tile + (per_tile if has_thumb else 0)
     if x2 <= x1 or y2 <= y1:
-        return [], list(range(total))
+        return []
 
     def clamp(v):
-        return max(0, min(patch_grid - 1, v))
+        return max(0, min(PATCH_GRID - 1, v))
 
     bx1, by1, bx2, by2 = x1 / 1000.0, y1 / 1000.0, x2 / 1000.0, y2 / 1000.0
     inside = []
@@ -229,213 +102,143 @@ def _bbox_to_internvl_token_indices(bbox, tile_grid, has_thumb: bool, patch_grid
         ty0, ty1 = row / n_rows, (row + 1) / n_rows
         if tx1 <= bx1 or tx0 >= bx2 or ty1 <= by1 or ty0 >= by2:
             continue  # tile does not overlap bbox
-        # bbox in tile-local [0,1] coordinates
-        lx0 = max(0.0, (bx1 - tx0) / (tx1 - tx0))
-        lx1 = min(1.0, (bx2 - tx0) / (tx1 - tx0))
-        ly0 = max(0.0, (by1 - ty0) / (ty1 - ty0))
-        ly1 = min(1.0, (by2 - ty0) / (ty1 - ty0))
-        col_min = clamp(int(np.floor(lx0 * patch_grid)))
-        col_max = clamp(int(np.floor((lx1 - 1e-6) * patch_grid)))
-        row_min = clamp(int(np.floor(ly0 * patch_grid)))
-        row_max = clamp(int(np.floor((ly1 - 1e-6) * patch_grid)))
+        lx0 = max(0.0, (bx1 - tx0) / (tx1 - tx0)); lx1 = min(1.0, (bx2 - tx0) / (tx1 - tx0))
+        ly0 = max(0.0, (by1 - ty0) / (ty1 - ty0)); ly1 = min(1.0, (by2 - ty0) / (ty1 - ty0))
+        col_min, col_max = clamp(int(np.floor(lx0 * PATCH_GRID))), clamp(int(np.floor((lx1 - 1e-6) * PATCH_GRID)))
+        row_min, row_max = clamp(int(np.floor(ly0 * PATCH_GRID))), clamp(int(np.floor((ly1 - 1e-6) * PATCH_GRID)))
         off = tile_idx * per_tile
         for pr in range(row_min, row_max + 1):
             for pc in range(col_min, col_max + 1):
-                inside.append(off + pr * patch_grid + pc)
+                inside.append(off + pr * PATCH_GRID + pc)
     if has_thumb:
-        col_min = clamp(int(np.floor(bx1 * patch_grid)))
-        col_max = clamp(int(np.floor((bx2 - 1e-6) * patch_grid)))
-        row_min = clamp(int(np.floor(by1 * patch_grid)))
-        row_max = clamp(int(np.floor((by2 - 1e-6) * patch_grid)))
+        col_min, col_max = clamp(int(np.floor(bx1 * PATCH_GRID))), clamp(int(np.floor((bx2 - 1e-6) * PATCH_GRID)))
+        row_min, row_max = clamp(int(np.floor(by1 * PATCH_GRID))), clamp(int(np.floor((by2 - 1e-6) * PATCH_GRID)))
         off = n_tiles * per_tile
         for pr in range(row_min, row_max + 1):
             for pc in range(col_min, col_max + 1):
-                inside.append(off + pr * patch_grid + pc)
-    inside_set = set(inside)
-    outside = [i for i in range(total) if i not in inside_set]
-    return inside, outside
+                inside.append(off + pr * PATCH_GRID + pc)
+    return [i for i in inside if i < total]
 
 
-def _build_transform(input_size=448):
-    return _T.Compose([
-        _T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-        _T.Resize((input_size, input_size), interpolation=_Interp.BICUBIC),
-        _T.ToTensor(), _T.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD),
-    ])
-
-
-def _find_closest_aspect_ratio(aspect_ratio, target_ratios, w, h, image_size):
-    best = float('inf'); best_ar = (1, 1); area = w * h
-    for r in target_ratios:
-        rar = r[0] / r[1]
-        diff = abs(aspect_ratio - rar)
-        if diff < best:
-            best = diff; best_ar = r
-        elif diff == best and area > 0.5 * image_size * image_size * r[0] * r[1]:
-            best_ar = r
-    return best_ar
-
-
-def _dynamic_preprocess(image, min_num=1, max_num=12, image_size=448, use_thumbnail=True):
-    ow, oh = image.size; ar = ow / oh
-    target_ratios = sorted({(i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1)
-                            for j in range(1, n + 1) if min_num <= i * j <= max_num},
-                           key=lambda x: x[0] * x[1])
-    target = _find_closest_aspect_ratio(ar, target_ratios, ow, oh, image_size)
-    n_cols, n_rows = target
-    tw, th = image_size * n_cols, image_size * n_rows
-    blocks = n_cols * n_rows
-    img = image.resize((tw, th))
-    images = []
-    for i in range(blocks):
-        c = i % n_cols; r = i // n_cols
-        images.append(img.crop((c * image_size, r * image_size,
-                                (c + 1) * image_size, (r + 1) * image_size)))
-    has_thumb = use_thumbnail and len(images) != 1
-    if has_thumb:
-        images.append(image.resize((image_size, image_size)))
-    return images, (n_cols, n_rows), has_thumb
-
-
-def load_image_internvl(path, input_size=448, max_num=12):
-    image = _Image.open(path).convert('RGB')
-    transform = _build_transform(input_size=input_size)
-    tiles, tile_grid, has_thumb = _dynamic_preprocess(image, image_size=input_size,
-                                                      use_thumbnail=True, max_num=max_num)
-    pixel_values = torch.stack([transform(img) for img in tiles])
-    return pixel_values, tile_grid, has_thumb
-
-
-def find_pred_token_ranges(response_text, pred_bboxes, tokenizer):
-    enc = tokenizer(response_text, add_special_tokens=False, return_offsets_mapping=True)
+def find_pred_token_ranges(response, predictions, tokenizer):
+    """Per predicted box, the response tokens Q_p (its label + coordinate tokens), via offsets."""
+    enc = tokenizer(response, add_special_tokens=False, return_offsets_mapping=True)
     offsets = enc["offset_mapping"]
     out = []
-    for pb in pred_bboxes:
-        label = pb["label"]; box = pb["box"]
-        bbox_pat = re.compile(rf'\[\s*{box[0]}\s*,\s*{box[1]}\s*,\s*{box[2]}\s*,\s*{box[3]}\s*\]')
-        m = bbox_pat.search(response_text)
+    for pred in predictions:
+        label, box = pred.label, pred.region
+        m = re.compile(rf'\[\s*{box[0]}\s*,\s*{box[1]}\s*,\s*{box[2]}\s*,\s*{box[3]}\s*\]').search(response)
         if not m:
             out.append(None); continue
         coord_toks = []
         for num_m in re.finditer(r'\d+', m.group(0)):
-            num_start = m.start() + num_m.start(); num_end = m.start() + num_m.end()
-            for ti, (ts, te) in enumerate(offsets):
-                if ts < num_end and te > num_start:
-                    coord_toks.append(ti)
-        label_block_pat = re.compile(
-            rf'(?:^|<ref>|[\s\]\)\.])({re.escape(label)})(?:</ref>\s*<box>)?\s*\[\[',
-            flags=re.IGNORECASE)
+            ns, ne = m.start() + num_m.start(), m.start() + num_m.end()
+            coord_toks += [ti for ti, (ts, te) in enumerate(offsets) if ts < ne and te > ns]
+        label_block = re.compile(
+            rf'(?:^|<ref>|[\s\]\)\.])({re.escape(label)})(?:</ref>\s*<box>)?\s*\[\[', flags=re.IGNORECASE)
         label_pos = None
-        for lm in label_block_pat.finditer(response_text):
+        for lm in label_block.finditer(response):
             if lm.start() <= m.start():
                 label_pos = lm
             else:
                 break
         if label_pos is None:
-            simple_pat = re.compile(rf'\b{re.escape(label)}\b', flags=re.IGNORECASE)
-            cand = None
-            for lm in simple_pat.finditer(response_text):
+            for lm in re.compile(rf'\b{re.escape(label)}\b', flags=re.IGNORECASE).finditer(response):
                 if lm.start() <= m.start():
-                    cand = lm
+                    label_pos = lm
                 else:
                     break
-            label_pos = cand
         if label_pos is None:
             out.append(None); continue
-        label_match = re.search(re.escape(label), label_pos.group(0), flags=re.IGNORECASE)
-        if label_match is None:
+        lmatch = re.search(re.escape(label), label_pos.group(0), flags=re.IGNORECASE)
+        if lmatch is None:
             out.append(None); continue
-        label_start = label_pos.start() + label_match.start()
-        label_end = label_pos.start() + label_match.end()
-        label_toks = [ti for ti, (ts, te) in enumerate(offsets) if ts < label_end and te > label_start]
+        ls, le = label_pos.start() + lmatch.start(), label_pos.start() + lmatch.end()
+        label_toks = [ti for ti, (ts, te) in enumerate(offsets) if ts < le and te > ls]
         if not label_toks:
             out.append(None); continue
         out.append({"first_label_tok": label_toks[0], "label_toks": label_toks, "coord_toks": coord_toks})
     return out
 
 
-def _load_internvl_for_extract(gpu_id):
-    from transformers import AutoModel, AutoTokenizer, modeling_utils
-    # transformers v5 compat shim (InternVL remote code expects an attr v5 dropped)
-    if not hasattr(modeling_utils.PreTrainedModel, '_compat_done'):
-        _orig = modeling_utils.PreTrainedModel.__getattr__
-        def _patched(self, name):
-            if name == 'all_tied_weights_keys':
-                try:
-                    return _orig(self, name)
-                except AttributeError:
-                    return {}
-            return _orig(self, name)
-        modeling_utils.PreTrainedModel.__getattr__ = _patched
-        modeling_utils.PreTrainedModel._compat_done = True
+@register_model("internvl")
+class InternVLAdapter(ModelAdapter):
+    model_id = MODEL_ID
+    attn_module_path = "transformers.models.qwen3.modeling_qwen3"   # InternVL-HF LLM backbone
+    tasks = ("image_det",)
 
-    state = MTLAState()
-    install("transformers.models.qwen3.modeling_qwen3",
-            make_mtla_attention_forward(state))
+    def parse(self, response, task=None):
+        self._check_task(task)
+        return parse_internvl(response)
 
-    device = f"cuda:{gpu_id}"
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=True)
-    model = AutoModel.from_pretrained(MODEL_ID, dtype=torch.bfloat16,
-                                      trust_remote_code=True).to(device).eval()
-    model.img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOK)
-    for layer in model.language_model.model.layers:
-        layer.self_attn.config._attn_implementation = "eager"
-    decoder_layers = model.language_model.model.layers
-    state.lang_attn_ids = {id(L.self_attn) for L in decoder_layers}
-    state.lang_attn_order = [id(L.self_attn) for L in decoder_layers]
+    # ---- vLLM generation ----
+    def vllm_engine_args(self, dataset):
+        return {"limit_mm_per_prompt": {"image": 1}}
 
-    return {"model": model, "tokenizer": tokenizer, "state": state, "device": device,
-            "n_layers": len(decoder_layers),
-            "n_heads": model.language_model.config.num_attention_heads,
-            "img_pad_id": tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOK)}
+    def vllm_uses_seed(self, task):
+        return True
 
+    def gen_processor(self):
+        return AutoProcessor.from_pretrained(self.model_id)
 
-def _load_internvl_for_generate(model_id, gpu_id):
-    """Load InternVL + tokenizer for HF generation on `gpu_id` (stock attention, no MTLA hook).
-    Returns the ctx the shared generate driver hands back to `_internvl_generate_hf`."""
-    from transformers import AutoModel, AutoTokenizer, modeling_utils
-    # transformers v5 compat: InternVL's modeling code expects an attr v5 dropped.
-    if not hasattr(modeling_utils.PreTrainedModel, "_compat_done"):
-        _orig = modeling_utils.PreTrainedModel.__getattr__
-        def _patched(self, name):
-            if name == "all_tied_weights_keys":
-                try:
-                    return _orig(self, name)
-                except AttributeError:
-                    return {}
-            return _orig(self, name)
-        modeling_utils.PreTrainedModel.__getattr__ = _patched
-        modeling_utils.PreTrainedModel._compat_done = True
+    def build_request(self, proc, item, dataset, cfg):
+        # `item` is a raw dataset item (from load_items), not a generation record.
+        image = Image.open(item["image"]).convert("RGB")
+        msgs = [{"role": "user", "content": [{"type": "image", "image": image},
+                                             {"type": "text", "text": dataset.prompt(item)}]}]
+        prompt = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+        return {"prompt": prompt, "multi_modal_data": {"image": image}}
 
-    device = f"cuda:{gpu_id}"
-    tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True, use_fast=True)
-    model = AutoModel.from_pretrained(model_id, dtype=torch.bfloat16,
-                                      trust_remote_code=True).to(device).eval()
-    model.img_context_token_id = tok.convert_tokens_to_ids(IMG_CONTEXT_TOK)
-    return {"model": model, "tokenizer": tok, "device": device}
+    # ---- MTLA extraction ----
+    def load_for_extract(self, gpu_id, task="image_det"):
+        device = f"cuda:{gpu_id}"
+        state = CaptureState()
+        install_capture(self.attn_module_path, state)
+        proc = AutoProcessor.from_pretrained(self.model_id)
+        model = AutoModelForImageTextToText.from_pretrained(
+            self.model_id, dtype=torch.bfloat16, attn_implementation="eager").to(device).eval()
+        layers = model.model.language_model.layers
+        state.layer_ids = {id(L.self_attn): i for i, L in enumerate(layers)}
+        return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "state": state,
+                "device": device, "task": task, "n_layers": len(layers),
+                "n_heads": model.config.text_config.num_attention_heads,
+                "image_pad_id": proc.tokenizer.convert_tokens_to_ids(IMAGE_TOKEN)}
 
+    def build_inputs(self, record, ctx, rank):
+        proc = ctx["proc"]; device = ctx["device"]; image_pad_id = ctx["image_pad_id"]
+        response = record.get("response")
+        preds = self.parse(response, "image_det") if response else []
+        if not preds:
+            return None
+        try:
+            img = Image.open(record["extra"]["image"]).convert("RGB")
+        except Exception as e:
+            print(f"[worker {rank}] skip {record['id']}: image {e}", flush=True)
+            return None
+        msgs = [{"role": "user", "content": [{"type": "image", "image": img},
+                                             {"type": "text", "text": record["prompt"]}]}]
+        inputs = proc.apply_chat_template(msgs, tokenize=True, add_generation_prompt=True,
+                                          return_dict=True, return_tensors="pt").to(device)
+        prompt_ids = inputs["input_ids"][0]
+        image_idx = [k for k, t in enumerate(prompt_ids.tolist()) if t == image_pad_id]
+        n_cols, n_rows, has_thumb = tile_grid_for(*img.size)
+        n_expected = (n_cols * n_rows + (1 if has_thumb else 0)) * TOKENS_PER_TILE
+        if len(image_idx) != n_expected:
+            print(f"[worker {rank}] skip {record['id']}: image tokens {len(image_idx)} != {n_expected}",
+                  flush=True)
+            return None
+        gt = record.get("gt", [])
+        hallu = [hallucinated(p.region, p.label, gt, iou) for p in preds]
+        return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx,
+                "predictions": preds, "hallu_flags": hallu, "pixel_values": inputs["pixel_values"],
+                "meta": {"tile": (n_cols, n_rows, has_thumb)}}
 
-def _internvl_generate_hf(ctx, item, seed, temperature, max_new_tokens):
-    """One InternVL HF forward for one image -> (response, truncated). Dynamic-tiling preprocessing
-    + the native grounding prompt. Samples at `temperature` (>0) for every rollout incl. seed 0;
-    the seed only varies the draw (the worker pre-seeds per (seed, rank)); temperature==0 = greedy."""
-    model, tok, device = ctx["model"], ctx["tokenizer"], ctx["device"]
-    do_sample = bool(temperature and temperature > 0)
-    pixel_values, tile_grid, has_thumb = load_image_internvl(item["image"])
-    pixel_values = pixel_values.to(device, dtype=torch.bfloat16)
-    n_tiles = tile_grid[0] * tile_grid[1]
-    n_img = n_tiles * NUM_IMAGE_TOKEN_PER_TILE + (NUM_IMAGE_TOKEN_PER_TILE if has_thumb else 0)
-    cats = ", ".join(item["categories"])
-    chat = tok.apply_chat_template([{"role": "user", "content": "<image>\n" + PROMPT_TMPL.format(cats=cats)}],
-                                   tokenize=False, add_generation_prompt=True)
-    prompt_text = chat.replace("<image>", "<img>" + (IMG_CONTEXT_TOK * n_img) + "</img>", 1)
-    input_ids = tok(prompt_text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
-    gk = dict(max_new_tokens=max_new_tokens)
-    gk.update(dict(do_sample=True, temperature=temperature, top_p=0.95) if do_sample else dict(do_sample=False))
-    with torch.no_grad():
-        out = model.generate(pixel_values=pixel_values, input_ids=input_ids,
-                             attention_mask=torch.ones_like(input_ids), **gk)
-    response = tok.decode(out[0], skip_special_tokens=True).strip()
-    return response, bool(out.shape[1] >= max_new_tokens)
+    def query_tokens(self, response, predictions, tokenizer):
+        return find_pred_token_ranges(response, predictions, tokenizer)
 
+    def region_mask(self, prediction, meta):
+        return bbox_region_mask(prediction.region, *meta["tile"])
 
+    def forward_kwargs(self, full_ids, total_len, device, inp):
+        return {"input_ids": full_ids, "pixel_values": inp["pixel_values"],
+                "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
