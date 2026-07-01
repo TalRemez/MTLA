@@ -46,11 +46,11 @@ class DatasetAdapter:
 
     # ---- shared machinery (base) ----
     def generate(self, cfg, model, seed=0):
-        from ..stages import run_stage
+        from ..pipeline import run_stage
         run_stage(*self.stage_cmd(cfg, model, seed, "generate"))
 
     def extract(self, cfg, model, seed=0):
-        from ..stages import run_stage
+        from ..pipeline import run_stage
         run_stage(*self.stage_cmd(cfg, model, seed, "extract"))
 
     @staticmethod

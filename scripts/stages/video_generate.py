@@ -12,7 +12,7 @@ the run config, resolves the (model, dataset) adapters, and delegates every spec
 Greedy by default; pass a non-default `--seed` (or config seed != 0) to sample a stochastic rollout
 (T=0.7, top-p=0.95), seeded per (seed, rank) for reproducibility.
 
-    python -m mtla.stages.video_generate --config configs/qvhighlights_qwen3vl.yaml --seed 0
+    python scripts/stages/video_generate.py --config configs/qvhighlights_qwen3vl.yaml --seed 0
 
 Writes `<predictions>/seed{K}/predictions.json` (merged across workers).
 """

@@ -13,7 +13,7 @@ every specific piece:
 
 Invoked as a subprocess by the dataset adapter's `stage_cmd`:
 
-    python -m mtla.stages.video_extract --config configs/qvhighlights_qwen3vl.yaml --seed 0
+    python scripts/stages/video_extract.py --config configs/qvhighlights_qwen3vl.yaml --seed 0
 
 Reads `<predictions>/seed{K}/predictions.json`; writes `<features>/seed{K}/shard{rank}.pt`.
 """

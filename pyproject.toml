@@ -44,5 +44,5 @@ generate = [
 ]
 
 [tool.setuptools]
-packages = ["mtla", "mtla.models", "mtla.data", "mtla.stages"]
+packages = ["mtla", "mtla.models", "mtla.data"]
 py-modules = ["run"]

@@ -11,7 +11,7 @@ every specific piece:
 
 Invoked as a subprocess by the dataset adapter's `stage_cmd` (see `mtla.data.base`):
 
-    python -m mtla.stages.image_extract --config configs/coco_internvl.yaml --seed 0
+    python scripts/stages/image_extract.py --config configs/coco_internvl.yaml --seed 0
 
 Reads `<predictions>/seed{K}/predictions.json` (from the generate stage); writes
 `<features>/seed{K}/shard{rank}.pt` feature shards.

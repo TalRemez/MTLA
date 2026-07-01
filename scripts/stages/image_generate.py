@@ -18,7 +18,7 @@ every model/dataset specific piece to adapter callbacks (mirrors video_generate.
     - `dataset.make_prediction(item, response, model, truncated)` -> the prediction record (parses
       via `model.parse`), the same schema the extract stage reads back.
 
-    python -m mtla.stages.image_generate --config configs/coco_internvl.yaml --seed 0
+    python scripts/stages/image_generate.py --config configs/coco_internvl.yaml --seed 0
 
 Writes `<predictions>/seed{K}/predictions.json` (merged + idx-sorted across workers).
 """
