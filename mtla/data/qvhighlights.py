@@ -39,6 +39,7 @@ PROMPT = (
 class QVHighlightsDataset(DatasetAdapter):
     name = "qvhighlights"
     task = "video_span"
+    greedy_seed0 = True   # N=16 recipe: rollout 0 greedy anchor + 15 stochastic (paper headline)
     # Video sampling for the Qwen3-VL video ext_* (deterministic, paper-faithful). `multi=True`:
     # QVHighlights emits MULTIPLE [start,end] windows per query. Dataset properties (not user
     # knobs), read by mtla.models.qwen3vl during extraction.

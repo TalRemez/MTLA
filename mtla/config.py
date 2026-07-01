@@ -42,7 +42,10 @@ class StageCfg:
     gpus: list | None = None           # None = all visible GPUs (see RunConfig.stage_gpus)
     n_items: int = 0                   # 0 = all
     agg: str = "max"                   # voting fusion: max | sum | support | mean
-    temperature: float = 0.7           # all runs sample at T=0.7 (vary seed per rollout)
+    temperature: float = 0.7           # sampling temperature for stochastic rollouts
+    greedy_seed0: bool | None = None   # generate: rollout 0 is a greedy (T=0) anchor, 1..N-1
+                                       # sample at `temperature`. None = use the dataset default
+                                       # (video benchmarks default True — the paper's N=16 recipe).
 
 
 @dataclass
@@ -75,6 +78,16 @@ class RunConfig:
         """GPU list for a stage; resolves `gpus: null` to all visible GPUs at run time."""
         g = getattr(self, stage).gpus
         return list(g) if g else all_visible_gpus()
+
+    def gen_temperature(self, seed: int, dataset_greedy_seed0: bool = False) -> float:
+        """Effective generation temperature for a rollout `seed`. If greedy_seed0 is on (config
+        overrides the dataset default), rollout 0 decodes greedily (T=0) as a deterministic anchor
+        and rollouts 1..N-1 sample at `temperature` — the paper's N=16 recipe. Video benchmarks
+        default to greedy_seed0=True; images to False."""
+        greedy0 = self.generate.greedy_seed0
+        if greedy0 is None:
+            greedy0 = dataset_greedy_seed0
+        return 0.0 if (greedy0 and seed == 0) else self.generate.temperature
 
     def path(self, key: str) -> str:
         if key not in self.paths:

@@ -33,6 +33,7 @@ PROMPT = (
 class CharadesDataset(DatasetAdapter):
     name = "charades"
     task = "video_span"
+    greedy_seed0 = True   # N=16 recipe: rollout 0 greedy anchor + 15 stochastic (paper headline)
     # Video sampling for the Qwen3-VL video ext_* (deterministic, paper-faithful). `multi=False`:
     # Charades emits ONE span per query. These are dataset properties (not user knobs), read by
     # mtla.models.qwen3vl during extraction.

@@ -38,7 +38,9 @@ def worker(rank, gpu_id, items, pred_dir, config_path, video_dir, seed):
     model, dataset = resolve(cfg.model, cfg.dataset)
     ctx = model.load_for_generate(0, cfg.generate.engine)  # only one GPU visible -> cuda:0
     vcfg = dataset.video
-    temperature = cfg.generate.temperature
+    # Effective temperature for THIS rollout: greedy (0) for the seed-0 anchor when greedy_seed0 is
+    # on (video default), else the config temperature. The seed only varies the stochastic draw.
+    temperature = cfg.gen_temperature(seed, dataset.greedy_seed0)
     print(f"[worker {rank}] generate model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
           f"n={len(items)} seed={seed} T={temperature} engine={cfg.generate.engine}", flush=True)
 
@@ -49,8 +51,6 @@ def worker(rank, gpu_id, items, pred_dir, config_path, video_dir, seed):
         if not os.path.exists(video_path):
             n_skipped += 1
             continue
-        # Every rollout samples at the config temperature; the seed only varies the draw (so seed 0
-        # is rollout #0, NOT a special greedy run). For deterministic decoding, set temperature: 0.
         response = model.generate_video(ctx, video_path, dataset.prompt(item), vcfg,
                                         seed=seed, temperature=temperature, rank=rank)
         if response is None:

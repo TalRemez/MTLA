@@ -208,7 +208,7 @@ def hf_worker(rank, gpu_id, items, pred_dir, config_path, seed):
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
     gen = model.make_hf_generate(gpu_id)
-    temperature = cfg.generate.temperature
+    temperature = cfg.gen_temperature(seed, dataset.greedy_seed0)  # greedy anchor for seed 0 if enabled
     print(f"[worker {rank}] hf gpu={gpu_id} n={len(items)} seed={seed} T={temperature}", flush=True)
     results = []
     for cnt, item in enumerate(items):
@@ -270,7 +270,8 @@ def main():
 
     cfg = load_config(args.config)
     model, dataset = resolve(cfg.model, cfg.dataset)
-    args.temperature = cfg.generate.temperature
+    # One seed per invocation -> one effective temperature (greedy anchor for seed 0 if greedy_seed0).
+    args.temperature = cfg.gen_temperature(args.seed, dataset.greedy_seed0)
     args.pred_dir = cfg.pred_dir(args.seed)
     samples = dataset.load_items(cfg)[:(cfg.generate.n_items or len(dataset.load_items(cfg)))]
 

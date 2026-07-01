@@ -19,6 +19,10 @@ class DatasetAdapter:
 
     name: str = ""
     task: str = ""
+    # Default for self-consistency voting: whether rollout 0 is a greedy (T=0) anchor. Video
+    # benchmarks set True (the paper's N=16 recipe: greedy seed 0 + N-1 stochastic); a config
+    # `generate.greedy_seed0` overrides it. See RunConfig.gen_temperature.
+    greedy_seed0: bool = False
 
     # ---- per-benchmark: subclasses implement ----
     def load_items(self, cfg) -> list:
