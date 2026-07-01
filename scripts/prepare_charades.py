@@ -27,7 +27,7 @@ import glob
 import os
 import re
 
-from scripts._prep_utils import download, unzip, out_dir, done_banner
+from scripts.prep_utils import download, unzip, out_dir, done_banner
 
 # Original Charades-STA test split (Gao et al., TALL), `VIDID start end##caption`. Open, no auth.
 STA_TEST_URL = "https://raw.githubusercontent.com/26hzhang/VSLNet/master/data/dataset/charades/charades_sta_test.txt"

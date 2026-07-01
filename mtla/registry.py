@@ -21,14 +21,19 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from .models.base import ModelAdapter
+    from .data.base import DatasetAdapter
 
 _MODELS: dict[str, type] = {}
 _DATASETS: dict[str, type] = {}
 
 
-def register_model(key: str):
+def register_model(key: str) -> Callable[[type], type]:
     """Class decorator: register a `ModelAdapter` subclass under `key` (e.g. "qwen3vl")."""
-    def deco(cls):
+    def deco(cls: type) -> type:
         existing = _MODELS.get(key)
         if existing is not None and existing is not cls:
             raise ValueError(f"duplicate model key {key!r}: {existing.__name__} vs {cls.__name__}")
@@ -37,9 +42,9 @@ def register_model(key: str):
     return deco
 
 
-def register_dataset(key: str):
+def register_dataset(key: str) -> Callable[[type], type]:
     """Class decorator: register a `DatasetAdapter` subclass under `key` (e.g. "coco")."""
-    def deco(cls):
+    def deco(cls: type) -> type:
         existing = _DATASETS.get(key)
         if existing is not None and existing is not cls:
             raise ValueError(f"duplicate dataset key {key!r}: {existing.__name__} vs {cls.__name__}")
@@ -57,7 +62,7 @@ def _discover(package_name: str) -> None:
         importlib.import_module(f"{package_name}.{info.name}")
 
 
-def _missing(kind: str, key: str, available, package: str, base: str) -> ValueError:
+def _missing(kind: str, key: str, available: dict, package: str, base: str) -> ValueError:
     have = ", ".join(sorted(available)) or "(none)"
     return ValueError(
         f"unknown {kind} {key!r}. Available {kind}s: {have}.\n"
@@ -65,7 +70,7 @@ def _missing(kind: str, key: str, available, package: str, base: str) -> ValueEr
         f"@register_{kind}('<name>'), and pass <name> in your config. See docs/EXTENDING.md.")
 
 
-def get_model_adapter(key: str):
+def get_model_adapter(key: str) -> "ModelAdapter":
     """Instantiate the registered model adapter for `key`, else raise a helpful ValueError."""
     _discover("mtla.models")
     if key not in _MODELS:
@@ -73,7 +78,7 @@ def get_model_adapter(key: str):
     return _MODELS[key]()
 
 
-def get_dataset_adapter(key: str):
+def get_dataset_adapter(key: str) -> "DatasetAdapter":
     """Instantiate the registered dataset adapter for `key`, else raise a helpful ValueError."""
     _discover("mtla.data")
     if key not in _DATASETS:
@@ -91,7 +96,7 @@ def available_datasets() -> list[str]:
     return sorted(_DATASETS)
 
 
-def resolve(model_key: str, dataset_key: str):
+def resolve(model_key: str, dataset_key: str) -> tuple["ModelAdapter", "DatasetAdapter"]:
     """Return (model_adapter, dataset_adapter) for a valid pairing, else raise ValueError."""
     model = get_model_adapter(model_key)
     dataset = get_dataset_adapter(dataset_key)

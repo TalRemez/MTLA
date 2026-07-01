@@ -37,7 +37,7 @@ from mtla.config import load_config
 from mtla.registry import resolve
 
 
-def generate_seed(cfg, model, dataset, seed, tuning):
+def generate_seed(cfg, model, dataset, seed: int, tuning: dict) -> None:
     """Generate one rollout ``seed`` and write its predictions.json."""
     # rollout 0 may be a greedy anchor (T=0) if the dataset/config asks for it; else config temp.
     temperature = cfg.gen_temperature(seed, dataset.greedy_seed0)
@@ -71,7 +71,7 @@ def generate_seed(cfg, model, dataset, seed, tuning):
           f"{pred_dir}/predictions.json", flush=True)
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="MTLA generation stage (vLLM).")
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
     ap.add_argument("--n", type=int, default=None,

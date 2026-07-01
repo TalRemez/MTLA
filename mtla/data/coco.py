@@ -9,9 +9,14 @@ Reproduces (InternVL3.5-8B): hallucination AUROC 0.873 (MTLA); detection mAP 41.
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 from .base import DatasetAdapter
 from ..registry import register_dataset
+from ..types import GenRecord, GTRegion
+
+if TYPE_CHECKING:
+    from ..config import RunConfig
 
 # 80 COCO class names (the open-vocab detection prompt lists these).
 COCO_CLASSES = [
@@ -47,15 +52,16 @@ class CocoDataset(DatasetAdapter):
     # 5000 small image requests -> async multi-engine vLLM pool (throughput).
     gen_strategy = "pooled"
 
-    def load_items(self, cfg):
+    def load_items(self, cfg: "RunConfig") -> list[dict]:
         return json.load(open(cfg.path("data")))
 
-    def prompt(self, item):
+    def prompt(self, item: dict) -> str:
         return PROMPT.format(cats=", ".join(item.get("categories", COCO_CLASSES)))
 
-    def ground_truth(self, item):
+    def ground_truth(self, item: dict) -> list[GTRegion]:
         return [{"region": o["bbox_2d"], "label": o["label"]} for o in item["gt"]]
 
-    def gen_record(self, cfg, item, response, truncated=False):
+    def gen_record(self, cfg: "RunConfig", item: dict, response: str,
+                   truncated: bool = False) -> GenRecord:
         return {"id": item["id"], "prompt": self.prompt(item), "response": response,
                 "gt": self.ground_truth(item), "extra": {"image": item["image"]}}

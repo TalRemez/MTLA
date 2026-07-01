@@ -14,14 +14,20 @@ matching overlap function via ``iou_fn``.
 """
 from __future__ import annotations
 
+from typing import Sequence
+
 # Spatial/temporal IoU live in mtla.utils (the shared primitives home); re-exported here so
 # `from mtla.voting import iou, tiou` and `nms_fuse(..., iou_fn=iou)` keep working.
 from .utils import iou, tiou
+from .types import OverlapFn, Region
 
 CLUSTER_IOU = 0.5  # overlap threshold for "same prediction" across rollouts
 
+# A pooled candidate: (region, MTLA score, seed it came from).
+Candidate = tuple[Region, float, int]
 
-def _fuse(agg: str, rep_score: float, member_scores, n_seeds: int) -> float:
+
+def _fuse(agg: str, rep_score: float, member_scores: Sequence[float], n_seeds: int) -> float:
     if agg == "max":
         return rep_score
     if agg == "support":
@@ -33,7 +39,8 @@ def _fuse(agg: str, rep_score: float, member_scores, n_seeds: int) -> float:
     raise ValueError(f"unknown agg {agg!r}")
 
 
-def nms_fuse(candidates, iou_th: float = CLUSTER_IOU, agg: str = "max", iou_fn=iou):
+def nms_fuse(candidates: Sequence[Candidate], iou_th: float = CLUSTER_IOU, agg: str = "max",
+             iou_fn: OverlapFn = iou) -> list[tuple[Region, float]]:
     """Greedy NMS over pooled rollout candidates, with cluster-score fusion.
 
     Args:

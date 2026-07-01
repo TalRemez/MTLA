@@ -39,8 +39,15 @@ from __future__ import annotations
 import gc
 import importlib
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import torch
+
+from .types import BuildInputs, Ctx, ItemRecord, PredObject, TokenRange
+
+if TYPE_CHECKING:
+    from .models.base import ModelAdapter
+    from .types import GenRecord
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +88,7 @@ class CaptureState:
     captured: list | None = None           # per-layer [H, N_q, n_mod], fp32, on CPU
 
 
-def make_capture_forward(state: CaptureState, orig_forward):
+def make_capture_forward(state: CaptureState, orig_forward: Callable) -> Callable:
     """Wrap the model's own ``eager_attention_forward``: run it verbatim, then capture the weights.
 
     The stock eager forward already returns ``(attn_output, attn_weights)``; this wrapper calls it
@@ -90,9 +97,10 @@ def make_capture_forward(state: CaptureState, orig_forward):
     modality cols ``modidx`` ON GPU and offloads that small tensor to CPU — freeing the GPU copy so
     peak memory stays at one layer's map.
     """
-    def wrapper(module, *args, **kwargs):
+    def wrapper(module: Any, *args: Any, **kwargs: Any) -> tuple:
         attn_output, attn_weights = orig_forward(module, *args, **kwargs)
         if state.active and attn_weights is not None and id(module) in state.layer_ids:
+            assert state.captured is not None            # set by the driver before each forward
             w = attn_weights[0]                          # [H, Q, K]
             if state.qpos is not None:
                 w = w.index_select(1, state.qpos)        # [H, N_q, K]
@@ -106,14 +114,15 @@ def make_capture_forward(state: CaptureState, orig_forward):
     return wrapper
 
 
-def install_capture(module_path: str, state: CaptureState):
+def install_capture(module_path: str, state: CaptureState) -> Any:
     """Install the capture wrapper over ``module_path``'s ``eager_attention_forward``.
 
     Returns the imported module. The model must use ``attn_implementation="eager"`` so the weights
     flow through this function. Records the original forward and wraps it in place.
     """
     mod = importlib.import_module(module_path)
-    mod.eager_attention_forward = make_capture_forward(state, mod.eager_attention_forward)
+    mod.eager_attention_forward = make_capture_forward(  # type: ignore[attr-defined]
+        state, mod.eager_attention_forward)
     return mod
 
 
@@ -130,7 +139,8 @@ def install_capture(module_path: str, state: CaptureState):
 #   item_record       -> the top-level record wrapper (id keys, counts, objects)
 
 
-def _resolve_qp_positions(token_ranges, prompt_len, total_len):
+def _resolve_qp_positions(token_ranges: list[TokenRange | None], prompt_len: int, total_len: int
+                          ) -> tuple[list[int], list[list[int]], list[int | None]]:
     """Map each prediction's response tokens Q_p to absolute sequence positions.
 
     ``token_ranges[i]`` (from ``query_tokens``) gives prediction i's label + coordinate token
@@ -139,7 +149,9 @@ def _resolve_qp_positions(token_ranges, prompt_len, total_len):
     ``kept`` are their indices into ``predictions``, ``qp_positions[j]`` the sorted absolute Q_p
     positions of ``kept[j]``, and ``x1_positions[j]`` its first coordinate/digit token (or None).
     """
-    kept, qp_positions, x1_positions = [], [], []
+    kept: list[int] = []
+    qp_positions: list[list[int]] = []
+    x1_positions: list[int | None] = []
     for i, tr in enumerate(token_ranges):
         if tr is None or tr["first_label_tok"] is None:
             continue
@@ -156,7 +168,9 @@ def _resolve_qp_positions(token_ranges, prompt_len, total_len):
     return kept, qp_positions, x1_positions
 
 
-def _run_captured_forward(model, state, fk, query_positions, modality_idx, n_layers, device, rank):
+def _run_captured_forward(model: Any, state: CaptureState, fk: dict, query_positions: list[int],
+                          modality_idx: list[int], n_layers: int, device: str, rank: int
+                          ) -> "torch.Tensor | None":
     """Run one teacher-forced forward with attention capture active, then return the captured maps
     stacked as ``[L, H, N_q, n_mod]`` (fp32, on ``device``), or None if the forward failed.
 
@@ -180,7 +194,8 @@ def _run_captured_forward(model, state, fk, query_positions, modality_idx, n_lay
     return torch.stack(state.captured, dim=0).float()
 
 
-def compute_mtla(adapter, record, ctx, rank=0):
+def compute_mtla(adapter: "ModelAdapter", record: "GenRecord", ctx: Ctx, rank: int = 0
+                 ) -> "ItemRecord | None":
     """Compute MTLA for every prediction in one item and return its feature-shard record.
 
     Steps: build the input and parse the response into predictions (``build_inputs``); teacher-force
@@ -236,14 +251,15 @@ def compute_mtla(adapter, record, ctx, rank=0):
                                   dtype=torch.long, device=device)
         qp_rows = torch.tensor([row_of[p] for p in qp_positions[j]], dtype=torch.long, device=device)
         la_by_i[i] = mtla_localized_attention(attn.index_select(2, qp_rows), region_idx).cpu()
-        if x1_positions[j] is not None:
-            x1_row = torch.tensor([row_of[x1_positions[j]]], dtype=torch.long, device=device)
+        x1_pos = x1_positions[j]
+        if x1_pos is not None:
+            x1_row = torch.tensor([row_of[x1_pos]], dtype=torch.long, device=device)
             fd_by_i[i] = mtla_localized_attention(attn.index_select(2, x1_row), region_idx).cpu()
 
     # Emit an object for EVERY prediction so the shards are the complete candidate set at score time;
     # a prediction whose Q_p couldn't be located gets a zero array and `extracted=False`.
     zeros = torch.zeros(n_layers, n_heads)
-    out_objs = []
+    out_objs: list[PredObject] = []
     for i, pred in enumerate(predictions):
         la = la_by_i.get(i, zeros)
         obj = adapter.prediction_record(pred, i, meta)
@@ -251,7 +267,7 @@ def compute_mtla(adapter, record, ctx, rank=0):
         obj["extracted"] = i in la_by_i
         obj["local_attention"] = la.to(torch.float16).numpy()
         obj["first_digit"] = fd_by_i.get(i, la).to(torch.float16).numpy()
-        out_objs.append(obj)
+        out_objs.append(cast(PredObject, obj))
     rec = adapter.item_record(record, meta, out_objs, n_predictions=len(predictions))
 
     del attn

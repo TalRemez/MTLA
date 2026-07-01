@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -32,11 +33,21 @@ from .metrics import auroc, coco_map, moment_retrieval, recall_at_iou
 from .score import reduce_band
 from .utils import iou, tiou
 from .voting import nms_fuse
+from .types import ItemId, OverlapFn, Region
 
-_OVERLAP = {"iou": iou, "tiou": tiou}
+if TYPE_CHECKING:
+    from .config import RunConfig
+    from .data.base import DatasetAdapter
+
+_OVERLAP: dict[str, OverlapFn] = {"iou": iou, "tiou": tiou}
+
+# A flattened scored candidate (one prediction in one rollout) built by ``_candidates``.
+Cand = dict[str, Any]
+# Fused output: ranked (region, score) lists keyed by (item id, label).
+FusedGroups = dict[tuple[ItemId, str], list[tuple[Region, float]]]
 
 
-def _candidates(cfg, dataset):
+def _candidates(cfg: "RunConfig", dataset: "DatasetAdapter") -> tuple[list[Cand], dict[ItemId, list], list[int]]:
     """Load every rollout and flatten to scored candidates.
 
     Returns ``(cands, gt_by_id)`` where ``cands`` is a list of dicts
@@ -46,38 +57,40 @@ def _candidates(cfg, dataset):
     band = cfg.band_indices()
     signal = dataset.signal
     seeds = cfg.extracted_seeds()   # discovered from <features>/seed*/, not a flag
-    cands, gt_by_id = [], {}
+    cands: list[Cand] = []
+    gt_by_id: dict[ItemId, list] = {}
     for seed in seeds:
         for rec in load_shards(cfg.feat_dir(seed)):
             gt_by_id[rec["id"]] = rec["gt"]
             for o in rec["objects"]:
+                arr = cast(np.ndarray, dict(o)[signal])   # dynamic signal key (not a TypedDict literal)
                 cands.append({
                     "id": rec["id"], "label": o["label"], "region": o["region"],
-                    "score": float(reduce_band(o[signal].astype(np.float32), band)),
+                    "score": float(reduce_band(arr.astype(np.float32), band)),
                     "hallu": bool(o["is_hallucinated"]), "extracted": bool(o.get("extracted", True)),
                     "seed": seed,
                 })
     return cands, gt_by_id, seeds
 
 
-def _hallucination_auroc(cands):
+def _hallucination_auroc(cands: list[Cand]) -> float:
     """Single-rollout (seed 0) hallucination AUROC over the extracted candidates."""
     s = [c["score"] for c in cands if c["seed"] == 0 and c["extracted"]]
     y = [c["hallu"] for c in cands if c["seed"] == 0 and c["extracted"]]
     return auroc(s, y) if s else float("nan")
 
 
-def _fuse_groups(cands, overlap_fn, agg, select):
+def _fuse_groups(cands: list[Cand], overlap_fn: OverlapFn, agg: str, select: str) -> FusedGroups:
     """Group candidates by ``(id, label)`` and fuse/select within each group across rollouts.
 
     ``select="fuse"`` runs NMS with cluster-score fusion (detection, multi-window grounding);
     ``select="argmax"`` keeps the single highest-scoring candidate (single-span grounding).
     Returns ``{(id, label): [(region, score), ...]}`` ranked by score.
     """
-    groups = defaultdict(list)
+    groups: dict[tuple[ItemId, str], list] = defaultdict(list)
     for c in cands:
         groups[(c["id"], c["label"])].append((c["region"], c["score"], c["seed"]))
-    out = {}
+    out: FusedGroups = {}
     for key, members in groups.items():
         if select == "argmax":
             region, score, _ = max(members, key=lambda m: m[1])
@@ -90,7 +103,7 @@ def _fuse_groups(cands, overlap_fn, agg, select):
 # ---------------------------------------------------------------------------
 # Metric handlers: fused candidates -> metric dict. One per metric name.
 # ---------------------------------------------------------------------------
-def _coco(cfg, fused, gt_by_id) -> dict:
+def _coco(cfg: "RunConfig", fused: FusedGroups, gt_by_id: dict[ItemId, list]) -> dict:
     """Assemble COCO detections from fused (region, score) per (image, label) and score mAP."""
     gt = json.load(open(cfg.path("coco_gt")))
     name2cat = {c["name"].lower(): c["id"] for c in gt["categories"]}
@@ -109,7 +122,7 @@ def _coco(cfg, fused, gt_by_id) -> dict:
     return {"map": coco_map(detections, cfg.path("coco_gt")), "n_dets": len(detections)}
 
 
-def _moment_retrieval(cfg, fused, gt_by_id) -> dict:
+def _moment_retrieval(cfg: "RunConfig", fused: FusedGroups, gt_by_id: dict[ItemId, list]) -> dict:
     """Assemble a ranked moment-retrieval submission (per qid) and score mAP / R@1."""
     MAX_WINDOWS = 10
     by_qid = defaultdict(list)
@@ -123,7 +136,7 @@ def _moment_retrieval(cfg, fused, gt_by_id) -> dict:
     return {"nms_mtla": moment_retrieval(submission, ground_truth)}
 
 
-def _recall(cfg, fused, gt_by_id) -> dict:
+def _recall(cfg: "RunConfig", fused: FusedGroups, gt_by_id: dict[ItemId, list]) -> dict:
     """Single-span recall: one selected span per query vs its ground-truth span."""
     pred_spans, gt_spans = [], []
     for (qid, _label), kept in fused.items():
@@ -136,7 +149,7 @@ def _recall(cfg, fused, gt_by_id) -> dict:
 _METRICS = {"coco_map": _coco, "moment_retrieval": _moment_retrieval, "recall_at_iou": _recall}
 
 
-def run_score(cfg, dataset) -> dict:
+def run_score(cfg: "RunConfig", dataset: "DatasetAdapter") -> dict:
     """Compute the benchmark metrics for a run from its feature shards. Returns a metrics dict."""
     overlap_fn = _OVERLAP[dataset.overlap]
     cands, gt_by_id, seeds = _candidates(cfg, dataset)

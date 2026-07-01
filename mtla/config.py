@@ -72,7 +72,7 @@ class RunConfig:
     config_path: str = ""               # absolute path this config was loaded from (set by
                                         # load_config); lets a GPU stage subprocess rebuild the run.
 
-    def band_indices(self):
+    def band_indices(self) -> list[int] | None:
         """Layer-index list for ``mtla.reduce_band`` (None means all layers)."""
         if self.band is None:
             return None

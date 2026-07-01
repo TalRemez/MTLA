@@ -13,6 +13,7 @@ reusing HF's tiling decision rather than reimplementing it.
 from __future__ import annotations
 
 import re
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -24,6 +25,7 @@ from .base import ModelAdapter, Prediction, hallucinated
 from ..registry import register_model
 from ..mtla_attn import CaptureState, install_capture
 from ..utils import iou
+from ..types import BuildInputs, Ctx, GenRecord, TokenRange
 
 MODEL_ID = "OpenGVLab/InternVL3_5-8B-HF"
 IMAGE_TOKEN = "<IMG_CONTEXT>"
@@ -38,7 +40,7 @@ def parse_internvl(response: str) -> list:
 
     Handles both ``<ref>label</ref><box>[[...]]</box>`` and the bare ``label[[...]]`` form.
     """
-    preds = []
+    preds: list[Prediction] = []
     for m in re.finditer(r'<ref>([^<]+)</ref><box>\s*\[(.+?)\]\s*</box>', response, flags=re.DOTALL):
         label = m.group(1).strip().lower()
         for b in re.finditer(r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]', m.group(2)):
@@ -49,12 +51,12 @@ def parse_internvl(response: str) -> list:
     pat = re.compile(r'([A-Za-z][A-Za-z _]*?)\s*(\[\[)')
     pos = 0
     while pos < len(cleaned):
-        m = pat.search(cleaned, pos)
-        if not m:
+        pm = pat.search(cleaned, pos)
+        if not pm:
             break
-        label = m.group(1).strip().lower()
+        label = pm.group(1).strip().lower()
         depth = 0; outer_close = -1
-        for i in range(m.start(2), len(cleaned)):
+        for i in range(pm.start(2), len(cleaned)):
             if cleaned[i] == '[':
                 depth += 1
             elif cleaned[i] == ']':
@@ -63,14 +65,14 @@ def parse_internvl(response: str) -> list:
                     outer_close = i; break
         if outer_close == -1:
             break
-        chunk = cleaned[m.start(2):outer_close + 1]
+        chunk = cleaned[pm.start(2):outer_close + 1]
         for b in re.finditer(r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]', chunk):
             preds.append(Prediction([int(b.group(i)) for i in range(1, 5)], label))
         pos = outer_close + 1
     return preds
 
 
-def tile_grid_for(width: int, height: int):
+def tile_grid_for(width: int, height: int) -> tuple[int, int, bool]:
     """The InternVL tile grid ``(n_cols, n_rows)`` for an image, via HF's own tiling decision.
     Returns ``(n_cols, n_rows, has_thumb)``; a thumbnail tile is appended whenever >1 tile."""
     n_cols, n_rows = get_optimal_tiled_canvas((height, width), (TILE_SIZE, TILE_SIZE),
@@ -78,7 +80,7 @@ def tile_grid_for(width: int, height: int):
     return n_cols, n_rows, (n_cols * n_rows) != 1
 
 
-def bbox_region_mask(bbox, n_cols, n_rows, has_thumb) -> list:
+def bbox_region_mask(bbox: list[float], n_cols: int, n_rows: int, has_thumb: bool) -> list[int]:
     """Image-token indices overlapping ``bbox`` M(R_p) under InternVL's dynamic tiling.
 
     The token sequence is ``tile_0[0..255], ..., tile_{N-1}[0..255], [thumbnail[0..255]]``, each
@@ -120,11 +122,12 @@ def bbox_region_mask(bbox, n_cols, n_rows, has_thumb) -> list:
     return [i for i in inside if i < total]
 
 
-def find_pred_token_ranges(response, predictions, tokenizer):
+def find_pred_token_ranges(response: str, predictions: list["Prediction"],
+                           tokenizer: Any) -> list[TokenRange | None]:
     """Per predicted box, the response tokens Q_p (its label + coordinate tokens), via offsets."""
     enc = tokenizer(response, add_special_tokens=False, return_offsets_mapping=True)
     offsets = enc["offset_mapping"]
-    out = []
+    out: list[TokenRange | None] = []
     for pred in predictions:
         label, box = pred.label, pred.region
         m = re.compile(rf'\[\s*{box[0]}\s*,\s*{box[1]}\s*,\s*{box[2]}\s*,\s*{box[3]}\s*\]').search(response)
@@ -167,18 +170,18 @@ class InternVLAdapter(ModelAdapter):
     attn_module_path = "transformers.models.qwen3.modeling_qwen3"   # InternVL-HF LLM backbone
     tasks = ("image_det",)
 
-    def parse(self, response, task=None):
+    def parse(self, response: str, task: str | None = None) -> list["Prediction"]:
         self._check_task(task)
         return parse_internvl(response)
 
     # ---- vLLM generation ----
-    def vllm_engine_args(self, dataset):
+    def vllm_engine_args(self, dataset: Any) -> dict:
         return {"limit_mm_per_prompt": {"image": 1}}
 
-    def vllm_uses_seed(self, task):
+    def vllm_uses_seed(self, task: str) -> bool:
         return True
 
-    def build_request(self, proc, item, dataset, cfg):
+    def build_request(self, proc: Any, item: dict, dataset: Any, cfg: Any) -> dict | None:
         # `item` is a raw dataset item (from load_items), not a generation record.
         image = Image.open(item["image"]).convert("RGB")
         msgs = [{"role": "user", "content": [{"type": "image", "image": image},
@@ -187,21 +190,21 @@ class InternVLAdapter(ModelAdapter):
         return {"prompt": prompt, "multi_modal_data": {"image": image}}
 
     # ---- MTLA extraction ----
-    def load_for_extract(self, gpu_id, task="image_det"):
+    def load_for_extract(self, gpu_id: int, task: str = "image_det") -> Ctx:
         device = f"cuda:{gpu_id}"
         state = CaptureState()
         install_capture(self.attn_module_path, state)
         proc = AutoProcessor.from_pretrained(self.model_id)
         model = AutoModelForImageTextToText.from_pretrained(
-            self.model_id, dtype=torch.bfloat16, attn_implementation="eager").to(device).eval()
+            self.model_id, dtype=torch.bfloat16, attn_implementation="eager").to(device).eval()  # type: ignore[arg-type]
         layers = model.model.language_model.layers
         state.layer_ids = {id(L.self_attn): i for i, L in enumerate(layers)}
-        return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "state": state,
+        return cast(Ctx, {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "state": state,
                 "device": device, "task": task, "n_layers": len(layers),
                 "n_heads": model.config.text_config.num_attention_heads,
-                "image_pad_id": proc.tokenizer.convert_tokens_to_ids(IMAGE_TOKEN)}
+                "image_pad_id": proc.tokenizer.convert_tokens_to_ids(IMAGE_TOKEN)})
 
-    def build_inputs(self, record, ctx, rank):
+    def build_inputs(self, record: GenRecord, ctx: Ctx, rank: int) -> BuildInputs | None:
         proc = ctx["proc"]; device = ctx["device"]; image_pad_id = ctx["image_pad_id"]
         response = record.get("response")
         preds = self.parse(response, "image_det") if response else []
@@ -226,16 +229,19 @@ class InternVLAdapter(ModelAdapter):
             return None
         gt = record.get("gt", [])
         hallu = [hallucinated(p.region, p.label, gt, iou) for p in preds]
-        return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx,
+        return cast(BuildInputs, {
+                "prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx,
                 "predictions": preds, "hallu_flags": hallu, "pixel_values": inputs["pixel_values"],
-                "meta": {"tile": (n_cols, n_rows, has_thumb)}}
+                "meta": {"tile": (n_cols, n_rows, has_thumb)}})
 
-    def query_tokens(self, response, predictions, tokenizer):
+    def query_tokens(self, response: str, predictions: list["Prediction"],
+                     tokenizer: Any) -> list[TokenRange | None]:
         return find_pred_token_ranges(response, predictions, tokenizer)
 
-    def region_mask(self, prediction, meta):
+    def region_mask(self, prediction: "Prediction", meta: dict) -> list[int]:
         return bbox_region_mask(prediction.region, *meta["tile"])
 
-    def forward_kwargs(self, full_ids, total_len, device, inp):
+    def forward_kwargs(self, full_ids: torch.Tensor, total_len: int, device: str,
+                       inp: BuildInputs) -> dict:
         return {"input_ids": full_ids, "pixel_values": inp["pixel_values"],
                 "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}

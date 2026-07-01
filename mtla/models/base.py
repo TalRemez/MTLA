@@ -15,8 +15,15 @@ Using a family (not a benchmark) is what lets one dataset run on multiple models
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from transformers import AutoProcessor
+
+from ..types import BuildInputs, Ctx, GenRecord, GTRegion, ItemRecord, OverlapFn, PredObject, \
+    Region, TokenRange
+
+if TYPE_CHECKING:
+    import torch
 
 
 @dataclass
@@ -26,11 +33,11 @@ class Prediction:
     region: bounding box ``[x1,y1,x2,y2]`` in ``[0,1000]`` (image) or ``[t_start,t_end]`` in
             seconds (video); label: the predicted class string (empty for video spans).
     """
-    region: list
+    region: Region
     label: str
 
 
-def hallucinated(region, label, gt, overlap) -> bool:
+def hallucinated(region: Region, label: str, gt: list[GTRegion], overlap: OverlapFn) -> bool:
     """Is a predicted ``(region, label)`` a hallucination? True when no ground-truth region of the
     same label overlaps it by >= 0.5 (``overlap`` is ``iou`` for boxes or ``tiou`` for spans).
     ``gt`` is a list of ``{"region", "label"}`` dicts; video labels are empty so only overlap counts.
@@ -51,27 +58,29 @@ class ModelAdapter:
     attn_module_path: str = ""
     # task families this model supports, e.g. ("image_det",) or ("image_det", "video_span").
     tasks: tuple = ()
+    # the task the current extraction is running (set per-item by compute_mtla; None outside extract).
+    _task: str | None = None
 
-    def _check_task(self, task):
+    def _check_task(self, task: str | None) -> None:
         """Raise if ``task`` is a family this model doesn't support (``None`` = the model default)."""
         if task is not None and task not in self.tasks:
             raise ValueError(
                 f"{type(self).__name__} does not support task {task!r}; supported: {list(self.tasks)}")
 
     # ---- pure, CPU-testable ----
-    def parse(self, response: str, task: str = None) -> list:
+    def parse(self, response: str, task: str | None = None) -> list["Prediction"]:
         """Parse a raw model response into a list of ``Prediction``. Called by BOTH the extract
         stage (to build Q_p) and the score stage (to recover the full candidate set)."""
         raise NotImplementedError
 
     # ---- generation (vLLM only; driven by generate.py) ----
-    def gen_processor(self):
+    def gen_processor(self) -> Any:
         """Load + return the processor/tokenizer used to build vLLM requests (once per worker).
         Default: ``AutoProcessor.from_pretrained(self.model_id)``; override only if a family needs
         non-default processor kwargs."""
         return AutoProcessor.from_pretrained(self.model_id)
 
-    def vllm_engine_args(self, dataset) -> dict:
+    def vllm_engine_args(self, dataset: Any) -> dict:
         """Model/modality-specific vLLM engine kwargs (e.g. ``limit_mm_per_prompt``,
         ``max_model_len``). May read ``dataset.task`` to pick the modality limit."""
         return {}
@@ -81,7 +90,7 @@ class ModelAdapter:
         Task-aware: e.g. Qwen COCO does NOT seed (matches the paper preds) but Qwen video does."""
         return False
 
-    def build_request(self, proc, item, dataset, cfg):
+    def build_request(self, proc: Any, item: dict, dataset: Any, cfg: Any) -> dict | None:
         """``(proc, item, dataset, cfg)`` -> ``{prompt, multi_modal_data, mm_processor_kwargs?}`` or
         None to skip. Builds the model-specific prompt + multimodal payload; ``cfg`` carries paths
         and ``cfg.preprocess`` (video fps/pixels)."""
@@ -90,7 +99,7 @@ class ModelAdapter:
     # ---- MTLA extraction (HF eager attention; driven by extract.py) ----
     # extract.py calls mtla.mtla_attn.compute_mtla(model, record, ctx) directly — the model does
     # not mediate the computation, it only loads the model and supplies the callbacks below.
-    def load_for_extract(self, gpu_id: int, task: str) -> dict:
+    def load_for_extract(self, gpu_id: int, task: str) -> Ctx:
         """Load model + processor on ``gpu_id``, install the capture wrapper, and return a ctx dict
         (model, tokenizer, state, device, n_layers, n_heads, task, ...) that ``compute_mtla`` and
         the callbacks below read."""
@@ -99,7 +108,7 @@ class ModelAdapter:
     # ---- model/task-specific callbacks invoked by compute_mtla ----
     # Each returns plain data; the shared driver owns the common flow (Q_p assembly, the single
     # captured forward, the MTLA math, buffer->record). Override these to add a model/task.
-    def build_inputs(self, record, ctx, rank):
+    def build_inputs(self, record: GenRecord, ctx: Ctx, rank: int) -> BuildInputs | None:
         """Preprocess the input, build the prompt, PARSE the response into predictions + their
         hallucination flags, and locate the modality tokens. Return a dict (or None to skip) with:
           prompt_ids (1-D tensor), response (str), modality_idx_l (modality-token positions),
@@ -107,28 +116,31 @@ class ModelAdapter:
           keys forward_kwargs needs (e.g. pixel_values / inputs)."""
         raise NotImplementedError
 
-    def query_tokens(self, response, predictions, tokenizer):
+    def query_tokens(self, response: str, predictions: list["Prediction"],
+                     tokenizer: Any) -> list[TokenRange | None]:
         """Per prediction, its response tokens Q_p as ``{first_label_tok, label_toks, coord_toks}``
         (or None), index-aligned with ``predictions``."""
         raise NotImplementedError
 
-    def region_mask(self, prediction, meta):
+    def region_mask(self, prediction: "Prediction", meta: dict) -> list[int]:
         """Modality-token indices inside one prediction's region M(R_p): image patches inside a
         bbox, or frame tokens inside a time span. ``prediction`` is a ``Prediction`` (use
         ``prediction.region``); the mask depends on the model's token layout, so it lives here."""
         raise NotImplementedError
 
-    def forward_kwargs(self, full_ids, total_len, device, inp):
+    def forward_kwargs(self, full_ids: "torch.Tensor", total_len: int, device: str,
+                       inp: BuildInputs) -> dict:
         """kwargs dict for the single captured ``model(**fk)`` forward."""
         raise NotImplementedError
 
     # ---- generic record shape (model-agnostic; the shards are the score stage's whole input) ----
-    def prediction_record(self, prediction, pred_idx, meta) -> dict:
+    def prediction_record(self, prediction: "Prediction", pred_idx: int, meta: dict) -> dict:
         """Per-prediction record fields. Generic: region + label. The driver adds is_hallucinated /
         extracted / local_attention / first_digit."""
         return {"pred_idx": pred_idx, "region": list(prediction.region), "label": prediction.label}
 
-    def item_record(self, record, meta, objects, n_predictions) -> dict:
+    def item_record(self, record: GenRecord, meta: dict, objects: list[PredObject],
+                    n_predictions: int) -> ItemRecord:
         """Top-level saved record. Generic: the item id + its ground truth + dataset extras +
         objects, so the score stage reads everything it needs straight from the shards."""
         return {"id": record["id"], "gt": record.get("gt", []), "extra": record.get("extra", {}),

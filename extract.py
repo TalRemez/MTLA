@@ -25,7 +25,7 @@ from mtla.registry import resolve
 from mtla.mtla_attn import compute_mtla
 
 
-def worker(rank, gpu_id, records, out_dir, config_path):
+def worker(rank: int, gpu_id: int, records: list, out_dir: str, config_path: str) -> None:
     """Extract one shard of the records on ``gpu_id`` and save it. Runs in a spawned subprocess."""
     # Pin this worker to ONE GPU before any CUDA use, so it sees the target device as cuda:0. Doing
     # it here (not via torch.cuda.set_device on an absolute id) keeps the run correct even when
@@ -63,7 +63,7 @@ def worker(rank, gpu_id, records, out_dir, config_path):
           f"{sum(len(r['objects']) for r in out)} preds -> {path}", flush=True)
 
 
-def extract_seed(cfg, seed):
+def extract_seed(cfg, seed: int) -> None:
     """Extract MTLA features for one rollout ``seed``, sharded across the extract GPUs."""
     gpus = cfg.stage_gpus("extract")
     records = json.load(open(os.path.join(cfg.pred_dir(seed), "predictions.json")))
@@ -85,7 +85,7 @@ def extract_seed(cfg, seed):
     print(f"[extract] all {len(procs)} workers complete (seed {seed})")
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
     ap.add_argument("--gpus", type=int, nargs="+", default=None,

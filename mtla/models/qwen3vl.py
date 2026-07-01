@@ -23,10 +23,13 @@ from PIL import Image
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 
+from typing import Any, cast
+
 from .base import ModelAdapter, Prediction, hallucinated
 from ..registry import register_model
 from ..mtla_attn import CaptureState, install_capture
 from ..utils import iou, tiou, tokens_overlapping_char_span
+from ..types import BuildInputs, Ctx, GenRecord, TokenRange
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 
@@ -53,7 +56,7 @@ def _to_seconds(s: str) -> float:
     return float(s)
 
 
-def parse_spans_with_offsets(response: str):
+def parse_spans_with_offsets(response: str) -> tuple[list[list[float]], list[tuple[int, int]]]:
     """Every ``[start, end]`` span in ``response`` with its char offset, deduped and start-ordered.
 
     Collects matches across all timestamp families against a length-preserving lowercase copy (so
@@ -80,14 +83,14 @@ def parse_spans_with_offsets(response: str):
     return [w for w, _ in rows], [sp for _, sp in rows]
 
 
-def parse_spans(response: str, multi: bool = True) -> list:
+def parse_spans(response: str, multi: bool = True) -> list["Prediction"]:
     """Temporal spans as ``[Prediction([start, end], "")]``. ``multi=False`` keeps only the first."""
     spans, _ = parse_spans_with_offsets(response)
     preds = [Prediction(w, "") for w in spans]
     return preds if multi else preds[:1]
 
 
-def parse_bboxes(response: str) -> list:
+def parse_bboxes(response: str) -> list["Prediction"]:
     """Parse Qwen detection JSON ``[{"bbox_2d":[x1,y1,x2,y2],"label":...}, ...]`` into Predictions.
     JSON first, then a regex fallback (label is the one AFTER each box, as Qwen emits it)."""
     cleaned = re.sub(r'```json\s*|```\s*', '', response).strip()
@@ -116,7 +119,7 @@ def parse_bboxes(response: str) -> list:
 # ---------------------------------------------------------------------------
 # Region masks + Q_p token finders
 # ---------------------------------------------------------------------------
-def bbox_region_mask(bbox, grid_h, grid_w) -> list:
+def bbox_region_mask(bbox: list[float], grid_h: int, grid_w: int) -> list[int]:
     """Modality-token indices inside ``bbox`` on Qwen's fixed ``grid_h x grid_w`` merged patch grid."""
     x1, y1, x2, y2 = bbox
     if x1 > x2:
@@ -130,7 +133,8 @@ def bbox_region_mask(bbox, grid_h, grid_w) -> list:
     return [r * grid_w + c for r in range(row_min, row_max + 1) for c in range(col_min, col_max + 1)]
 
 
-def span_region_mask(span, duration_s, T_tokens, H_tokens, W_tokens) -> list:
+def span_region_mask(span: list[float] | None, duration_s: float, T_tokens: int, H_tokens: int,
+                     W_tokens: int) -> list[int]:
     """Modality-token indices inside a time ``span`` M(R_p): the frames whose timestamps fall in the
     span, expanded across all H*W spatial tokens. The video block is frame-major: frame ``t`` holds
     tokens ``[t*HW : (t+1)*HW)``; token ``t`` covers time ``t*duration/T_tokens``."""
@@ -145,11 +149,13 @@ def span_region_mask(span, duration_s, T_tokens, H_tokens, W_tokens) -> list:
     return [f * HW + k for f in range(fs, fe) for k in range(HW)]
 
 
-def find_bbox_token_ranges(response, predictions, tokenizer):
+def find_bbox_token_ranges(response: str, predictions: list["Prediction"],
+                           tokenizer: Any) -> list[TokenRange | None]:
     """Per predicted box, its response tokens Q_p (label + coordinate tokens), via char offsets."""
     enc = tokenizer(response, add_special_tokens=False, return_offsets_mapping=True)
     offsets = enc["offset_mapping"]
-    out, search_pos = [], 0
+    out: list[TokenRange | None] = []
+    search_pos = 0
     full_tmpl = (r'"bbox_2d"\s*:\s*\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]\s*,'
                  r'\s*"label"\s*:\s*"{label}"')
     for pred in predictions:
@@ -165,7 +171,9 @@ def find_bbox_token_ranges(response, predictions, tokenizer):
             ml = lp.search(response, search_pos) or lp.search(response)
             if not ml:
                 out.append(None); continue
-            marker = re.search(r'"label"\s*:\s*"', ml.group(0)).group(0)
+            mk = re.search(r'"label"\s*:\s*"', ml.group(0))
+            assert mk is not None                          # the pattern that produced ml contains it
+            marker = mk.group(0)
             label_start = ml.start() + len(marker); label_end = label_start + len(label)
             coord_ranges = []; search_pos = ml.end()
         label_toks = [ti for ti, (ts, te) in enumerate(offsets) if ts < label_end and te > label_start]
@@ -177,14 +185,15 @@ def find_bbox_token_ranges(response, predictions, tokenizer):
     return out
 
 
-def find_span_token_ranges(response, predictions, tokenizer):
+def find_span_token_ranges(response: str, predictions: list["Prediction"],
+                           tokenizer: Any) -> list[TokenRange | None]:
     """Per predicted span (``Prediction`` with a ``[start,end]`` region), the response digit tokens
     inside its timestamp match — its Q_p. Aligned index-for-index with ``predictions``."""
     enc = tokenizer(response, add_special_tokens=False, return_offsets_mapping=True)
     offsets = enc["offset_mapping"]
     spans, offs = parse_spans_with_offsets(response)
     off_by_key = {(round(w[0], 2), round(w[1], 2)): sp for w, sp in zip(spans, offs)}
-    out = []
+    out: list[TokenRange | None] = []
     for pred in predictions:
         w = pred.region
         sp = off_by_key.get((round(w[0], 2), round(w[1], 2)))
@@ -200,7 +209,7 @@ def find_span_token_ranges(response, predictions, tokenizer):
 # ---------------------------------------------------------------------------
 # Vision-input builders (shared by generate + extract)
 # ---------------------------------------------------------------------------
-def _video_messages(video_path, prompt, pre):
+def _video_messages(video_path: str, prompt: str, pre: dict) -> list[dict]:
     """Chat messages for one video clip with the config's preprocessing (fps / pixel budget)."""
     return [{"role": "user", "content": [
         {"type": "video", "video": f"file://{video_path}",
@@ -208,17 +217,17 @@ def _video_messages(video_path, prompt, pre):
         {"type": "text", "text": prompt}]}]
 
 
-def _process_video(proc, msgs, device):
+def _process_video(proc: Any, msgs: list[dict], device: str) -> Any:
     """Run the processor on video messages -> (inputs on device, text). None on failure."""
     text = proc.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
     images, videos, video_kwargs = process_vision_info(
         msgs, image_patch_size=16, return_video_kwargs=True, return_video_metadata=True)
+    vids: Any = videos
+    metas: list | None = None
     if videos:
-        videos, metas = zip(*videos)
-        videos, metas = list(videos), list(metas)
-    else:
-        metas = None
-    inputs = proc(text=text, images=images, videos=videos, video_metadata=metas,
+        vids_t, metas_t = zip(*videos)
+        vids, metas = list(vids_t), list(metas_t)
+    inputs = proc(text=text, images=images, videos=vids, video_metadata=metas,
                   do_resize=False, return_tensors="pt", **video_kwargs).to(device)
     return inputs
 
@@ -229,23 +238,23 @@ class Qwen3VLAdapter(ModelAdapter):
     attn_module_path = "transformers.models.qwen3_vl.modeling_qwen3_vl"
     tasks = ("image_det", "video_span")
 
-    def parse(self, response, task="video_span"):
+    def parse(self, response: str, task: str | None = "video_span") -> list["Prediction"]:
         self._check_task(task)
         if task == "image_det":
             return parse_bboxes(response)
         return parse_spans(response, multi=True)
 
     # ---- vLLM generation ----
-    def vllm_engine_args(self, dataset):
+    def vllm_engine_args(self, dataset: Any) -> dict:
         if dataset.task == "video_span":
             return {"limit_mm_per_prompt": {"video": 1}, "max_model_len": 32768}
         return {"limit_mm_per_prompt": {"image": 1}}
 
-    def vllm_uses_seed(self, task):
+    def vllm_uses_seed(self, task: str) -> bool:
         # COCO did NOT seed vLLM (matches the validated paper preds); video DOES (per-rollout draw).
         return task == "video_span"
 
-    def build_request(self, proc, item, dataset, cfg):
+    def build_request(self, proc: Any, item: dict, dataset: Any, cfg: Any) -> dict | None:
         # `item` is a raw dataset item (from load_items); the dataset owns its prompt + media path.
         if dataset.task == "video_span":
             video_path = dataset.video_path(cfg, item)
@@ -267,7 +276,7 @@ class Qwen3VLAdapter(ModelAdapter):
         return {"prompt": text, "multi_modal_data": {"image": image_inputs} if image_inputs else {}}
 
     # ---- MTLA extraction ----
-    def load_for_extract(self, gpu_id, task="image_det"):
+    def load_for_extract(self, gpu_id: int, task: str = "image_det") -> Ctx:
         device = f"cuda:{gpu_id}"
         state = CaptureState()
         install_capture(self.attn_module_path, state)
@@ -277,27 +286,29 @@ class Qwen3VLAdapter(ModelAdapter):
         layers = model.model.language_model.layers
         state.layer_ids = {id(L.self_attn): i for i, L in enumerate(layers)}
         pad = "<|video_pad|>" if task == "video_span" else "<|image_pad|>"
-        return {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "state": state,
+        return cast(Ctx, {"model": model, "proc": proc, "tokenizer": proc.tokenizer, "state": state,
                 "device": device, "task": task, "n_layers": len(layers),
                 "n_heads": model.config.text_config.num_attention_heads,
-                "pad_id": proc.tokenizer.convert_tokens_to_ids(pad)}
+                "pad_id": proc.tokenizer.convert_tokens_to_ids(pad)})
 
-    def build_inputs(self, record, ctx, rank):
+    def build_inputs(self, record: GenRecord, ctx: Ctx, rank: int) -> BuildInputs | None:
         if ctx["task"] == "video_span":
             return self._video_inputs(record, ctx, rank)
         return self._image_inputs(record, ctx, rank)
 
-    def query_tokens(self, response, predictions, tokenizer):
+    def query_tokens(self, response: str, predictions: list["Prediction"],
+                     tokenizer: Any) -> list[TokenRange | None]:
         if self._task == "video_span":
             return find_span_token_ranges(response, predictions, tokenizer)
         return find_bbox_token_ranges(response, predictions, tokenizer)
 
-    def region_mask(self, prediction, meta):
+    def region_mask(self, prediction: "Prediction", meta: dict) -> list[int]:
         if meta["task"] == "video_span":
             return span_region_mask(prediction.region, meta["duration_s"], meta["T"], meta["H"], meta["W"])
         return bbox_region_mask(prediction.region, meta["grid_h"], meta["grid_w"])
 
-    def forward_kwargs(self, full_ids, total_len, device, inp):
+    def forward_kwargs(self, full_ids: torch.Tensor, total_len: int, device: str,
+                       inp: BuildInputs) -> dict:
         inputs = inp["inputs"]
         fk = {"input_ids": full_ids,
               "attention_mask": torch.ones(1, total_len, device=device, dtype=torch.long)}
@@ -313,7 +324,7 @@ class Qwen3VLAdapter(ModelAdapter):
         return fk
 
     # ---- per-task input builders ----
-    def _image_inputs(self, record, ctx, rank):
+    def _image_inputs(self, record: GenRecord, ctx: Ctx, rank: int) -> BuildInputs | None:
         proc = ctx["proc"]; device = ctx["device"]; pad_id = ctx["pad_id"]
         response = record.get("response")
         preds = parse_bboxes(response) if response else []
@@ -339,11 +350,12 @@ class Qwen3VLAdapter(ModelAdapter):
                   flush=True)
             return None
         hallu = [hallucinated(p.region, p.label, record.get("gt", []), iou) for p in preds]
-        return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx,
+        return cast(BuildInputs, {
+                "prompt_ids": prompt_ids, "response": response, "modality_idx_l": image_idx,
                 "predictions": preds, "hallu_flags": hallu, "inputs": inputs,
-                "meta": {"task": "image_det", "grid_h": grid_h, "grid_w": grid_w}}
+                "meta": {"task": "image_det", "grid_h": grid_h, "grid_w": grid_w}})
 
-    def _video_inputs(self, record, ctx, rank):
+    def _video_inputs(self, record: GenRecord, ctx: Ctx, rank: int) -> BuildInputs | None:
         proc = ctx["proc"]; device = ctx["device"]; pad_id = ctx["pad_id"]
         pre = ctx["preprocess"]; multi = ctx["multi"]
         response = record.get("response")
@@ -374,12 +386,13 @@ class Qwen3VLAdapter(ModelAdapter):
         # A span is grounded iff it overlaps some GT window by tIoU >= 0.5 (labels are empty for
         # spans, so `hallucinated` reduces to the overlap test — same rule as the image path).
         hallu = [hallucinated(p.region, p.label, record.get("gt", []), tiou) for p in preds]
-        return {"prompt_ids": prompt_ids, "response": response, "modality_idx_l": video_idx,
+        return cast(BuildInputs, {
+                "prompt_ids": prompt_ids, "response": response, "modality_idx_l": video_idx,
                 "predictions": preds, "hallu_flags": hallu, "inputs": inputs,
-                "meta": {"task": "video_span", "duration_s": duration_s, "T": T, "H": H, "W": W}}
+                "meta": {"task": "video_span", "duration_s": duration_s, "T": T, "H": H, "W": W}})
 
 
-def video_duration(video_path) -> float:
+def video_duration(video_path: str) -> float:
     vr = VideoReader(video_path, ctx=cpu(0))
     fps = vr.get_avg_fps()
     return len(vr) / fps if fps > 0 else 0.0

@@ -20,7 +20,7 @@ import argparse
 import json
 import os
 
-from scripts._prep_utils import download, unzip, out_dir, done_banner
+from scripts.prep_utils import download, unzip, out_dir, done_banner
 
 IMAGES_URL = "http://images.cocodataset.org/zips/val2017.zip"
 ANNOS_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"

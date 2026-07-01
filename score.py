@@ -17,7 +17,7 @@ from mtla.evaluate import run_score
 from mtla.data.base import print_metrics
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
     ap.add_argument("--agg", default=None, help="override score.agg (max|sum|support|mean)")

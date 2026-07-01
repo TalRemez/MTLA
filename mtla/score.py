@@ -33,7 +33,7 @@ LAYER_BANDS = {
 
 
 def reduce_band(
-    attn: np.ndarray | Sequence,
+    attn: np.ndarray | Sequence | None,
     band: Sequence[int] | None = DEFAULT_BAND,
 ) -> float | np.ndarray:
     """Reduce an attention aggregate to a scalar MTLA/SVAR score.
@@ -70,7 +70,8 @@ def reduce_band(
     return float(scores[0]) if single else scores
 
 
-def mtla_score(obj: dict, signal: str = "local_attention", band=DEFAULT_BAND) -> float:
+def mtla_score(obj: dict, signal: str = "local_attention",
+               band: Sequence[int] | None = DEFAULT_BAND) -> float:
     """MTLA score for one extracted prediction object.
 
     `signal` selects which saved ``[L, H]`` array to reduce:
@@ -78,4 +79,4 @@ def mtla_score(obj: dict, signal: str = "local_attention", band=DEFAULT_BAND) ->
         tokens Q_p; this is MTLA.
       * ``first_digit`` — the same, read at only the first coordinate digit (x1).
     """
-    return reduce_band(obj[signal], band)
+    return float(reduce_band(obj[signal], band))  # single [L,H] input -> scalar

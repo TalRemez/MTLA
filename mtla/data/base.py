@@ -21,13 +21,19 @@ mask to use, so any valid ``(model x dataset)`` pair runs from a config.
 from __future__ import annotations
 
 import glob
+from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..types import GenRecord, GTRegion, ItemRecord
 
-def load_shards(features_dir: str) -> list:
+if TYPE_CHECKING:
+    from ..config import RunConfig
+
+
+def load_shards(features_dir: str) -> list["ItemRecord"]:
     """Load + concatenate all ``shard*.pt`` records under a seed's feature dir."""
-    recs = []
+    recs: list = []
     for sp in sorted(glob.glob(f"{features_dir}/shard*.pt")):
         recs.extend(torch.load(sp, weights_only=False, map_location="cpu"))
     return recs
@@ -70,19 +76,20 @@ class DatasetAdapter:
     gen_strategy: str = "sharded"
 
     # ---- per-benchmark: subclasses implement ----
-    def load_items(self, cfg) -> list:
+    def load_items(self, cfg: "RunConfig") -> list[dict]:
         """Load the work items (images or video queries) for generation."""
         raise NotImplementedError
 
-    def prompt(self, item) -> str:
+    def prompt(self, item: dict) -> str:
         """The task prompt for one item."""
         raise NotImplementedError
 
-    def ground_truth(self, item) -> list:
+    def ground_truth(self, item: dict) -> list[GTRegion]:
         """Ground truth as a list of ``{"region", "label"}`` dicts (label empty for video spans)."""
         raise NotImplementedError
 
-    def gen_record(self, cfg, item, response: str, truncated: bool = False) -> dict:
+    def gen_record(self, cfg: "RunConfig", item: dict, response: str,
+                   truncated: bool = False) -> GenRecord:
         """Uniform generation record: ``{id, prompt, response(raw), gt, extra}``. The response is
         stored RAW — parsing happens in the extract/score stages, identically for every model.
         ``extra`` carries anything the extract stage needs to locate the input (e.g. an absolute

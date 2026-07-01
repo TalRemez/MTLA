@@ -19,6 +19,7 @@ import contextlib
 import io
 import os
 import sys
+from typing import Sequence
 
 import numpy as np
 from sklearn.metrics import roc_auc_score
@@ -34,7 +35,7 @@ from moment_detr_eval.eval import compute_mr_ap, compute_mr_r1
 from .utils import tiou
 
 
-def auroc(scores, is_hallucinated) -> float:
+def auroc(scores: Sequence[float], is_hallucinated: Sequence[bool]) -> float:
     """AUROC of MTLA scores vs. hallucination labels.
 
     Args:
@@ -49,7 +50,7 @@ def auroc(scores, is_hallucinated) -> float:
     return float(roc_auc_score(y, s))
 
 
-def coco_map(detections, gt_json_path: str) -> dict:
+def coco_map(detections: list[dict], gt_json_path: str) -> dict:
     """COCO bbox mAP for a list of detections.
 
     Args:
@@ -70,7 +71,7 @@ def coco_map(detections, gt_json_path: str) -> dict:
             "AP_small": s[3] * 100, "AP_medium": s[4] * 100, "AP_large": s[5] * 100}
 
 
-def moment_retrieval(submission, ground_truth) -> dict:
+def moment_retrieval(submission: list[dict], ground_truth: list[dict]) -> dict:
     """QVHighlights moment-retrieval metrics via the official Moment-DETR evaluator.
 
     Args:
@@ -86,7 +87,9 @@ def moment_retrieval(submission, ground_truth) -> dict:
             "R1@0.5": r1["0.5"], "R1@0.7": r1["0.7"]}
 
 
-def recall_at_iou(pred_spans, gt_spans, thresholds=(0.3, 0.5, 0.7)) -> dict:
+def recall_at_iou(pred_spans: Sequence[list[float] | None],
+                  gt_spans: Sequence[list[float] | None],
+                  thresholds: Sequence[float] = (0.3, 0.5, 0.7)) -> dict:
     """Single-span temporal grounding metrics (Charades): R@1 at IoU thresholds + mIoU.
 
     Args:

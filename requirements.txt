@@ -34,3 +34,6 @@ huggingface_hub>=0.34.0,<1.0
 # --- generation stage: fast batched vLLM decoding (GPU only, large install) ---
 # Only needed to run generate.py; extract/score do not use it.
 vllm==0.19.0
+
+# --- dev: static type checking (run `mypy mtla` from the repo root) ---
+mypy>=1.8

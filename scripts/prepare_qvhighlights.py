@@ -20,7 +20,7 @@ import argparse
 import glob
 import os
 
-from scripts._prep_utils import download, untar, out_dir, done_banner
+from scripts.prep_utils import download, untar, out_dir, done_banner
 
 # Official annotations ship in the Moment-DETR repo's data.zip (MIT). This is the upstream raw URL.
 ANNO_ZIP_URL = "https://raw.githubusercontent.com/jayleicn/moment_detr/main/data/highlight_val_release.jsonl"

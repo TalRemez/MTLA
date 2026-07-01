@@ -40,7 +40,8 @@ from mtla.registry import resolve
 # ===========================================================================
 # Strategy A — async multi-engine vLLM pool (throughput on many small requests)
 # ===========================================================================
-def _pooled_cpu_worker(raw_queue, ready_queues, config_path, num_engines, worker_id):
+def _pooled_cpu_worker(raw_queue, ready_queues, config_path: str, num_engines: int,
+                       worker_id: int) -> None:
     """Build each item's vLLM request via ``model.build_request`` and route it round-robin to an
     engine's ready-queue. Prep is CPU-only, so many run in parallel."""
     try:
@@ -67,7 +68,8 @@ def _pooled_cpu_worker(raw_queue, ready_queues, config_path, num_engines, worker
         print(f"[CPU {worker_id}] FATAL: {traceback.format_exc()}", flush=True)
 
 
-def _pooled_gpu_worker(engine_id, gpu_ids_str, ready_queue, result_queue, config_path, args):
+def _pooled_gpu_worker(engine_id: int, gpu_ids_str: str, ready_queue, result_queue,
+                       config_path: str, args: dict) -> None:
     """One vLLM AsyncLLMEngine on its GPU group; concurrently generates for queued requests and
     puts ``dataset.gen_record`` records on result_queue."""
     try:
@@ -100,7 +102,7 @@ def _pooled_gpu_worker(engine_id, gpu_ids_str, ready_queue, result_queue, config
             local_q = asyncio.Queue(maxsize=args["concurrency"] * 2)
             active = set(); stats = {"done": 0, "err": 0}; shutdown = False
 
-            def bridge():
+            def bridge() -> None:
                 while True:
                     try:
                         it = ready_queue.get(timeout=5)
@@ -157,7 +159,7 @@ def _pooled_gpu_worker(engine_id, gpu_ids_str, ready_queue, result_queue, config
         sys.exit(1)
 
 
-def run_pooled(cfg, samples, args):
+def run_pooled(cfg, samples: list, args: dict) -> list:
     """Async multi-engine vLLM pool. ``args`` holds tuning + effective sampling knobs. Returns the
     merged list of generation records."""
     gpu_ids = cfg.stage_gpus("generate")
@@ -212,7 +214,8 @@ def run_pooled(cfg, samples, args):
 # ===========================================================================
 # Strategy B — one blocking engine per GPU (heavy per-item work)
 # ===========================================================================
-def _sharded_worker(rank, gpu_id, items, out_dir, config_path, args):
+def _sharded_worker(rank: int, gpu_id: int, items: list, out_dir: str, config_path: str,
+                    args: dict) -> None:
     """One GPU worker. Pins its GPU (CUDA_VISIBLE_DEVICES before torch import), builds an offline
     vLLM engine, loops its chunk, and writes preds_rank{rank}.json."""
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)   # BEFORE torch import (vLLM grabs device 0)
@@ -260,7 +263,7 @@ def _sharded_worker(rank, gpu_id, items, out_dir, config_path, args):
     print(f"[worker {rank}] saved {len(results)} -> {out_dir}/preds_rank{rank}.json", flush=True)
 
 
-def run_sharded(cfg, samples, args, out_dir):
+def run_sharded(cfg, samples: list, args: dict, out_dir: str) -> list:
     """One blocking engine per GPU. Writes per-rank shards under ``out_dir``, then merges + returns."""
     gpu_ids = cfg.stage_gpus("generate")
     print(f"[sharded] samples={len(samples)} gpus={gpu_ids}", flush=True)

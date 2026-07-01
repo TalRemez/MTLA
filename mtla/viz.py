@@ -15,7 +15,7 @@ CLIP_PCT = 60     # percentile below which the overlay is fully transparent
 FLOOR, AMAX = 0.45, 0.88  # min / max overlay opacity
 
 
-def heatmap(grid_map, H: int, W: int):
+def heatmap(grid_map: np.ndarray, H: int, W: int) -> np.ndarray:
     """Upsample a ``[grid_h, grid_w]`` attention map to image size ``(H, W)``, smooth it, and
     normalize to ``[0, 1]`` by the map's own peak.
 
@@ -32,7 +32,8 @@ def heatmap(grid_map, H: int, W: int):
     return up / (up.max() + 1e-9)
 
 
-def overlay(image, grid_map, box=None, out_path=None, title=None):
+def overlay(image, grid_map: np.ndarray, box: list[float] | None = None,
+            out_path: str | None = None, title: str | None = None):
     """Save a turbo attention overlay of ``grid_map`` on ``image``.
 
     Args:
