@@ -204,6 +204,28 @@ HF-eager). `configs/coco_internvl_voting.yaml` ships the 16-seed COCO setup read
 override any config for quick sweeps: `--seeds 0 1 2 3`, `--n 16`, `--agg sum`.
 Datasets and paths: [`docs/DATA.md`](docs/DATA.md).
 
+## Visualize the per-token attention
+
+`scripts/figure_pertoken.py` shows *why* MTLA works: for a chosen prediction it runs one HF-eager
+forward and renders where **each** of the prediction's response tokens attends over the image — the
+four bounding-box coordinates `x1,y1,x2,y2`, the `label` token, and (right of the dashed rule) their
+per-token **mean** (the quantity MTLA scores). Grounded predictions concentrate attention **inside**
+the proposed box; hallucinations scatter it across the scene.
+
+```bash
+python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml       # the paper's Fig. 3 rows
+python scripts/figure_pertoken.py --config configs/coco_qwen3vl.yaml \
+    --targets 64499:0:grounded 60823:3:hallu --out fig.pdf                 # your own predictions
+```
+
+<p align="center">
+  <img src="docs/assets/figure_pertoken.png" width="100%" alt="Per-token attention: a grounded zebra concentrates attention inside its box; a hallucinated cow labeled horse scatters it across the scene"/>
+</p>
+
+Each `<image_id>:<pred_idx>:<grounded|hallu>` target picks one prediction from the COCO
+`predictions.json`; the overlay reuses `mtla.viz` (turbo heatmap, peak-normalized so the falloff at
+the edges of the attended region stays visible).
+
 ## Extending: add a new model or task
 
 Models and datasets are **independent registries**; any valid (model × dataset) pair runs from a

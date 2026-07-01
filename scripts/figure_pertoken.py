@@ -265,7 +265,7 @@ def main():
                  fontsize=13, fontweight="bold", color="white", zorder=6)
     gi = [i for i, r in enumerate(rows) if r["grounded"]]
     hi = [i for i, r in enumerate(rows) if not r["grounded"]]
-    band(gi, GROUNDED_C, "Grounded"); band(hi, HALLU_C, "Hallucinated")
+    band(gi, GROUNDED_C, "Grounded"); band(hi, HALLU_C, "Hallu.")
     # dashed separator before the mean column
     xsep = (axes[0, 5].get_position().x1 + axes[0, 6].get_position().x0) / 2
     fig.add_artist(plt.Line2D([xsep, xsep], [axes[nr - 1, 6].get_position().y0,

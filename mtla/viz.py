@@ -16,14 +16,20 @@ FLOOR, AMAX = 0.45, 0.88  # min / max overlay opacity
 
 
 def heatmap(grid_map, H: int, W: int):
-    """Upsample a ``[grid_h, grid_w]`` attention map to image size ``(H, W)`` and smooth it."""
+    """Upsample a ``[grid_h, grid_w]`` attention map to image size ``(H, W)``, smooth it, and
+    normalize to ``[0, 1]`` by the map's own peak.
+
+    No upper clipping: this previously divided by the 99th percentile and clipped to 1, which
+    flattened the hottest ~1% of cells into a saturated plateau and hid the falloff at the edges of
+    the attended region. We instead keep the full positive range, then renormalize the *smoothed*
+    map to its own maximum — the peak sits at 1.0 and the whole gradient (edges included) shows."""
     from scipy.ndimage import gaussian_filter, zoom
 
     g = np.asarray(grid_map, dtype=np.float32)
     gh, gw = g.shape
-    g = g / (np.percentile(g, 99) + 1e-9)
-    up = zoom(np.clip(g, 0, 1), (H / gh, W / gw), order=0)
-    return gaussian_filter(up, SIGMA * max(H / gh, W / gw))
+    up = zoom(np.clip(g, 0, None), (H / gh, W / gw), order=0)   # keep full range, drop negatives only
+    up = gaussian_filter(up, SIGMA * max(H / gh, W / gw))
+    return up / (up.max() + 1e-9)
 
 
 def overlay(image, grid_map, box=None, out_path=None, title=None):
