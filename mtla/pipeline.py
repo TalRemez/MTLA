@@ -12,8 +12,6 @@ The four shared drivers are config-driven (``--config <yaml> --seed <K>``): they
   scripts/stages/image_extract.py    shared image_det MTLA extraction (any image model) — HF eager
   scripts/stages/video_generate.py   shared video_span generation (any video model; vLLM or HF)
   scripts/stages/video_extract.py    shared video_span MTLA extraction (any video model) — HF eager
-  scripts/stages/qwen3vl_video.py    LEGACY QVHighlights monolith (parity reference; off the run path)
-  scripts/stages/qwen3vl_charades.py LEGACY Charades-STA monolith (parity reference; off the run path)
 """
 import os
 import subprocess

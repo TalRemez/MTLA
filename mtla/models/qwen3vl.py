@@ -30,9 +30,9 @@ def _to_seconds(s: str) -> float:
     return float(s)
 
 
-# The canonical, validated multi-window parser lives in the video stage script
-# (scripts/stages/qwen3vl_video.py). We reuse it verbatim here so the generate stage and any
-# offline parsing share one source of truth and cannot drift.
+# The canonical multi-window timestamp parser. `parse_windows_with_spans` in
+# `mtla/models/_qwen3vl_video.py` (extract-time Q_p attribution) shares these exact patterns +
+# dedup/ordering, so generation and extraction cannot drift.
 _PATTERNS = [
     rf'\[\s*{_TIME}\s*,\s*{_TIME}\s*\]',
     rf'\(\s*{_TIME}\s*,\s*{_TIME}\s*\)',
