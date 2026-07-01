@@ -1,11 +1,13 @@
 """Stage 3 — scoring. Turn the extracted attention shards into benchmark numbers (CPU only).
 
-Reads ``<features>/seed{K}/shard*.pt`` for seeds ``0..n_rollouts-1`` and computes the hallucination
+Reads every ``<features>/seed{K}/shard*.pt`` the extract stage wrote and computes the hallucination
 AUROC + the benchmark's task metric. No GPU and no model weights: all the work (band reduction,
-self-consistency voting, NMS, metric evaluation) lives in ``mtla.evaluate`` / ``mtla.metrics``.
+self-consistency voting, NMS, metric evaluation) lives in ``mtla.evaluate`` / ``mtla.metrics``. The
+rollout seed set is discovered from the features dir, so there is no ``--n``: score votes over
+exactly the rollouts that were extracted.
 
     python -m score --config configs/coco_internvl.yaml
-    python -m score --config configs/coco_internvl.yaml --n 16 --agg sum   # N=16 voting headline
+    python -m score --config configs/coco_internvl.yaml --agg sum   # COCO N=16 voting headline
 """
 import argparse
 
@@ -18,13 +20,10 @@ from mtla.data.base import print_metrics
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
-    ap.add_argument("--n", type=int, default=None, help="override n_rollouts (how many seeds to vote over)")
     ap.add_argument("--agg", default=None, help="override score.agg (max|sum|support|mean)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    if args.n is not None:
-        cfg.n_rollouts = args.n
     if args.agg is not None:
         cfg.score.agg = args.agg
 

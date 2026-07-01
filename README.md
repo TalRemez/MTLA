@@ -151,21 +151,24 @@ Each stage is one config-driven command; they chain by writing files the next st
 └────────────────────────────────────────────────────┘
 ```
 
-The rollout count, GPUs, and item count are set **at launch**, not in the config: `--n` (rollouts,
-default 1), `--gpus` (default: all visible GPUs), and `--limit N` (run only the first N items — e.g.
-`--limit 100` for a quick smoke test; default: the full set). Every benchmark uses the **same three
-commands** — only the `--config` (and, for voting, `--n` / `--agg`) changes. The runnable examples
+Launch-time flags (not in the config): `--n` sets the rollout count and is on **`generate` only**
+(default 1); `extract` and `score` need no `--n` — they discover the rollout seeds from what the
+previous stage wrote on disk and print how many they found. `--gpus` (default: all visible GPUs) and
+`--limit N` (run only the first N items — e.g. `--limit 100` for a quick smoke test; default: the
+full set) apply to the GPU stages. Every benchmark uses the **same three commands** — only the
+`--config` (and, for voting, `generate`'s `--n` / `score`'s `--agg`) changes. The runnable examples
 below cover COCO detection and the two video benchmarks.
 
 ### COCO detection — quick smoke test (2 rollouts, 50 images)
 
-A fast end-to-end check of all three stages on a small slice — `--n 2` rollouts over the first
-`--limit 50` images. Drop both flags to run the full benchmark.
+A fast end-to-end check of all three stages on a small slice — `generate` makes `--n 2` rollouts
+over the first `--limit 50` images; `extract`/`score` then pick up those 2 rollouts automatically.
+Drop the flags to run the full benchmark.
 
 ```bash
 python -m generate --config configs/coco_internvl.yaml --n 2 --limit 50
-python -m extract --config configs/coco_internvl.yaml --n 2 --limit 50
-python -m score --config configs/coco_internvl.yaml --n 2
+python -m extract --config configs/coco_internvl.yaml --limit 50
+python -m score --config configs/coco_internvl.yaml
 ```
 
 The full single-rollout run (`python -m generate --config configs/coco_internvl.yaml`, then
@@ -178,8 +181,8 @@ The headline detection result: **mAP 41.9** (COCO uses sum-of-cluster fusion, `-
 
 ```bash
 python -m generate --config configs/coco_internvl.yaml --n 16
-python -m extract --config configs/coco_internvl.yaml --n 16
-python -m score --config configs/coco_internvl.yaml --n 16 --agg sum
+python -m extract --config configs/coco_internvl.yaml
+python -m score --config configs/coco_internvl.yaml --agg sum
 ```
 
 ### Video (QVHighlights & Charades-STA) — N=16 self-consistency voting
@@ -189,14 +192,14 @@ R@1@0.5 55.1. **Charades-STA**: R@1@0.5 55.4, R@1@0.3 76.3.
 
 ```bash
 python -m generate --config configs/qvhighlights_qwen3vl.yaml --n 16
-python -m extract --config configs/qvhighlights_qwen3vl.yaml --n 16
-python -m score --config configs/qvhighlights_qwen3vl.yaml --n 16
+python -m extract --config configs/qvhighlights_qwen3vl.yaml
+python -m score --config configs/qvhighlights_qwen3vl.yaml
 ```
 
 ```bash
 python -m generate --config configs/charades_qwen3vl.yaml --n 16
-python -m extract --config configs/charades_qwen3vl.yaml --n 16
-python -m score --config configs/charades_qwen3vl.yaml --n 16
+python -m extract --config configs/charades_qwen3vl.yaml
+python -m score --config configs/charades_qwen3vl.yaml
 ```
 
 Add `--gpus 0 1 2 3 ...` to any `generate`/`extract` command to pick GPUs (default: all visible).

@@ -7,10 +7,11 @@ model/task specific lives behind the adapter's extraction callbacks; this file i
 multi-GPU harness. The generation records are self-contained (``{id, prompt, response, gt, extra}``),
 so a worker just streams ``predictions.json`` — no dataset item lookup.
 
-    python -m extract --config configs/coco_internvl.yaml            # 1 rollout
-    python -m extract --config configs/coco_internvl.yaml --n 16      # 16 rollouts (seeds 0..15)
+    python -m extract --config configs/coco_internvl.yaml   # extracts every rollout generate wrote
 
 Reads ``<predictions>/seed{K}/predictions.json``; writes ``<features>/seed{K}/shard{rank}.pt``.
+The seed set is discovered from the predictions dir, so there is no ``--n``: extract processes
+exactly the rollouts the generate stage produced.
 """
 import argparse
 import json
@@ -87,8 +88,6 @@ def extract_seed(cfg, seed):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
-    ap.add_argument("--n", type=int, default=None,
-                    help="number of rollouts to extract (seeds 0..n-1; default 1)")
     ap.add_argument("--gpus", type=int, nargs="+", default=None,
                     help="GPU indices to run on (default: all visible GPUs)")
     ap.add_argument("--limit", type=int, default=None,
@@ -97,8 +96,6 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    if args.n is not None:
-        cfg.n_rollouts = args.n
     if args.gpus is not None:
         cfg.extract.gpus = args.gpus
     if args.limit is not None:
@@ -115,10 +112,15 @@ def main():
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
     set_start_method("spawn", force=True)
-    seeds = cfg.seeds()
+    seeds = cfg.predicted_seeds()   # discovered from <predictions>/seed*/, not a flag
+    if not seeds:
+        raise SystemExit(f"[extract] no rollouts found under {cfg.path('predictions')}/seed*/ — "
+                         f"run the generate stage first.")
+    print(f"[extract] found {len(seeds)} rollout(s) on disk: seeds {seeds}", flush=True)
     for i, seed in enumerate(seeds):
         print(f"[extract] seed {seed}  ({i + 1}/{len(seeds)})", flush=True)
         extract_seed(cfg, seed)
+    print(f"[extract] done: extracted {len(seeds)} rollout(s) -> {cfg.path('features')}", flush=True)
 
 
 if __name__ == "__main__":

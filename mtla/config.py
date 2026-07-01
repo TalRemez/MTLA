@@ -80,8 +80,29 @@ class RunConfig:
         return list(range(lo, hi + 1))
 
     def seeds(self) -> list:
-        """Rollout seeds to produce / score: 0 .. n_rollouts-1 (one knob drives all stages)."""
+        """Rollout seeds to produce: 0 .. n_rollouts-1 (``--n`` on generate drives this)."""
         return list(range(max(1, self.n_rollouts)))
+
+    def _seeds_on_disk(self, root_key: str) -> list:
+        """Rollout seeds discovered under ``<root_key>/seed{K}/`` (sorted). Extract/score infer the
+        seed set from what the previous stage actually wrote, so they need no ``--n``."""
+        import glob
+        import re
+        root = self.path(root_key)
+        found = []
+        for d in glob.glob(os.path.join(root, "seed*")):
+            m = re.fullmatch(r"seed(\d+)", os.path.basename(d))
+            if m and os.path.isdir(d):
+                found.append(int(m.group(1)))
+        return sorted(found)
+
+    def predicted_seeds(self) -> list:
+        """Seeds that have a predictions dir (the input set for extract)."""
+        return self._seeds_on_disk("predictions")
+
+    def extracted_seeds(self) -> list:
+        """Seeds that have a features dir (the input set for score)."""
+        return self._seeds_on_disk("features")
 
     def stage_gpus(self, stage: str) -> list:
         """GPU list for a stage; resolves ``gpus: null`` to all visible GPUs at run time."""

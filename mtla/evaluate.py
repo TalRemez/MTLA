@@ -45,8 +45,9 @@ def _candidates(cfg, dataset):
     """
     band = cfg.band_indices()
     signal = dataset.signal
+    seeds = cfg.extracted_seeds()   # discovered from <features>/seed*/, not a flag
     cands, gt_by_id = [], {}
-    for seed in range(cfg.n_rollouts):
+    for seed in seeds:
         for rec in load_shards(cfg.feat_dir(seed)):
             gt_by_id[rec["id"]] = rec["gt"]
             for o in rec["objects"]:
@@ -56,7 +57,7 @@ def _candidates(cfg, dataset):
                     "hallu": bool(o["is_hallucinated"]), "extracted": bool(o.get("extracted", True)),
                     "seed": seed,
                 })
-    return cands, gt_by_id
+    return cands, gt_by_id, seeds
 
 
 def _hallucination_auroc(cands):
@@ -138,11 +139,12 @@ _METRICS = {"coco_map": _coco, "moment_retrieval": _moment_retrieval, "recall_at
 def run_score(cfg, dataset) -> dict:
     """Compute the benchmark metrics for a run from its feature shards. Returns a metrics dict."""
     overlap_fn = _OVERLAP[dataset.overlap]
-    cands, gt_by_id = _candidates(cfg, dataset)
+    cands, gt_by_id, seeds = _candidates(cfg, dataset)
     if not cands:
         return {"error": "no candidates found — did the extract stage run?"}
+    print(f"[score] found {len(seeds)} rollout(s) on disk: seeds {seeds}", flush=True)
     fused = _fuse_groups(cands, overlap_fn, cfg.score.agg, dataset.select)
     metrics = {"auroc_mtla": _hallucination_auroc(cands),
-               "n_rollouts": cfg.n_rollouts, "agg": cfg.score.agg}
+               "n_rollouts": len(seeds), "agg": cfg.score.agg}
     metrics.update(_METRICS[dataset.metric](cfg, fused, gt_by_id))
     return metrics
