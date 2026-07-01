@@ -1,158 +1,150 @@
 """The MTLA computation (shared by image detection and video grounding).
 
-This module *is* MTLA. The paper's score (appendix pseudo-code) is
+This module *is* MTLA. The paper's score (appendix pseudo-code) reads a prediction's own
+attention from its response tokens Q_p to the input modality tokens, restricted to the tokens
+inside its proposal region M(R_p)::
 
-    x = attn[..., mask_idx]   # keep modality tokens inside the proposal region M(R_p)
-    x = x.sum(-1)             # sum over region        -> Localized Attention   (eq. 2)
-    x = x.mean(1)             # mean over Q_p           -> Multi-Token LA        (eq. 3)
-    x = x.mean(-1)            # mean over heads
-    return x[band].mean()     # mean over middle layers -> s(p)                  (eq. 4)
+    x = attn[..., region_idx]   # keep modality tokens inside the region M(R_p)
+    x = x.sum(-1)               # sum over the region     -> Localized Attention   (eq. 2)
+    x = x.mean(-1)              # mean over Q_p            -> Multi-Token LA         (eq. 3)
+    # (head/layer reduction, eq. 4, is done later on CPU in mtla.score.reduce_band)
 
-It reads from a `[n_layer, n_query, n_heads, n_modality_tok]` attention tensor. At detection
-scale that tensor is terabytes and is never materialized: fused kernels don't even expose the
-weights. So the *modality-token* reductions (restrict to M(R_p), sum the region = LA, mean over
-Q_p) run **streaming, one decoder layer at a time, inside the forward pass** via a monkeypatched
-eager-attention function. The remaining head/layer reductions (eq. 4) run later, on CPU, in
-`mtla.score` over the small `[L, H]` per-prediction array saved here.
+`mtla_localized_attention` below is exactly that — an independent, model-agnostic function that
+takes a prediction's `[L, H, Q_p, n_mod]` attention slice and its region mask and returns the
+`[L, H]` localized-attention array. Everything else in this module just *gets the model's real
+attention weights to that function*.
 
-Each prediction stores two `[L, H]` arrays of localized attention (eqs. 2-3):
-  * `local_attention` — meaned over *all* the prediction's tokens Q_p (the MTLA score).
-  * `first_digit`     — read at the single first coordinate digit (x1), the autoregressive
-    decision point analyzed in the paper.
+Getting the weights is the only hard part. A fused attention kernel never exposes the weights, and
+`output_attentions=True` materializes every layer's `[H, Q, Q]` map at once — hundreds of GB for a
+video clip. So we install a thin **capture** wrapper around the model's own eager-attention
+forward: it runs the stock forward unchanged, then slices the returned weights down to just the
+rows/cols MTLA reads (the query positions Q_p and the modality tokens) and offloads that small
+`[H, N_q, n_mod]` tensor to CPU, freeing the GPU copy. GPU peak stays at one layer; the reduction
+runs afterward from the CPU list. Because the wrapper reuses the model's own forward verbatim, the
+captured weights are bit-for-bit what the model computed, for any model / transformers version.
 
 Public API:
-  * `MTLAState` — per-forward state (query positions, modality-token indices, per-prediction
-    region masks, output buffer).
-  * `new_mtla_buffer(...)` — the per-prediction `[n_preds, L, H]` accumulators.
-  * `make_mtla_attention_forward(state, repeat_kv)` — the streaming, per-layer MTLA kernel; a
-    drop-in `eager_attention_forward`, numerically identical to the stock one when not active.
-  * `compute_mtla(...)` — the per-item MTLA computation (image boxes or video windows): build
-    inputs, run the patched forward, return the saved record.
-  * `install(module_path, hook)` — monkeypatch a model family's attention function.
+  * `mtla_localized_attention(attn, region_idx)` — the pure MTLA math (eqs. 2-3).
+  * `CaptureState` / `install_capture(module_path, state)` — install the capture wrapper.
+  * `compute_mtla(adapter, record, ds_by_id, ctx, rank)` — per-item driver (image boxes or video
+    windows); builds inputs, runs one captured forward, returns the saved record.
 
-The model/task-specific pieces (prompt build, prediction enumeration + hallucination flags,
-prediction-token finding, region mask, forward kwargs, record fields) live in the model adapters'
-`ext_*` methods; this module is the common math.
+The model/task-specific pieces (prompt build, prediction parsing + hallucination flags,
+Q_p token finding, region mask, forward kwargs, record fields) live in the model adapters' `ext_*`
+methods; this module is the common math and plumbing.
 """
 from __future__ import annotations
 
+import gc
 import importlib
 from dataclasses import dataclass, field
 
+import numpy as np
 import torch
-import torch.nn as nn
 
 
+# ---------------------------------------------------------------------------
+# The MTLA math (paper eqs. 2-3) — pure, independent, model-agnostic.
+# ---------------------------------------------------------------------------
+def mtla_localized_attention(attn: torch.Tensor, region_idx: torch.Tensor) -> torch.Tensor:
+    """Localized attention for one prediction (paper eqs. 2-3).
+
+    Args:
+        attn:       ``[L, H, Q_p, n_mod]`` attention from the prediction's response tokens Q_p to
+                    the input modality tokens, per layer ``L`` and head ``H``.
+        region_idx: indices into the ``n_mod`` axis that fall inside the proposal region M(R_p).
+
+    Returns:
+        ``[L, H]`` localized attention: summed over the region (eq. 2), meaned over Q_p (eq. 3).
+    """
+    x = attn.index_select(-1, region_idx)   # keep modality tokens inside M(R_p)  [L,H,Q_p,|R|]
+    x = x.sum(dim=-1)                        # sum over the region   -> LA   (eq.2) [L,H,Q_p]
+    x = x.mean(dim=-1)                       # mean over Q_p         -> MTLA (eq.3) [L,H]
+    return x
+
+
+# ---------------------------------------------------------------------------
+# Attention capture: get the model's real weights to the function above.
+# ---------------------------------------------------------------------------
 @dataclass
-class MTLAState:
-    """Mutable state shared between the MTLA attention forward and the per-item driver.
+class CaptureState:
+    """State shared between the capture wrapper and the per-item driver.
 
-    Index tensors live on the model device; the buffer accumulates on CPU in fp32. The driver
-    sets `query_positions` / `modality_indices` / `pred_specs` / `buf` before each forward and
-    reads `buf` after it.
-    """
+    ``layer_ids`` maps each LM decoder self-attention module id to its layer index (so the wrapper
+    ignores vision-tower attention that routes through the same function). Before each forward the
+    driver sets ``qpos`` / ``modidx`` (the rows/cols to keep) and allocates ``captured``; after the
+    forward it reads ``captured`` (a CPU list of ``[H, N_q, n_mod]`` tensors, one per layer)."""
+    layer_ids: dict = field(default_factory=dict)
     active: bool = False
-    lang_attn_ids: set = field(default_factory=set)
-    lang_attn_order: list = field(default_factory=list)
-    query_positions: torch.Tensor | None = None   # unique response-token positions Q_p (sorted)
-    modality_indices: torch.Tensor | None = None   # absolute positions of the modality tokens
-                                                   # (image patches, or video frame tokens)
-    pred_specs: list | None = None                 # per-prediction {qp_rows, first_digit_row, inside_idx}
-    buf: dict | None = None                         # {"local_attention": [P,L,H], "first_digit": [P,L,H]}
+    qpos: torch.Tensor | None = None       # query positions to keep (rows), on the model device
+    modidx: torch.Tensor | None = None     # modality-token positions to keep (cols), on device
+    captured: list | None = None           # per-layer [H, N_q, n_mod], fp32, on CPU
 
 
-def new_mtla_buffer(n_preds, n_layers, n_heads):
-    """Allocate the per-prediction `[n_preds, L, H]` MTLA accumulators for one forward pass."""
-    return {
-        "local_attention": torch.zeros(n_preds, n_layers, n_heads, dtype=torch.float32),
-        "first_digit": torch.zeros(n_preds, n_layers, n_heads, dtype=torch.float32),
-    }
+def make_capture_forward(state: CaptureState, orig_forward):
+    """Wrap the model's own ``eager_attention_forward``: run it verbatim, then capture the weights.
 
-
-def make_mtla_attention_forward(state: MTLAState, repeat_kv=None):
-    """Build the MTLA `eager_attention_forward` (the streaming, per-layer MTLA kernel).
-
-    Numerically identical to the stock eager forward; additionally, when `state.active`, it
-    accumulates each prediction's localized attention (eqs. 2-3): for the `local_attention`
-    signal, the mean over the prediction's tokens Q_p of the attention summed over the modality
-    tokens inside the proposal region; for `first_digit`, the same but read at the single x1
-    token. `repeat_kv` is the grouped-query KV-repeat helper; it defaults to `mtla.utils.repeat_kv`
-    (identical to HF's Qwen3/Qwen3-VL impl) so model families don't need to pass it. The
-    head/layer reductions (eq. 4) happen later in `mtla.score`.
+    The stock eager forward already returns ``(attn_output, attn_weights)``; this wrapper calls it
+    unchanged (so no attention math is reimplemented and it can't drift from the model), then, when
+    active and this is an LM decoder layer, slices the weights to the query rows ``qpos`` and
+    modality cols ``modidx`` ON GPU and offloads that small tensor to CPU — freeing the GPU copy so
+    peak memory stays at one layer's map.
     """
-    if repeat_kv is None:
-        from .utils import repeat_kv
-    def patched(module, query, key, value, attention_mask, scaling, dropout=0.0, **kwargs):
-        key_states = repeat_kv(key, module.num_key_value_groups)
-        value_states = repeat_kv(value, module.num_key_value_groups)
-        attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
-        if attention_mask is not None:
-            attn_weights = attn_weights + attention_mask[:, :, :, :key_states.shape[-2]]
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
-
-        s = state
-        if s.active and id(module) in s.lang_attn_ids:
-            layer_idx = s.lang_attn_order.index(id(module))
-            rows = attn_weights[0].index_select(1, s.query_positions).transpose(0, 1).float()  # [Nq, H, K]
-            mod_rows = rows.index_select(2, s.modality_indices)                                 # [Nq, H, n_mod]
-            for pi, spec in enumerate(s.pred_specs):
-                in_idx = spec["inside_idx"]
-                # MTLA: mean over Q_p (eq. 3), then sum over the proposal region (eq. 2 = LA).
-                la = mod_rows.index_select(0, spec["qp_rows"]).mean(dim=0)        # [H, n_mod]
-                s.buf["local_attention"][pi, layer_idx, :] += la.index_select(1, in_idx).sum(dim=1).cpu()
-                fd = spec["first_digit_row"]
-                if fd is not None:
-                    la_fd = mod_rows[fd]                                          # [H, n_mod]
-                    s.buf["first_digit"][pi, layer_idx, :] += la_fd.index_select(1, in_idx).sum(dim=1).cpu()
-
-        attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
-        attn_output = torch.matmul(attn_weights, value_states).transpose(1, 2).contiguous()
-        return attn_output, None
-
-    return patched
+    def wrapper(module, *args, **kwargs):
+        attn_output, attn_weights = orig_forward(module, *args, **kwargs)
+        if state.active and attn_weights is not None and id(module) in state.layer_ids:
+            w = attn_weights[0]                          # [H, Q, K]
+            if state.qpos is not None:
+                w = w.index_select(1, state.qpos)        # [H, N_q, K]
+            if state.modidx is not None:
+                w = w.index_select(2, state.modidx)      # [H, N_q, n_mod]
+            # Keep the tiny slice on the compute device: the full [H,Q,K] map (the memory wall) is
+            # freed when the stock forward's output goes out of scope after this returns; only the
+            # pre-sliced [H,N_q,n_mod] is retained, so holding all L layers is cheap (~1 GB).
+            state.captured[state.layer_ids[id(module)]] = w.detach()
+        return attn_output, attn_weights
+    return wrapper
 
 
-def install(module_path: str, hook):
-    """Monkeypatch `eager_attention_forward` in `module_path`; return the imported module."""
+def install_capture(module_path: str, state: CaptureState):
+    """Install the capture wrapper over ``module_path``'s ``eager_attention_forward``.
+
+    Returns the imported module. The model must use ``attn_implementation="eager"`` so the weights
+    flow through this function. Records the original forward and wraps it in place.
+    """
     mod = importlib.import_module(module_path)
-    mod.eager_attention_forward = hook
+    mod.eager_attention_forward = make_capture_forward(state, mod.eager_attention_forward)
     return mod
 
 
 # ---------------------------------------------------------------------------
-# Per-image MTLA computation
+# Per-item driver (shared by image_det AND video_span).
 # ---------------------------------------------------------------------------
-# Per-item MTLA computation (shared by image_det AND video_span)
-# ---------------------------------------------------------------------------
-# The per-item flow is identical across modalities: build the full token sequence, find each
-# prediction's tokens Q_p, run one patched forward, then read the per-prediction buffer into the
-# saved record. A "prediction" is a bbox (image) or a time-span window (video); its proposal
-# region M(R_p) is the modality tokens inside it (image patches, or the frames inside the span).
-# Everything model/task-specific is delegated to the adapter's `ext_*` callbacks:
-#   ext_build_inputs   -> preprocess input, build prompt, locate modality tokens, list the
-#                         predictions + their hallucination flags (None to skip the item)
-#   ext_token_ranges   -> per prediction, the response tokens Q_p (label/coord or window digits)
+# The flow is identical across modalities: build the full token sequence, find each prediction's
+# response tokens Q_p, run one captured forward, then apply the MTLA math per prediction. A
+# "prediction" is a bbox (image) or a [t0,t1] window (video); its region M(R_p) is the modality
+# tokens inside it. All model/task specifics come from the adapter's ext_* callbacks:
+#   ext_build_inputs   -> preprocess input, build prompt, PARSE the response into predictions +
+#                         hallucination flags, locate modality tokens  (None to skip the item)
+#   ext_token_ranges   -> per prediction, its response tokens Q_p (label/coord or window digits)
 #   ext_region_mask    -> the modality-token indices inside one prediction's region M(R_p)
-#   ext_forward_kwargs -> kwargs for the single patched forward
-#   ext_obj_record     -> the per-prediction record fields (pred_idx/label/box or window/span)
+#   ext_forward_kwargs -> kwargs for the single captured forward
+#   ext_obj_record     -> per-prediction record fields (box/window + geometry)
 #   ext_record         -> the top-level record wrapper (id keys, counts, objects)
 
 
-def compute_mtla(adapter, p, ds_by_id, ctx, svar_shift, rank=0):
-    """Compute MTLA for one item's predictions via a single eager-attention forward.
+def compute_mtla(adapter, record, ctx, rank=0):
+    """Compute MTLA for one item's predictions via a single captured forward.
 
     Works for both image detection (predictions = boxes) and video grounding (predictions =
-    time-span windows): the math is identical, only the `ext_*` callbacks differ. `adapter`
-    supplies them (see InternVLAdapter / Qwen3VLAdapter). Returns the saved .pt record or None
-    to skip the item.
+    time-span windows): the math is identical, only the ``ext_*`` callbacks differ. The ``record``
+    (a generation record: ``{id, prompt, response, gt, extra}``) is self-contained — everything the
+    extraction needs is on it. Returns the saved .pt record or None to skip the item.
     """
-    import gc
-    s = ctx["state"]; device = ctx["device"]; tokenizer = ctx["tokenizer"]
+    state = ctx["state"]; device = ctx["device"]; tokenizer = ctx["tokenizer"]
     model = ctx["model"]; n_layers, n_heads = ctx["n_layers"], ctx["n_heads"]
 
-    # Model/task-specific: preprocess input, build prompt, locate modality tokens, and enumerate
-    # the predictions (boxes or windows) with their hallucination flags. None => skip the item.
-    inp = adapter.ext_build_inputs(p, ds_by_id, ctx, rank)
+    inp = adapter.ext_build_inputs(record, ctx, rank)
     if inp is None:
         return None
     prompt_ids = inp["prompt_ids"]; response = inp["response"]
@@ -165,73 +157,80 @@ def compute_mtla(adapter, p, ds_by_id, ctx, svar_shift, rank=0):
     full_ids = torch.cat([prompt_ids, resp_ids]).unsqueeze(0)
     total_len = full_ids.shape[1]
 
-    # Model-specific: per prediction, the response-token spans for its Q_p. For images that is the
-    # label + coordinate tokens; for video, the window's digit tokens (returned as `coord_toks`
-    # with `first_label_tok` set to the first digit, so the assembly below is identical).
-    # Contract: token_ranges is index-aligned with `predictions` (one entry each), so `valid_pred_idx`
-    # below can index `predictions` directly.
+    # Per-prediction Q_p tokens (index-aligned with `predictions`): label + coordinate tokens for
+    # images, the window's digit tokens for video.
     token_ranges = adapter.ext_token_ranges(response, predictions, tokenizer)
     assert len(token_ranges) == len(predictions), (
-        f"ext_token_ranges must align with predictions: got {len(token_ranges)} vs {len(predictions)}")
+        f"ext_token_ranges must align with predictions: {len(token_ranges)} vs {len(predictions)}")
 
-    def _shift(pos):
-        return max(0, pos - 1) if svar_shift else pos
-
-    # Q_p = label tokens + coordinate tokens; x1 = first coordinate/digit token.
-    valid_pred_idx = []; qp_abs_list = []; x1_abs_list = []
+    # Absolute Q_p positions per prediction; x1 = the first coordinate/digit token.
+    valid, qp_abs_list, x1_abs_list = [], [], []
     for i, tr in enumerate(token_ranges):
         if tr is None or tr["first_label_tok"] is None:
             continue
-        label_abs = [_shift(prompt_len + t) for t in tr["label_toks"] if prompt_len + t < total_len]
-        coord_abs = [_shift(prompt_len + t) for t in tr["coord_toks"] if prompt_len + t < total_len]
+        label_abs = [prompt_len + t for t in tr["label_toks"] if prompt_len + t < total_len]
+        coord_abs = [prompt_len + t for t in tr["coord_toks"] if prompt_len + t < total_len]
         if not label_abs:
-            label_abs = [_shift(prompt_len + tr["first_label_tok"])]
+            label_abs = [prompt_len + tr["first_label_tok"]]
         qp_abs = sorted(set(label_abs + coord_abs))
         if not qp_abs:
             continue
-        valid_pred_idx.append(i); qp_abs_list.append(qp_abs)
+        valid.append(i); qp_abs_list.append(qp_abs)
         x1_abs_list.append(coord_abs[0] if coord_abs else None)
-    if not valid_pred_idx:
+    if not valid:
         return None
 
-    sorted_positions = sorted({x for qp in qp_abs_list for x in qp})
-    pos_to_qrow = {pos: r for r, pos in enumerate(sorted_positions)}
-    s.query_positions = torch.tensor(sorted_positions, dtype=torch.long, device=device)
-    s.modality_indices = torch.tensor(modality_idx_l, dtype=torch.long, device=device)
-
-    n_preds = len(valid_pred_idx)
-    pred_specs = []
-    for i, orig_i in enumerate(valid_pred_idx):
-        inside_idx = adapter.ext_region_mask(predictions[orig_i], meta)
-        x1 = x1_abs_list[i]
-        pred_specs.append({
-            "qp_rows": torch.tensor([pos_to_qrow[x] for x in qp_abs_list[i]], dtype=torch.long, device=device),
-            "first_digit_row": pos_to_qrow[x1] if x1 is not None else None,
-            "inside_idx": torch.tensor(inside_idx, dtype=torch.long, device=device),
-        })
-    s.pred_specs = pred_specs
-    s.buf = new_mtla_buffer(n_preds, n_layers, n_heads)
+    # Capture only the rows (union of all Q_p) and cols (modality tokens) MTLA reads.
+    query_positions = sorted({x for qp in qp_abs_list for x in qp})
+    row_of = {pos: r for r, pos in enumerate(query_positions)}
+    state.qpos = torch.tensor(query_positions, dtype=torch.long, device=device)
+    state.modidx = torch.tensor(modality_idx_l, dtype=torch.long, device=device)
+    state.captured = [None] * n_layers
 
     fk = adapter.ext_forward_kwargs(full_ids, total_len, device, inp)
     try:
-        s.active = True
+        state.active = True
         with torch.no_grad():
             model(**fk)
-        s.active = False
+        state.active = False
     except Exception as e:
-        s.active = False
+        state.active = False
         print(f"[worker {rank}] skip item: forward {e}", flush=True)
         return None
 
+    # Stack the captured per-layer maps into one [L, H, N_q, n_mod] tensor and reduce on the same
+    # device the forward ran on (the slice is tiny, so this stays on-GPU and fast). Upcast to fp32
+    # once so the MTLA reduction matches the paper's math; only the [L,H] results move to CPU.
+    attn = torch.stack(state.captured, dim=0).float()  # [L, H, N_q, n_mod]
+
+    # Localized attention for the predictions whose Q_p we located, keyed by prediction index.
+    la_by_i, fd_by_i = {}, {}
+    for i, orig_i in enumerate(valid):
+        region_idx = torch.tensor(adapter.ext_region_mask(predictions[orig_i], meta),
+                                  dtype=torch.long, device=device)
+        qp_rows = torch.tensor([row_of[x] for x in qp_abs_list[i]], dtype=torch.long, device=device)
+        la_by_i[orig_i] = mtla_localized_attention(attn.index_select(2, qp_rows), region_idx).cpu()
+        x1 = x1_abs_list[i]
+        if x1 is not None:
+            fd_rows = torch.tensor([row_of[x1]], dtype=torch.long, device=device)
+            fd_by_i[orig_i] = mtla_localized_attention(attn.index_select(2, fd_rows), region_idx).cpu()
+
+    # Emit an object for EVERY prediction so the shards are the complete candidate set for scoring
+    # (a prediction whose Q_p couldn't be located gets a zero array + extracted=False, so it still
+    # appears as a candidate but carries no grounding signal). `zeros` is [L, H].
+    zeros = torch.zeros(n_layers, n_heads)
     out_objs = []
-    for i, orig_i in enumerate(valid_pred_idx):
-        obj = adapter.ext_obj_record(predictions[orig_i], orig_i, meta)
-        obj["is_hallucinated"] = bool(hallu_flags[orig_i])
-        obj["n_qp_tokens"] = int(pred_specs[i]["qp_rows"].numel())
-        obj["local_attention"] = s.buf["local_attention"][i].to(torch.float16).numpy()
-        obj["first_digit"] = s.buf["first_digit"][i].to(torch.float16).numpy()
+    for i, pred in enumerate(predictions):
+        la = la_by_i.get(i, zeros); fd = fd_by_i.get(i, la_by_i.get(i, zeros))
+        obj = adapter.ext_obj_record(pred, i, meta)
+        obj["is_hallucinated"] = bool(hallu_flags[i])
+        obj["extracted"] = i in la_by_i
+        obj["local_attention"] = la.to(torch.float16).numpy()
+        obj["first_digit"] = fd.to(torch.float16).numpy()
         out_objs.append(obj)
-    rec = adapter.ext_record(p, meta, out_objs, n_predictions=len(predictions))
-    s.query_positions = s.modality_indices = s.pred_specs = s.buf = None
+
+    rec = adapter.ext_record(record, meta, out_objs, n_predictions=len(predictions))
+    del attn
+    state.qpos = state.modidx = state.captured = None
     torch.cuda.empty_cache(); gc.collect()
     return rec

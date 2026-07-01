@@ -6,29 +6,21 @@ predicted this time span), did it actually look inside the region it claims?* Pr
 whose tokens attend to evidence inside their proposal region are grounded; those that attend
 elsewhere are likely hallucinations.
 
-Typical use, starting from the attention records the extract stage writes:
+The pipeline is three stages driven by ``run.py`` (generate → extract → score). The library
+pieces:
 
-    from mtla import mtla_score, auroc_from_records
-
-    auroc_mtla = auroc_from_records(objects)                           # MTLA (local_attention)
-    auroc_fd   = auroc_from_records(objects, signal="first_digit")     # first-digit ablation
-
-Resolve a (model, dataset) pair to its adapters. ``import mtla`` itself stays light (the scoring
-helpers above pull in only numpy); the adapter modules are imported lazily on the first
-``resolve`` / ``available_*`` call:
-
-    from mtla import resolve
+    from mtla import mtla_localized_attention, reduce_band   # the MTLA math (eqs. 2-3, then 4)
+    from mtla import auroc, coco_map                          # metrics
+    from mtla import resolve                                  # (model, dataset) -> adapters
     model, dataset = resolve("qwen3vl", "coco")
+
+Adapter modules are *discovered* (not eagerly imported) on the first ``resolve`` / ``available_*``
+call, so a config's ``model:`` / ``dataset:`` keys resolve to classes without a central list.
 """
-from .score import (
-    ALL_LAYERS,
-    DEFAULT_BAND,
-    LAYER_BANDS,
-    mtla_score,
-    reduce_band,
-)
+from .mtla_attn import mtla_localized_attention
+from .score import ALL_LAYERS, DEFAULT_BAND, LAYER_BANDS, mtla_score, reduce_band
 from .voting import iou, nms_fuse, tiou
-from .eval import auroc, auroc_from_records, coco_map
+from .metrics import auroc, coco_map, moment_retrieval, recall_at_iou
 from .registry import (
     resolve,
     register_model,
@@ -38,10 +30,10 @@ from .registry import (
 )
 
 __all__ = [
-    "DEFAULT_BAND", "ALL_LAYERS", "LAYER_BANDS",
-    "reduce_band", "mtla_score",
+    "mtla_localized_attention",
+    "DEFAULT_BAND", "ALL_LAYERS", "LAYER_BANDS", "reduce_band", "mtla_score",
     "nms_fuse", "iou", "tiou",
-    "auroc", "auroc_from_records", "coco_map",
+    "auroc", "coco_map", "moment_retrieval", "recall_at_iou",
     "resolve", "register_model", "register_dataset",
     "available_models", "available_datasets",
 ]
