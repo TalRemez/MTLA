@@ -50,6 +50,14 @@ class ModelAdapter:
     # task families this model supports, e.g. ("image_det",) or ("video_span",).
     tasks: tuple = ()
 
+    def _check_task(self, task):
+        """Raise if `task` is a family this model doesn't support. `None` means the model's own
+        default (kept for single-task models whose `parse` ignores the argument)."""
+        if task is not None and task not in self.tasks:
+            raise ValueError(
+                f"{type(self).__name__} does not support task {task!r}; "
+                f"supported: {list(self.tasks)}")
+
     # ---- pure, CPU-testable ----
     def parse(self, response: str, task: str = None, **kw) -> list:
         """Parse a raw model response into a list of `Prediction`."""
@@ -57,14 +65,14 @@ class ModelAdapter:
 
     # ---- which GPU stage scripts implement this model's stages ----
     def generate_script(self, task: str, engine: str) -> str:
-        """Filename in mtla/stages/ for the generate stage (depends on engine: hf|vllm)."""
+        """Filename in scripts/stages/ for the generate stage (depends on engine: hf|vllm)."""
         raise NotImplementedError(f"{type(self).__name__} has no generate for task {task}")
 
     def extract_script(self, task: str) -> str:
-        """Filename in mtla/stages/ for the (always HF-eager) extract stage."""
+        """Filename in scripts/stages/ for the (always HF-eager) extract stage."""
         raise NotImplementedError(f"{type(self).__name__} has no extract for task {task}")
 
-    # ---- HF-eager MTLA extraction (driven by mtla/stages/{image,video}_extract.py) ----
+    # ---- HF-eager MTLA extraction (driven by scripts/stages/{image,video}_extract.py) ----
     def load_for_extract(self, gpu_id: int) -> dict:
         """Load model + processor on `gpu_id`, install the MTLA attention forward, and return a
         ctx dict (model, tokenizer, MTLAState, device, n_layers, n_heads, ...) the shared driver
@@ -73,10 +81,13 @@ class ModelAdapter:
 
     def extract_one(self, p: dict, ds_by_id: dict, ctx: dict, svar_shift: bool, rank: int = 0):
         """Compute MTLA for one item's predictions and return its saved .pt record (or None to
-        skip). Adapters delegate to `mtla.mtla_attn.compute_mtla`, which drives the shared per-item
-        MTLA computation (identical for image boxes and video windows) and calls back the `ext_*`
-        methods below."""
-        raise NotImplementedError(f"{type(self).__name__} has no extract_one")
+        skip). This is shared: it delegates to `mtla.mtla_attn.compute_mtla`, which drives the
+        per-item MTLA computation (identical for image boxes and video windows) and calls back the
+        `ext_*` methods below. `self._task` is recorded from the ctx so multi-task adapters'
+        `ext_*` can dispatch on it (single-task adapters simply ignore it)."""
+        from ..mtla_attn import compute_mtla
+        self._task = ctx.get("task", self.tasks[0] if self.tasks else None)
+        return compute_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
 
     # ---- model/task-specific callbacks invoked by mtla.mtla_attn.compute_mtla ----
     # Each returns plain data; the shared driver owns the common flow (Q_p assembly, query-position

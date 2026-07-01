@@ -2,12 +2,13 @@
 
 InternVL emits native grounding: ``<ref>label</ref><box>[[x1,y1,x2,y2], ...]</box>`` with
 coordinates in [0,1000]. Images are encoded with dynamic tiling (variable tiles + optional
-thumbnail), so the region mask uses `mtla.mask.bbox_to_internvl_token_indices`.
+thumbnail), so the region mask (`_bbox_to_internvl_token_indices`, defined below) is specific to
+this token layout.
 
-This adapter holds the small, pure, CPU-testable pieces: the output `parse` and the
-`region_mask`, plus the `attn_module_path` to monkeypatch during extraction. The heavy GPU
-generate/extract drivers live with the dataset adapter (they are model x dataset specific),
-which calls the validated stage scripts under `mtla/stages/`.
+This adapter holds the output `parse` and the `attn_module_path` to monkeypatch during extraction,
+plus the InternVL-specific `ext_*` extraction callbacks (build inputs, find prediction tokens, mask
+the proposal region) that feed the shared MTLA driver in `mtla.mtla_attn`. The heavy GPU work runs
+via the config-driven stage scripts under `scripts/stages/`.
 """
 from __future__ import annotations
 
@@ -15,7 +16,6 @@ import re
 
 from .base import ModelAdapter, Prediction
 from ..registry import register_model
-from ..mask import bbox_to_internvl_token_indices
 
 MODEL_ID = "OpenGVLab/InternVL3_5-8B"
 IMG_CONTEXT_TOK = "<IMG_CONTEXT>"
@@ -74,6 +74,7 @@ class InternVLAdapter(ModelAdapter):
     tasks = ("image_det",)
 
     def parse(self, response: str, task: str = None, **kw) -> list:
+        self._check_task(task)
         return parse_internvl(response)
 
     # ---- stage scripts ----
@@ -109,14 +110,10 @@ class InternVLAdapter(ModelAdapter):
         return _make_internvl_hf_generate(self.model_id, gpu_id)
 
     # ---- HF-eager extraction (image_det) ----
-    # The per-item flow is shared with Qwen in mtla.mtla_attn.compute_mtla; this adapter supplies
-    # only the InternVL-specific pieces via the `ext_*` callbacks below.
+    # The per-item flow (extract_one) is shared in the base class; this adapter supplies only the
+    # InternVL-specific pieces via the `ext_*` callbacks below.
     def load_for_extract(self, gpu_id):
         return _load_internvl_for_extract(gpu_id)
-
-    def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
-        from ..mtla_attn import compute_mtla
-        return compute_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
 
     def ext_build_inputs(self, p, ds_by_id, ctx, rank):
         """Tile the image, build the InternVL grounding prompt, re-insert the <ref>/<box>
@@ -165,7 +162,7 @@ class InternVLAdapter(ModelAdapter):
 
     def ext_region_mask(self, prediction, meta):
         """Modality-token indices inside the proposal box M(R_p) (InternVL dynamic tiling)."""
-        return bbox_to_internvl_token_indices(prediction["box"], meta["tile_grid"], meta["has_thumb"])[0]
+        return _bbox_to_internvl_token_indices(prediction["box"], meta["tile_grid"], meta["has_thumb"])[0]
 
     def ext_forward_kwargs(self, full_ids, total_len, device, inp):
         import torch
@@ -187,6 +184,7 @@ class InternVLAdapter(ModelAdapter):
 # HF-eager MTLA extraction implementation (image_det) for InternVL3.5.
 # Supplies the InternVL-specific pieces of mtla.mtla_attn.compute_mtla.
 # ============================================================================
+import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import torchvision.transforms as _T  # noqa: E402
 from torchvision.transforms.functional import InterpolationMode as _Interp  # noqa: E402
@@ -194,6 +192,61 @@ from PIL import Image as _Image  # noqa: E402
 from ..mtla_attn import MTLAState, make_mtla_attention_forward, install  # noqa: E402
 
 _IMAGENET_MEAN = (0.485, 0.456, 0.406); _IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def _bbox_to_internvl_token_indices(bbox, tile_grid, has_thumb: bool, patch_grid: int = 16):
+    """Image-token indices overlapping ``bbox`` M(R_p) under InternVL's dynamic tiling.
+
+    InternVL splits an image into ``n_cols x n_rows`` tiles plus an optional thumbnail. The
+    image-token sequence is ``tile_0[0..G-1], ..., tile_{N-1}[0..G-1], [thumbnail[0..G-1]]``, each
+    tile a ``patch_grid x patch_grid`` row-major grid of ``G = patch_grid**2`` tokens (16 for
+    InternVL3.5, i.e. 16x16=256 tokens per 448px tile after pixel-shuffle 0.5). ``tile_grid`` is
+    ``(n_cols, n_rows)``; ``bbox`` is ``[x1,y1,x2,y2]`` in ``[0, 1000]``. Returns ``(inside, outside)``.
+    """
+    x1, y1, x2, y2 = bbox
+    n_cols, n_rows = tile_grid
+    n_tiles = n_cols * n_rows
+    per_tile = patch_grid * patch_grid
+    total = n_tiles * per_tile + (per_tile if has_thumb else 0)
+    if x2 <= x1 or y2 <= y1:
+        return [], list(range(total))
+
+    def clamp(v):
+        return max(0, min(patch_grid - 1, v))
+
+    bx1, by1, bx2, by2 = x1 / 1000.0, y1 / 1000.0, x2 / 1000.0, y2 / 1000.0
+    inside = []
+    for tile_idx in range(n_tiles):
+        col, row = tile_idx % n_cols, tile_idx // n_cols
+        tx0, tx1 = col / n_cols, (col + 1) / n_cols
+        ty0, ty1 = row / n_rows, (row + 1) / n_rows
+        if tx1 <= bx1 or tx0 >= bx2 or ty1 <= by1 or ty0 >= by2:
+            continue  # tile does not overlap bbox
+        # bbox in tile-local [0,1] coordinates
+        lx0 = max(0.0, (bx1 - tx0) / (tx1 - tx0))
+        lx1 = min(1.0, (bx2 - tx0) / (tx1 - tx0))
+        ly0 = max(0.0, (by1 - ty0) / (ty1 - ty0))
+        ly1 = min(1.0, (by2 - ty0) / (ty1 - ty0))
+        col_min = clamp(int(np.floor(lx0 * patch_grid)))
+        col_max = clamp(int(np.floor((lx1 - 1e-6) * patch_grid)))
+        row_min = clamp(int(np.floor(ly0 * patch_grid)))
+        row_max = clamp(int(np.floor((ly1 - 1e-6) * patch_grid)))
+        off = tile_idx * per_tile
+        for pr in range(row_min, row_max + 1):
+            for pc in range(col_min, col_max + 1):
+                inside.append(off + pr * patch_grid + pc)
+    if has_thumb:
+        col_min = clamp(int(np.floor(bx1 * patch_grid)))
+        col_max = clamp(int(np.floor((bx2 - 1e-6) * patch_grid)))
+        row_min = clamp(int(np.floor(by1 * patch_grid)))
+        row_max = clamp(int(np.floor((by2 - 1e-6) * patch_grid)))
+        off = n_tiles * per_tile
+        for pr in range(row_min, row_max + 1):
+            for pc in range(col_min, col_max + 1):
+                inside.append(off + pr * patch_grid + pc)
+    inside_set = set(inside)
+    outside = [i for i in range(total) if i not in inside_set]
+    return inside, outside
 
 
 def _build_transform(input_size=448):

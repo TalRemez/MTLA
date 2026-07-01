@@ -31,7 +31,7 @@ def _to_seconds(s: str) -> float:
 
 
 # The canonical, validated multi-window parser lives in the video stage script
-# (mtla/stages/qwen3vl_video.py). We reuse it verbatim here so the generate stage and any
+# (scripts/stages/qwen3vl_video.py). We reuse it verbatim here so the generate stage and any
 # offline parsing share one source of truth and cannot drift.
 _PATTERNS = [
     rf'\[\s*{_TIME}\s*,\s*{_TIME}\s*\]',
@@ -110,6 +110,7 @@ class Qwen3VLAdapter(ModelAdapter):
     tasks = ("video_span", "image_det")
 
     def parse(self, response: str, task: str = "video_span", multi: bool = True, **kw) -> list:
+        self._check_task(task)
         if task == "image_det":
             return parse_bboxes(response)
         return parse_spans(response, multi=multi)
@@ -155,10 +156,10 @@ class Qwen3VLAdapter(ModelAdapter):
         raise NotImplementedError("Qwen3-VL COCO generation is vLLM-only (engine: vllm)")
 
     # ---- HF-eager extraction ----
-    # Shares the per-item flow with InternVL via mtla.mtla_attn.compute_mtla; this adapter supplies
-    # the Qwen-specific pieces via the `ext_*` callbacks. The same flow serves image detection
-    # (boxes) and video grounding (time-span windows); each `ext_*` dispatches on the task family,
-    # which the worker records on the adapter via `load_for_extract`/`extract_one`.
+    # The per-item flow (extract_one) is shared in the base class; this adapter supplies the
+    # Qwen-specific pieces via the `ext_*` callbacks. The same flow serves image detection (boxes)
+    # and video grounding (time-span windows); each `ext_*` dispatches on `self._task`, which the
+    # base `extract_one` records from `ctx["task"]` (set by `load_for_extract`).
     def load_for_extract(self, gpu_id, task="image_det"):
         self._task = task
         ctx = _load_qwen_for_extract(gpu_id, task)
@@ -183,12 +184,7 @@ class Qwen3VLAdapter(ModelAdapter):
             return _generate_video_vllm(ctx, video_path, query, vcfg, seed, temperature, rank)
         return _generate_video(ctx, video_path, query, vcfg, seed, temperature, rank)
 
-    def extract_one(self, p, ds_by_id, ctx, svar_shift, rank=0):
-        from ..mtla_attn import compute_mtla
-        self._task = ctx.get("task", "image_det")
-        return compute_mtla(self, p, ds_by_id, ctx, svar_shift, rank)
-
-    # ---- ext_* dispatch (image_det <-> video_span) ----
+    # ---- ext_* dispatch (image_det <-> video_span); extract_one is inherited from the base ----
     def ext_build_inputs(self, p, ds_by_id, ctx, rank):
         if ctx.get("task") == "video_span":
             return self._vid_build_inputs(p, ds_by_id, ctx, rank)

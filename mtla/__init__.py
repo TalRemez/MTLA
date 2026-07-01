@@ -27,11 +27,6 @@ from .score import (
     mtla_score,
     reduce_band,
 )
-from .mask import (
-    bbox_to_internvl_token_indices,
-    bbox_to_patch_indices,
-    span_to_token_indices,
-)
 from .voting import iou, nms_fuse, tiou
 from .eval import auroc, auroc_from_records, coco_map
 from .registry import (
@@ -45,7 +40,6 @@ from .registry import (
 __all__ = [
     "DEFAULT_BAND", "ALL_LAYERS", "LAYER_BANDS",
     "reduce_band", "mtla_score",
-    "bbox_to_patch_indices", "bbox_to_internvl_token_indices", "span_to_token_indices",
     "nms_fuse", "iou", "tiou",
     "auroc", "auroc_from_records", "coco_map",
     "resolve", "register_model", "register_dataset",
