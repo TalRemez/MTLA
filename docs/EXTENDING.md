@@ -26,7 +26,7 @@ registers an adapter for its task.
 
 ## The pipeline in one paragraph
 
-Three stages — `generate.py`, `extract.py`, `score.py`, each `--config <yaml>`:
+Three stages — `generate.py`, `extract.py`, `evaluate.py`, each `--config <yaml>`:
 - **generate** (GPU; vLLM) writes `<predictions>/seed{K}/predictions.json` — a list of uniform,
   model-agnostic records `{id, prompt, response, gt, extra}`, where `response` is the **raw** model
   output. No parsing happens here.
@@ -41,7 +41,8 @@ adapters, and asks the **dataset** for its items (`load_items`) and the **model*
 work (`build_vllm_request` + the extraction callbacks). The shared MTLA core (`mtla/mtla_attn.py`) owns
 the common per-item flow for both image and video; the kernel is the same because "the modality
 tokens inside the proposal region" is a flat index set either way. All of the score-stage
-computation lives in `mtla/evaluate.py` + `mtla/metrics.py`, so dataset adapters do no computation.
+computation lives in `evaluate.py` (+ `mtla/voting.py` and the pure `mtla/metrics.py`), so dataset
+adapters do no computation.
 
 ---
 
@@ -109,7 +110,7 @@ from ..registry import register_dataset
 class MyBench(DatasetAdapter):
     name = "mybench"
     task = "image_det"                     # must be a family the chosen model supports
-    # scoring descriptors (read by mtla.evaluate):
+    # scoring descriptors (read by the evaluate.py stage):
     signal = "local_attention"             # or "first_digit" (video)
     overlap = "iou"                        # "iou" (boxes) | "tiou" (spans)
     select = "fuse"                        # "fuse" (NMS pool across rollouts) | "argmax" (single-span)
@@ -139,14 +140,13 @@ score:    {agg: max}
 band: [8, 21]
 ```
 
-`python -m score --config configs/mybench_myvlm.yaml` now works. `mtla/data/coco.py` is the
+`python -m evaluate --config configs/mybench_myvlm.yaml` now works. `mtla/data/coco.py` is the
 smallest complete `image_det` example; `mtla/data/charades.py` the smallest `video_span` one.
 
 ### Reusing vs. adding a metric
 `select` + `metric` cover the existing benchmarks (`coco_map`, `moment_retrieval`, `recall_at_iou`).
-If your benchmark reuses one of these, there is nothing to add in `mtla/evaluate.py`. A genuinely
-new metric is one pure function in `mtla/metrics.py` (fused candidates → numbers) plus one handler
-in `mtla/evaluate.py`.
+If your benchmark reuses one of these, there is nothing more to add. A genuinely new metric is one
+pure function in `mtla/metrics.py` (voted candidates → numbers) plus one handler in `evaluate.py`.
 
 ### Video specifics
 A `video_span` run declares its vision **preprocessing** in the config (not the dataset), so the

@@ -2,7 +2,7 @@
 
 Each function takes already-assembled inputs (scores + labels, or fused detections + ground truth)
 and returns numbers. They do **no** shard loading, band reduction, self-consistency voting, or NMS
-— that orchestration lives in ``mtla.evaluate`` and runs before these are called. Keeping the
+— that orchestration lives in the ``evaluate.py`` stage (+ ``mtla.voting``) and runs before these are called. Keeping the
 metrics pure makes them reusable across datasets and trivially testable on synthetic inputs.
 
 Protocols used in the paper:
