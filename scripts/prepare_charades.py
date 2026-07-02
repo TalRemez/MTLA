@@ -22,6 +22,7 @@ default. Pass `--skip-videos` to skip them (annotations only) and provide the cl
     python -m scripts.prepare_charades --from-annotations charades_sta_test.txt   # local ann copy
     python -m scripts.prepare_charades --hf                  # HF lmms-lab/Charades-STA (needs auth)
 """
+
 import argparse
 import glob
 import os
@@ -38,8 +39,21 @@ HF_FILE = "data/test-00000-of-00001.parquet"
 
 
 def from_annotations(txt_path: str, out_parquet: str) -> int:
-    """Convert original Charades-STA `VIDID start end##caption` lines -> the test parquet."""
+    """Convert the original Charades-STA text annotations into the test parquet.
+
+    Parses each ``VIDID start end##caption`` line into a row with ``video``
+    (``{id}.mp4``), ``caption``, and ``timestamp`` (``[start, end]``), skipping blank
+    or malformed lines, and writes the ``charades`` adapter's parquet.
+
+    Args:
+        txt_path: path to a local ``charades_sta_test.txt`` file.
+        out_parquet: path to write the resulting parquet to.
+
+    Returns:
+        The number of query rows written.
+    """
     import pandas as pd
+
     rows = []
     with open(txt_path) as f:
         for ln in f:
@@ -51,33 +65,65 @@ def from_annotations(txt_path: str, out_parquet: str) -> int:
             if not m:
                 continue
             vid, s, e = m.group(1), float(m.group(2)), float(m.group(3))
-            rows.append({"video": f"{vid}.mp4", "caption": caption.strip(),
-                         "timestamp": [s, e]})
+            rows.append(
+                {"video": f"{vid}.mp4", "caption": caption.strip(), "timestamp": [s, e]}
+            )
     df = pd.DataFrame(rows, columns=["video", "caption", "timestamp"])
     df.to_parquet(out_parquet)
     return len(df)
 
 
 def from_hf(out_parquet: str) -> int:
-    """Fetch the lmms-lab/Charades-STA test parquet via huggingface_hub (needs auth/accepted terms)."""
+    """Fetch the lmms-lab/Charades-STA test parquet from the HuggingFace Hub.
+
+    Downloads the gated dataset file (requires accepted terms and an HF token / login)
+    and copies it into place.
+
+    Args:
+        out_parquet: path to copy the fetched parquet to.
+
+    Returns:
+        The number of query rows in the fetched parquet.
+    """
     import shutil
     from huggingface_hub import hf_hub_download
+
     src = hf_hub_download(repo_id=HF_REPO, filename=HF_FILE, repo_type="dataset")
     shutil.copy(src, out_parquet)
     import pandas as pd
+
     return len(pd.read_parquet(out_parquet))
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=None, help="output dir (default: <repo>/data/charades)")
-    ap.add_argument("--from-annotations", default=None,
-                    help="convert a LOCAL charades_sta_test.txt instead of downloading it")
-    ap.add_argument("--hf", action="store_true",
-                    help="fetch from HuggingFace lmms-lab/Charades-STA (needs HF auth)")
-    ap.add_argument("--skip-videos", action="store_true",
-                    help="skip the ~15GB Charades_v1_480 video download (annotations only)")
+    """Build the Charades-STA test parquet and (optionally) fetch the clips.
+
+    By default downloads and converts the open Charades-STA annotations; ``--hf``
+    fetches the gated HuggingFace parquet instead and ``--from-annotations`` converts a
+    local copy. Unless ``--skip-videos``, also downloads and extracts the
+    Charades_v1_480 clips (~15GB), then prints the config paths to set.
+    """
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out", default=None, help="output dir (default: <repo>/data/charades)"
+    )
+    ap.add_argument(
+        "--from-annotations",
+        default=None,
+        help="convert a LOCAL charades_sta_test.txt instead of downloading it",
+    )
+    ap.add_argument(
+        "--hf",
+        action="store_true",
+        help="fetch from HuggingFace lmms-lab/Charades-STA (needs HF auth)",
+    )
+    ap.add_argument(
+        "--skip-videos",
+        action="store_true",
+        help="skip the ~15GB Charades_v1_480 video download (annotations only)",
+    )
     args = ap.parse_args()
     root = out_dir(args.out, "charades")
     parquet = os.path.join(root, "charades_sta_test.parquet")
@@ -89,8 +135,12 @@ def main():
             print(f"  fetched {parquet} from HF {HF_REPO}  ({n} queries)")
         except Exception as e:
             print(f"  [error] HF fetch failed ({type(e).__name__}: {str(e)[:120]}).")
-            print(f"          {HF_REPO} is gated — accept its terms + `huggingface-cli login`,")
-            print(f"          or drop --hf to download the open Charades-STA annotations instead.")
+            print(
+                f"          {HF_REPO} is gated — accept its terms + `huggingface-cli login`,"
+            )
+            print(
+                f"          or drop --hf to download the open Charades-STA annotations instead."
+            )
     else:
         # Default: use the open annotations. Download them unless a local copy was given.
         txt = args.from_annotations
@@ -103,7 +153,9 @@ def main():
     videos = os.path.join(root, "Charades_v1_480")
     if args.skip_videos:
         os.makedirs(videos, exist_ok=True)
-        print(f"\n  [skip] videos (--skip-videos); place the {{id}}.mp4 clips under: {videos}")
+        print(
+            f"\n  [skip] videos (--skip-videos); place the {{id}}.mp4 clips under: {videos}"
+        )
     elif glob.glob(os.path.join(videos, "*.mp4")):
         print(f"\n  [skip] videos already present under {videos}")
     else:
@@ -111,8 +163,9 @@ def main():
         zp = download(VIDEOS_URL, os.path.join(root, "Charades_v1_480.zip"))
         unzip(zp, root)
 
-    done_banner("Charades-STA", [f"paths.data:      {parquet}",
-                                 f"paths.video_dir: {videos}"])
+    done_banner(
+        "Charades-STA", [f"paths.data:      {parquet}", f"paths.video_dir: {videos}"]
+    )
 
 
 if __name__ == "__main__":

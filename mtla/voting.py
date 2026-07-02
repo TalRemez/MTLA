@@ -12,14 +12,15 @@ a fused score from its cluster's MTLA scores. The ``agg`` argument selects the f
 Works for both spatial boxes (use ``iou``) and temporal spans (use ``tiou``); pass the
 matching overlap function via ``iou_fn``.
 """
+
 from __future__ import annotations
 
 from typing import Sequence
 
 # Spatial/temporal IoU live in mtla.utils (the shared primitives home); re-exported here so
 # `from mtla.voting import iou, tiou` and `nms_fuse(..., iou_fn=iou)` keep working.
-from .utils import iou, tiou
-from .types import OverlapFn, Region
+from mtla.utils import iou, tiou
+from mtla.types import OverlapFn, Region
 
 CLUSTER_IOU = 0.5  # overlap threshold for "same prediction" across rollouts
 
@@ -27,7 +28,25 @@ CLUSTER_IOU = 0.5  # overlap threshold for "same prediction" across rollouts
 Candidate = tuple[Region, float, int]
 
 
-def _fuse(agg: str, rep_score: float, member_scores: Sequence[float], n_seeds: int) -> float:
+def _fuse(
+    agg: str, rep_score: float, member_scores: Sequence[float], n_seeds: int
+) -> float:
+    """Combine one NMS cluster's member scores into a single fused score.
+
+    Args:
+        agg: Fusion rule (see module docstring): ``"max"`` returns the cluster representative's
+            score, ``"support"`` scales it by the number of distinct seeds, ``"sum"`` adds all
+            member scores, ``"mean"`` averages them.
+        rep_score: Score of the cluster representative (the highest-scoring member).
+        member_scores: Scores of every candidate absorbed into the cluster (includes the rep).
+        n_seeds: Number of distinct rollout seeds represented in the cluster.
+
+    Returns:
+        The fused cluster score under ``agg``.
+
+    Raises:
+        ValueError: If ``agg`` is not one of the four known rules.
+    """
     if agg == "max":
         return rep_score
     if agg == "support":
@@ -39,20 +58,30 @@ def _fuse(agg: str, rep_score: float, member_scores: Sequence[float], n_seeds: i
     raise ValueError(f"unknown agg {agg!r}")
 
 
-def nms_fuse(candidates: Sequence[Candidate], iou_th: float = CLUSTER_IOU, agg: str = "max",
-             iou_fn: OverlapFn = iou) -> list[tuple[Region, float]]:
-    """Greedy NMS over pooled rollout candidates, with cluster-score fusion.
+def nms_fuse(
+    candidates: Sequence[Candidate],
+    iou_th: float = CLUSTER_IOU,
+    agg: str = "max",
+    iou_fn: OverlapFn = iou,
+) -> list[tuple[Region, float]]:
+    """Merge overlapping rollout candidates by greedy non-maximum suppression, then fuse each cluster.
+
+    Processes candidates from highest to lowest score. Each unclaimed candidate becomes a cluster
+    representative and absorbs every remaining candidate that overlaps it by ``>= iou_th``; the
+    cluster's members are then collapsed to one score via ``agg`` (see :func:`_fuse`). This both
+    de-duplicates predictions the model produced across rollouts and lets recurrence boost a score.
 
     Args:
-        candidates: list of ``(region, score, seed)``. ``region`` is a box or span, ``score``
-            is its MTLA value, ``seed`` identifies the rollout it came from.
-        iou_th: overlap at/above which a candidate is absorbed into a kept one.
-        agg: cluster fusion rule (see module docstring).
-        iou_fn: ``iou`` for boxes (default) or ``tiou`` for temporal spans.
+        candidates: Pooled candidates as ``(region, score, seed)`` triples, where ``region`` is a
+            box (``[x1,y1,x2,y2]``) or span (``[t0,t1]``), ``score`` is its MTLA value, and ``seed``
+            identifies the rollout it came from.
+        iou_th: Overlap at or above which a candidate is absorbed into the current cluster.
+        agg: Cluster fusion rule passed to :func:`_fuse` (``max`` / ``sum`` / ``support`` / ``mean``).
+        iou_fn: Overlap function — :func:`mtla.utils.iou` for boxes, :func:`mtla.utils.tiou` for spans.
 
     Returns:
-        list of ``(region, fused_score)`` for the kept (non-suppressed) predictions,
-        in descending score order before fusion.
+        One ``(region, fused_score)`` per kept (representative) cluster, in the greedy processing
+        order (descending representative score).
     """
     order = sorted(range(len(candidates)), key=lambda i: -candidates[i][1])
     taken = [False] * len(candidates)

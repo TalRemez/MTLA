@@ -5,35 +5,55 @@ averaged over the prediction's tokens), this upsamples and smooths it into a tur
 so you can *see* whether the model looked inside the box it drew. Distilled from the figure
 script used for the paper's qualitative panels.
 """
+
 from __future__ import annotations
 
 import numpy as np
 
 RED = "#E7263F"
-SIGMA = 1.2       # gaussian smoothing (in upscaled-patch units)
-CLIP_PCT = 60     # percentile below which the overlay is fully transparent
+SIGMA = 1.2  # gaussian smoothing (in upscaled-patch units)
+CLIP_PCT = 60  # percentile below which the overlay is fully transparent
 FLOOR, AMAX = 0.45, 0.88  # min / max overlay opacity
 
 
 def heatmap(grid_map: np.ndarray, H: int, W: int) -> np.ndarray:
-    """Upsample a ``[grid_h, grid_w]`` attention map to image size ``(H, W)``, smooth it, and
-    normalize to ``[0, 1]`` by the map's own peak.
+    """Upsample, smooth, and peak-normalize a coarse attention map to image size.
 
-    No upper clipping: this previously divided by the 99th percentile and clipped to 1, which
-    flattened the hottest ~1% of cells into a saturated plateau and hid the falloff at the edges of
-    the attended region. We instead keep the full positive range, then renormalize the *smoothed*
-    map to its own maximum — the peak sits at 1.0 and the whole gradient (edges included) shows."""
+    Nearest-neighbor upsamples the ``[grid_h, grid_w]`` map to ``(H, W)``, Gaussian
+    smooths it, and normalizes to ``[0, 1]`` by the smoothed map's own maximum. No upper
+    clipping: an earlier version divided by the 99th percentile and clipped to 1, which
+    flattened the hottest ~1% of cells into a saturated plateau and hid the falloff at
+    the edges of the attended region. Keeping the full positive range and renormalizing
+    the smoothed map puts the peak at 1.0 while the whole gradient (edges included)
+    stays visible.
+
+    Args:
+        grid_map: coarse per-patch attention for one prediction, shape
+            ``[grid_h, grid_w]``.
+        H: target image height in pixels.
+        W: target image width in pixels.
+
+    Returns:
+        A ``(H, W)`` float32 array in ``[0, 1]`` with its peak at 1.0.
+    """
     from scipy.ndimage import gaussian_filter, zoom
 
     g = np.asarray(grid_map, dtype=np.float32)
     gh, gw = g.shape
-    up = zoom(np.clip(g, 0, None), (H / gh, W / gw), order=0)   # keep full range, drop negatives only
+    up = zoom(
+        np.clip(g, 0, None), (H / gh, W / gw), order=0
+    )  # keep full range, drop negatives only
     up = gaussian_filter(up, SIGMA * max(H / gh, W / gw))
     return up / (up.max() + 1e-9)
 
 
-def overlay(image, grid_map: np.ndarray, box: list[float] | None = None,
-            out_path: str | None = None, title: str | None = None):
+def overlay(
+    image,
+    grid_map: np.ndarray,
+    box: list[float] | None = None,
+    out_path: str | None = None,
+    title: str | None = None,
+):
     """Save a turbo attention overlay of ``grid_map`` on ``image``.
 
     Args:
@@ -47,6 +67,7 @@ def overlay(image, grid_map: np.ndarray, box: list[float] | None = None,
         ``out_path`` if given, else the composited HxWx3 uint8 array.
     """
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
@@ -59,8 +80,14 @@ def overlay(image, grid_map: np.ndarray, box: list[float] | None = None,
     lo = np.percentile(hm, CLIP_PCT)
     t = np.clip((hm - lo) / (hm.max() - lo + 1e-9), 0, 1)
     alpha = np.where(hm <= lo, 0.0, FLOOR + (AMAX - FLOOR) * t)[..., None]
-    comp = ((1 - alpha) * img.astype(np.float32)
-            + alpha * (cmap(np.clip(hm, 0, 1))[..., :3] * 255)).clip(0, 255).astype(np.uint8)
+    comp = (
+        (
+            (1 - alpha) * img.astype(np.float32)
+            + alpha * (cmap(np.clip(hm, 0, 1))[..., :3] * 255)
+        )
+        .clip(0, 255)
+        .astype(np.uint8)
+    )
 
     if out_path is None and box is None and title is None:
         return comp
@@ -68,11 +95,19 @@ def overlay(image, grid_map: np.ndarray, box: list[float] | None = None,
     fig, ax = plt.subplots(figsize=(W / 100, H / 100), dpi=100)
     ax.imshow(comp, interpolation="none")
     if box is not None:
-        x1, y1, x2, y2 = box[0] * W / 1000, box[1] * H / 1000, box[2] * W / 1000, box[3] * H / 1000
-        ax.add_patch(Rectangle((x1, y1), x2 - x1, y2 - y1, ec="white", fc="none", lw=2.5))
+        x1, y1, x2, y2 = (
+            box[0] * W / 1000,
+            box[1] * H / 1000,
+            box[2] * W / 1000,
+            box[3] * H / 1000,
+        )
+        ax.add_patch(
+            Rectangle((x1, y1), x2 - x1, y2 - y1, ec="white", fc="none", lw=2.5)
+        )
     if title:
         ax.set_title(title, fontsize=11)
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
     fig.tight_layout(pad=0.2)
     if out_path is not None:
         fig.savefig(out_path, bbox_inches="tight", dpi=130)

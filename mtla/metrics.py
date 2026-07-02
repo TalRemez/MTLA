@@ -13,6 +13,7 @@ Protocols used in the paper:
                            evaluator vendored under ``third_party/moment_detr_eval``.
   * ``recall_at_iou``    — single-span temporal grounding (Charades): R@1 @ IoU thresholds + mIoU.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -28,11 +29,15 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
 # Vendored official Moment-DETR evaluator (QVHighlights).
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "third_party"))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "third_party"
+    ),
+)
 from moment_detr_eval.eval import compute_mr_ap, compute_mr_r1
 
-from .utils import tiou
+from mtla.utils import tiou
 
 
 def auroc(scores: Sequence[float], is_hallucinated: Sequence[bool]) -> float:
@@ -45,7 +50,7 @@ def auroc(scores: Sequence[float], is_hallucinated: Sequence[bool]) -> float:
     Returns:
         AUROC in ``[0, 1]``; the positive class is *grounded* (``not is_hallucinated``).
     """
-    y = 1 - np.asarray(is_hallucinated, dtype=np.int32)   # 1 = grounded (positive)
+    y = 1 - np.asarray(is_hallucinated, dtype=np.int32)  # 1 = grounded (positive)
     s = np.asarray(scores, dtype=np.float64)
     return float(roc_auc_score(y, s))
 
@@ -65,10 +70,18 @@ def coco_map(detections: list[dict], gt_json_path: str) -> dict:
         gt = COCO(gt_json_path)
         dt = gt.loadRes(detections)
         ev = COCOeval(gt, dt, "bbox")
-        ev.evaluate(); ev.accumulate(); ev.summarize()
+        ev.evaluate()
+        ev.accumulate()
+        ev.summarize()
     s = ev.stats
-    return {"mAP": s[0] * 100, "mAP50": s[1] * 100, "mAP75": s[2] * 100,
-            "AP_small": s[3] * 100, "AP_medium": s[4] * 100, "AP_large": s[5] * 100}
+    return {
+        "mAP": s[0] * 100,
+        "mAP50": s[1] * 100,
+        "mAP75": s[2] * 100,
+        "AP_small": s[3] * 100,
+        "AP_medium": s[4] * 100,
+        "AP_large": s[5] * 100,
+    }
 
 
 def moment_retrieval(submission: list[dict], ground_truth: list[dict]) -> dict:
@@ -83,13 +96,20 @@ def moment_retrieval(submission: list[dict], ground_truth: list[dict]) -> dict:
     """
     apd = compute_mr_ap(submission, ground_truth, num_workers=8)
     r1 = compute_mr_r1(submission, ground_truth)
-    return {"mAP": apd["average"], "mAP@0.5": apd["0.5"], "mAP@0.75": apd["0.75"],
-            "R1@0.5": r1["0.5"], "R1@0.7": r1["0.7"]}
+    return {
+        "mAP": apd["average"],
+        "mAP@0.5": apd["0.5"],
+        "mAP@0.75": apd["0.75"],
+        "R1@0.5": r1["0.5"],
+        "R1@0.7": r1["0.7"],
+    }
 
 
-def recall_at_iou(pred_spans: Sequence[list[float] | None],
-                  gt_spans: Sequence[list[float] | None],
-                  thresholds: Sequence[float] = (0.3, 0.5, 0.7)) -> dict:
+def recall_at_iou(
+    pred_spans: Sequence[list[float] | None],
+    gt_spans: Sequence[list[float] | None],
+    thresholds: Sequence[float] = (0.3, 0.5, 0.7),
+) -> dict:
     """Single-span temporal grounding metrics (Charades): R@1 at IoU thresholds + mIoU.
 
     Args:
@@ -100,8 +120,12 @@ def recall_at_iou(pred_spans: Sequence[list[float] | None],
     Returns:
         dict with ``R@{thr}`` (percent) for each threshold and ``mIoU``.
     """
-    ious = np.array([tiou(p, g) if (p is not None and g is not None) else 0.0
-                     for p, g in zip(pred_spans, gt_spans)])
+    ious = np.array(
+        [
+            tiou(p, g) if (p is not None and g is not None) else 0.0
+            for p, g in zip(pred_spans, gt_spans)
+        ]
+    )
     out = {f"R@{thr}": float(100 * np.mean(ious >= thr)) for thr in thresholds}
     out["mIoU"] = float(ious.mean()) if len(ious) else 0.0
     return out

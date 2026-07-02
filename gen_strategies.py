@@ -15,6 +15,7 @@ Both return the merged list of uniform generation records (``dataset.gen_record`
 record schema is owned by the dataset, so the strategies never touch it. Every record keeps its
 ``idx`` so generate.py can merge in a deterministic order.
 """
+
 import asyncio
 import json
 import os
@@ -40,13 +41,35 @@ from mtla.registry import resolve
 # ===========================================================================
 # Strategy A — async multi-engine vLLM pool (throughput on many small requests)
 # ===========================================================================
-def _pooled_cpu_worker(raw_queue, ready_queues, config_path: str, num_engines: int,
-                       worker_id: int) -> None:
-    """Build each item's vLLM request via ``model.build_request`` and route it round-robin to an
-    engine's ready-queue. Prep is CPU-only, so many run in parallel."""
+def _pooled_cpu_worker(
+    raw_queue, ready_queues, config_path: str, num_engines: int, worker_id: int
+) -> None:
+    """Build vLLM requests on the CPU and route them round-robin to the engines.
+
+    A pooled-strategy prep worker: it pulls raw items off ``raw_queue``, builds each
+    item's request via ``model.build_request``, and pushes the result onto the ready
+    queue of engine ``idx % num_engines``. Request prep is CPU-only, so many workers
+    run in parallel to keep the GPU engines fed. Runs in a spawned subprocess.
+
+    Args:
+        raw_queue: shared queue of ``(idx, item)`` tasks; a ``None`` sentinel signals
+            this worker to stop.
+        ready_queues: one per engine; the built request is enqueued on the engine
+            selected by ``idx % num_engines``.
+        config_path: path to the run config, reloaded to resolve the adapters.
+        num_engines: number of GPU engines, used for the round-robin routing.
+        worker_id: this prep worker's index, used only for log messages.
+
+    Returns:
+        None. Side effect: enqueues per-item request dicts (or ``skip``/``error``
+        markers) onto the ready queues.
+    """
     try:
-        os.environ["OMP_NUM_THREADS"] = "1"; os.environ["MKL_NUM_THREADS"] = "1"
-        import torch; torch.set_num_threads(1)
+        os.environ["OMP_NUM_THREADS"] = "1"
+        os.environ["MKL_NUM_THREADS"] = "1"
+        import torch
+
+        torch.set_num_threads(1)
         cfg = load_config(config_path)
         model, dataset = resolve(cfg.model, cfg.dataset)
         proc = model.gen_processor()
@@ -57,50 +80,107 @@ def _pooled_cpu_worker(raw_queue, ready_queues, config_path: str, num_engines: i
             idx, item = task
             try:
                 req = model.build_request(proc, item, dataset, cfg)
-                if req is None:                       # adapter chose to skip this item
-                    ready_queues[idx % num_engines].put({"idx": idx, "item": item, "skip": True})
+                if req is None:  # adapter chose to skip this item
+                    ready_queues[idx % num_engines].put(
+                        {"idx": idx, "item": item, "skip": True}
+                    )
                 else:
-                    ready_queues[idx % num_engines].put({"idx": idx, "item": item, **req})
+                    ready_queues[idx % num_engines].put(
+                        {"idx": idx, "item": item, **req}
+                    )
             except Exception:
-                print(f"[CPU {worker_id}] error idx {idx}: {traceback.format_exc()}", flush=True)
-                ready_queues[idx % num_engines].put({"idx": idx, "item": item, "error": True})
+                print(
+                    f"[CPU {worker_id}] error idx {idx}: {traceback.format_exc()}",
+                    flush=True,
+                )
+                ready_queues[idx % num_engines].put(
+                    {"idx": idx, "item": item, "error": True}
+                )
     except Exception:
         print(f"[CPU {worker_id}] FATAL: {traceback.format_exc()}", flush=True)
 
 
-def _pooled_gpu_worker(engine_id: int, gpu_ids_str: str, ready_queue, result_queue,
-                       config_path: str, args: dict) -> None:
-    """One vLLM AsyncLLMEngine on its GPU group; concurrently generates for queued requests and
-    puts ``dataset.gen_record`` records on result_queue."""
+def _pooled_gpu_worker(
+    engine_id: int,
+    gpu_ids_str: str,
+    ready_queue,
+    result_queue,
+    config_path: str,
+    args: dict,
+) -> None:
+    """Run one vLLM AsyncLLMEngine on a GPU group and generate for queued requests.
+
+    A pooled-strategy GPU worker: it pins its GPU group (via ``CUDA_VISIBLE_DEVICES``
+    before importing vLLM), builds a persistent ``AsyncLLMEngine``, and concurrently
+    decodes requests pulled from ``ready_queue`` (up to ``concurrency`` in flight),
+    emitting one ``dataset.gen_record`` per item onto ``result_queue``. Skipped or
+    errored items still emit an empty record so the parent's count stays exact. Runs
+    in a spawned subprocess.
+
+    Args:
+        engine_id: this engine's index, used for logging and cache-dir naming.
+        gpu_ids_str: comma-joined GPU indices for this engine's tensor-parallel group.
+        ready_queue: shared queue of built request dicts (or skip/error markers); a
+            ``None`` sentinel signals shutdown.
+        result_queue: queue the parent drains; receives one generation record per item.
+        config_path: path to the run config, reloaded to resolve the adapters.
+        args: tuning + sampling knobs (``tp``, ``max_model_len``, ``gpu_mem_util``,
+            ``concurrency``, ``temperature``, ``top_p``, ``max_new_tokens``, ``seed``).
+
+    Returns:
+        None. Side effect: puts generation records on ``result_queue``.
+
+    Raises:
+        SystemExit: exits the subprocess with code 1 on a fatal engine error.
+    """
     try:
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_ids_str
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
         # User-scoped cache root: on shared boxes a dir owned by another user under /tmp is not
         # writable, so per-user paths avoid cross-user PermissionErrors.
-        cache_dir = f"/tmp/vllm_cache_mtla_{os.environ.get('USER', 'u')}/engine_{engine_id}"
+        cache_dir = (
+            f"/tmp/vllm_cache_mtla_{os.environ.get('USER', 'u')}/engine_{engine_id}"
+        )
         os.makedirs(cache_dir, exist_ok=True)
         os.environ["VLLM_CACHE_ROOT"] = cache_dir
         from vllm import AsyncLLMEngine, AsyncEngineArgs, SamplingParams
         from vllm.utils import random_uuid
+
         cfg = load_config(config_path)
         model, dataset = resolve(cfg.model, cfg.dataset)
 
-        engine = AsyncLLMEngine.from_engine_args(AsyncEngineArgs(
-            model=model.model_id, tensor_parallel_size=args["tp"],
-            max_model_len=args["max_model_len"], gpu_memory_utilization=args["gpu_mem_util"],
-            max_num_seqs=args["concurrency"], max_num_batched_tokens=32768,
-            disable_log_stats=True, enforce_eager=False,
-            disable_custom_all_reduce=True, **model.vllm_engine_args(dataset)))
-        print(f"[Engine {engine_id}] ready (GPUs {gpu_ids_str}, TP={args['tp']})", flush=True)
-        sp_kwargs = dict(temperature=args["temperature"], top_p=args["top_p"],
-                         max_tokens=args["max_new_tokens"])
+        engine = AsyncLLMEngine.from_engine_args(
+            AsyncEngineArgs(
+                model=model.model_id,
+                tensor_parallel_size=args["tp"],
+                max_model_len=args["max_model_len"],
+                gpu_memory_utilization=args["gpu_mem_util"],
+                max_num_seqs=args["concurrency"],
+                max_num_batched_tokens=32768,
+                disable_log_stats=True,
+                enforce_eager=False,
+                disable_custom_all_reduce=True,
+                **model.vllm_engine_args(dataset),
+            )
+        )
+        print(
+            f"[Engine {engine_id}] ready (GPUs {gpu_ids_str}, TP={args['tp']})",
+            flush=True,
+        )
+        sp_kwargs = dict(
+            temperature=args["temperature"],
+            top_p=args["top_p"],
+            max_tokens=args["max_new_tokens"],
+        )
         if model.vllm_uses_seed(dataset.task):
             sp_kwargs["seed"] = args["seed"]
         sampling = SamplingParams(**sp_kwargs)
 
         async def run():
             local_q = asyncio.Queue(maxsize=args["concurrency"] * 2)
-            active = set(); stats = {"done": 0, "err": 0}; shutdown = False
+            active = set()
+            stats = {"done": 0, "err": 0}
+            shutdown = False
 
             def bridge() -> None:
                 while True:
@@ -111,6 +191,7 @@ def _pooled_gpu_worker(engine_id: int, gpu_ids_str: str, ready_queue, result_que
                             return
                     except queue.Empty:
                         continue
+
             loop = asyncio.get_event_loop()
             threading.Thread(target=bridge, daemon=True).start()
 
@@ -118,22 +199,37 @@ def _pooled_gpu_worker(engine_id: int, gpu_ids_str: str, ready_queue, result_que
                 try:
                     if task.get("error") or task.get("skip"):
                         rec = dataset.gen_record(cfg, task["item"], "")
-                        rec["idx"] = task["idx"]; result_queue.put(rec); stats["err"] += 1; return
+                        rec["idx"] = task["idx"]
+                        result_queue.put(rec)
+                        stats["err"] += 1
+                        return
                     final = None
-                    req = {"prompt": task["prompt"], "multi_modal_data": task["multi_modal_data"]}
+                    req = {
+                        "prompt": task["prompt"],
+                        "multi_modal_data": task["multi_modal_data"],
+                    }
                     if task.get("mm_processor_kwargs"):
                         req["mm_processor_kwargs"] = task["mm_processor_kwargs"]
                     async for r in engine.generate(req, sampling, random_uuid()):
                         final = r
                     response = final.outputs[0].text if final else ""
-                    trunc = len(final.outputs[0].token_ids) >= args["max_new_tokens"] if final else False
-                    rec = dataset.gen_record(cfg, task["item"], response, truncated=trunc)
+                    trunc = (
+                        len(final.outputs[0].token_ids) >= args["max_new_tokens"]
+                        if final
+                        else False
+                    )
+                    rec = dataset.gen_record(
+                        cfg, task["item"], response, truncated=trunc
+                    )
                     rec["idx"] = task["idx"]
-                    result_queue.put(rec); stats["done"] += 1
+                    result_queue.put(rec)
+                    stats["done"] += 1
                 except Exception:
                     print(f"[Engine {engine_id}] {traceback.format_exc()}", flush=True)
                     rec = dataset.gen_record(cfg, task["item"], "")
-                    rec["idx"] = task["idx"]; result_queue.put(rec); stats["err"] += 1
+                    rec["idx"] = task["idx"]
+                    result_queue.put(rec)
+                    stats["err"] += 1
                 finally:
                     active.discard(asyncio.current_task())
 
@@ -144,15 +240,22 @@ def _pooled_gpu_worker(engine_id: int, gpu_ids_str: str, ready_queue, result_que
                     except asyncio.QueueEmpty:
                         break
                     if task is None:
-                        shutdown = True; break
+                        shutdown = True
+                        break
                     active.add(asyncio.create_task(infer(task)))
                 if active:
-                    _, active = await asyncio.wait(active, timeout=0.1, return_when=asyncio.FIRST_COMPLETED)
+                    _, active = await asyncio.wait(
+                        active, timeout=0.1, return_when=asyncio.FIRST_COMPLETED
+                    )
                 else:
                     await asyncio.sleep(0.05)
             if active:
                 await asyncio.gather(*active, return_exceptions=True)
-            print(f"[Engine {engine_id}] done={stats['done']} err={stats['err']}", flush=True)
+            print(
+                f"[Engine {engine_id}] done={stats['done']} err={stats['err']}",
+                flush=True,
+            )
+
         asyncio.run(run())
     except Exception:
         print(f"[Engine {engine_id}] FATAL: {traceback.format_exc()}", flush=True)
@@ -160,26 +263,64 @@ def _pooled_gpu_worker(engine_id: int, gpu_ids_str: str, ready_queue, result_que
 
 
 def run_pooled(cfg, samples: list, args: dict) -> list:
-    """Async multi-engine vLLM pool. ``args`` holds tuning + effective sampling knobs. Returns the
-    merged list of generation records."""
+    """Run generation via an async multi-engine vLLM pool (throughput strategy).
+
+    Spins up one ``AsyncLLMEngine`` per tensor-parallel GPU group plus a set of CPU
+    prep workers, streams the samples through the raw queue, and drains one generation
+    record per sample from the result queue (with a live throughput/ETA log), then
+    shuts the workers down. Best for many small requests (e.g. thousands of images).
+
+    Args:
+        cfg: the loaded run config (provides the generate-stage GPUs and config path).
+        samples: the tagged work items to generate for (each carries an ``idx``).
+        args: tuning + effective sampling knobs (``tp``, ``max_model_len``,
+            ``gpu_mem_util``, ``concurrency``, ``num_cpu_workers``, ``temperature``,
+            ``top_p``, ``max_new_tokens``, ``seed``).
+
+    Returns:
+        The merged list of ``dataset.gen_record`` records (one per sample), unordered;
+        the caller sorts by ``idx``.
+
+    Raises:
+        AssertionError: if the number of GPUs is not divisible by the tensor-parallel
+            size ``tp``.
+    """
     gpu_ids = cfg.stage_gpus("generate")
     tp = args["tp"]
     assert len(gpu_ids) % tp == 0, f"#GPUs {len(gpu_ids)} not divisible by TP {tp}"
-    groups = [gpu_ids[i:i + tp] for i in range(0, len(gpu_ids), tp)]
+    groups = [gpu_ids[i : i + tp] for i in range(0, len(gpu_ids), tp)]
     num_engines = len(groups)
-    print(f"[pooled] samples={len(samples)} engines={num_engines} TP={tp} GPUs={groups}", flush=True)
+    print(
+        f"[pooled] samples={len(samples)} engines={num_engines} TP={tp} GPUs={groups}",
+        flush=True,
+    )
 
     raw_q = mp.Queue()
     ready_qs = [mp.Queue(maxsize=500) for _ in range(num_engines)]
     result_q = mp.Queue()
-    gpu_procs = [mp.Process(target=_pooled_gpu_worker,
-                            args=(i, ",".join(map(str, g)), ready_qs[i], result_q, cfg.config_path, args))
-                 for i, g in enumerate(groups)]
+    gpu_procs = [
+        mp.Process(
+            target=_pooled_gpu_worker,
+            args=(
+                i,
+                ",".join(map(str, g)),
+                ready_qs[i],
+                result_q,
+                cfg.config_path,
+                args,
+            ),
+        )
+        for i, g in enumerate(groups)
+    ]
     for p in gpu_procs:
         p.start()
-    cpu_procs = [mp.Process(target=_pooled_cpu_worker,
-                            args=(raw_q, ready_qs, cfg.config_path, num_engines, i))
-                 for i in range(args["num_cpu_workers"])]
+    cpu_procs = [
+        mp.Process(
+            target=_pooled_cpu_worker,
+            args=(raw_q, ready_qs, cfg.config_path, num_engines, i),
+        )
+        for i in range(args["num_cpu_workers"])
+    ]
     for p in cpu_procs:
         p.start()
     for idx, item in enumerate(samples):
@@ -187,19 +328,25 @@ def run_pooled(cfg, samples: list, args: dict) -> list:
     for _ in range(args["num_cpu_workers"]):
         raw_q.put(None)
 
-    results = []; start = time.time(); last = start
+    results = []
+    start = time.time()
+    last = start
     while len(results) < len(samples):
         try:
             results.append(result_q.get(timeout=300))
             now = time.time()
             if now - last > 10:
                 spd = len(results) / (now - start)
-                print(f"  [{len(results)}/{len(samples)}] {spd:.1f}/s "
-                      f"ETA {(len(samples)-len(results))/max(spd,1e-9):.0f}s", flush=True)
+                print(
+                    f"  [{len(results)}/{len(samples)}] {spd:.1f}/s "
+                    f"ETA {(len(samples)-len(results))/max(spd,1e-9):.0f}s",
+                    flush=True,
+                )
                 last = now
         except queue.Empty:
             if not any(p.is_alive() for p in gpu_procs):
-                print("[pooled] all GPU workers died!", flush=True); break
+                print("[pooled] all GPU workers died!", flush=True)
+                break
     for p in cpu_procs:
         p.join(timeout=30)
     for q in ready_qs:
@@ -214,24 +361,59 @@ def run_pooled(cfg, samples: list, args: dict) -> list:
 # ===========================================================================
 # Strategy B — one blocking engine per GPU (heavy per-item work)
 # ===========================================================================
-def _sharded_worker(rank: int, gpu_id: int, items: list, out_dir: str, config_path: str,
-                    args: dict) -> None:
-    """One GPU worker. Pins its GPU (CUDA_VISIBLE_DEVICES before torch import), builds an offline
-    vLLM engine, loops its chunk, and writes preds_rank{rank}.json."""
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)   # BEFORE torch import (vLLM grabs device 0)
+def _sharded_worker(
+    rank: int, gpu_id: int, items: list, out_dir: str, config_path: str, args: dict
+) -> None:
+    """Generate for one chunk of items on a single GPU with a blocking vLLM engine.
+
+    A sharded-strategy worker: it pins its GPU (via ``CUDA_VISIBLE_DEVICES`` before
+    importing vLLM), builds one blocking ``LLM`` engine, and loops its chunk one item
+    at a time, writing the resulting records to a per-rank shard file. Items that fail
+    or produce an empty response are skipped. Runs in a spawned subprocess.
+
+    Args:
+        rank: this worker's shard index; used to name the output shard file.
+        gpu_id: the absolute GPU index this worker pins to (seen as cuda:0 inside).
+        items: this worker's slice of work items.
+        out_dir: directory to write ``preds_rank{rank}.json`` into (created if missing).
+        config_path: path to the run config, reloaded to resolve the adapters.
+        args: sampling knobs (``temperature``, ``top_p``, ``max_new_tokens``, ``seed``).
+
+    Returns:
+        None. Side effect: writes ``<out_dir>/preds_rank{rank}.json`` with this shard's
+        generation records.
+    """
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(
+        gpu_id
+    )  # BEFORE torch import (vLLM grabs device 0)
     from vllm import LLM, SamplingParams
+
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
     temperature = args["temperature"]
-    print(f"[worker {rank}] sharded model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
-          f"n={len(items)} seed={args['seed']} T={temperature}", flush=True)
+    print(
+        f"[worker {rank}] sharded model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
+        f"n={len(items)} seed={args['seed']} T={temperature}",
+        flush=True,
+    )
 
     proc = model.gen_processor()
-    llm = LLM(model=model.model_id, gpu_memory_utilization=0.90, enforce_eager=False,
-              disable_log_stats=True, **model.vllm_engine_args(dataset))
-    sp_kwargs = (dict(temperature=temperature, top_p=args["top_p"], max_tokens=args["max_new_tokens"])
-                 if temperature and temperature > 0
-                 else dict(temperature=0.0, max_tokens=args["max_new_tokens"]))
+    llm = LLM(
+        model=model.model_id,
+        gpu_memory_utilization=0.90,
+        enforce_eager=False,
+        disable_log_stats=True,
+        **model.vllm_engine_args(dataset),
+    )
+    sp_kwargs = (
+        dict(
+            temperature=temperature,
+            top_p=args["top_p"],
+            max_tokens=args["max_new_tokens"],
+        )
+        if temperature and temperature > 0
+        else dict(temperature=0.0, max_tokens=args["max_new_tokens"])
+    )
     if model.vllm_uses_seed(dataset.task) and temperature and temperature > 0:
         sp_kwargs["seed"] = args["seed"]
     sp = SamplingParams(**sp_kwargs)
@@ -242,7 +424,10 @@ def _sharded_worker(rank: int, gpu_id: int, items: list, out_dir: str, config_pa
             req = model.build_request(proc, item, dataset, cfg)
             if req is None:
                 continue
-            gen_req = {"prompt": req["prompt"], "multi_modal_data": req["multi_modal_data"]}
+            gen_req = {
+                "prompt": req["prompt"],
+                "multi_modal_data": req["multi_modal_data"],
+            }
             if req.get("mm_processor_kwargs"):
                 gen_req["mm_processor_kwargs"] = req["mm_processor_kwargs"]
             out = llm.generate([gen_req], sp, use_tqdm=False)
@@ -255,29 +440,61 @@ def _sharded_worker(rank: int, gpu_id: int, items: list, out_dir: str, config_pa
         except Exception as e:
             print(f"[worker {rank}] skip {cnt}: {e}", flush=True)
         if (cnt + 1) % 25 == 0:
-            print(f"[worker {rank}] [{cnt+1}/{len(items)}] done={len(results)}", flush=True)
+            print(
+                f"[worker {rank}] [{cnt+1}/{len(items)}] done={len(results)}",
+                flush=True,
+            )
 
     os.makedirs(out_dir, exist_ok=True)
     with open(f"{out_dir}/preds_rank{rank}.json", "w") as f:
         json.dump(results, f)
-    print(f"[worker {rank}] saved {len(results)} -> {out_dir}/preds_rank{rank}.json", flush=True)
+    print(
+        f"[worker {rank}] saved {len(results)} -> {out_dir}/preds_rank{rank}.json",
+        flush=True,
+    )
 
 
 def run_sharded(cfg, samples: list, args: dict, out_dir: str) -> list:
-    """One blocking engine per GPU. Writes per-rank shards under ``out_dir``, then merges + returns."""
+    """Run generation via one blocking vLLM engine per GPU (heavy-per-item strategy).
+
+    Splits the samples evenly across the generate-stage GPUs, spawns one
+    ``_sharded_worker`` per GPU, joins them, then merges their per-rank shard files.
+    Best for heavy per-item work such as video clips. Fails loudly if any worker
+    crashes, since a missing shard would silently produce an incomplete run.
+
+    Args:
+        cfg: the loaded run config (provides the generate-stage GPUs and config path).
+        samples: the tagged work items to generate for.
+        args: sampling knobs passed through to each worker (see ``_sharded_worker``).
+        out_dir: directory the workers write their per-rank shards into.
+
+    Returns:
+        The merged list of generation records read back from the per-rank shard files.
+
+    Raises:
+        SystemExit: if one or more workers exit with a non-zero code, listing the
+            failed ``(rank, exitcode)`` pairs; the shards on disk are incomplete.
+    """
     gpu_ids = cfg.stage_gpus("generate")
     print(f"[sharded] samples={len(samples)} gpus={gpu_ids}", flush=True)
     procs = []
-    for rank, (gpu, chunk) in enumerate(zip(gpu_ids, np.array_split(samples, len(gpu_ids)))):
+    for rank, (gpu, chunk) in enumerate(
+        zip(gpu_ids, np.array_split(samples, len(gpu_ids)))
+    ):
         if len(chunk) == 0:
             continue
-        p = mp.Process(target=_sharded_worker,
-                       args=(rank, gpu, list(chunk), out_dir, cfg.config_path, args))
-        p.start(); procs.append((rank, p))
+        p = mp.Process(
+            target=_sharded_worker,
+            args=(rank, gpu, list(chunk), out_dir, cfg.config_path, args),
+        )
+        p.start()
+        procs.append((rank, p))
     failed = [(rank, p.exitcode) for rank, p in procs if (p.join() or p.exitcode != 0)]
     if failed:
-        raise SystemExit(f"[sharded] {len(failed)} worker(s) failed (rank, exitcode): {failed}; "
-                         f"shards under {out_dir} are INCOMPLETE — fix the error and re-run.")
+        raise SystemExit(
+            f"[sharded] {len(failed)} worker(s) failed (rank, exitcode): {failed}; "
+            f"shards under {out_dir} are INCOMPLETE — fix the error and re-run."
+        )
     merged = []
     for rank in range(len(gpu_ids)):
         pp = f"{out_dir}/preds_rank{rank}.json"

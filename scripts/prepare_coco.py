@@ -16,6 +16,7 @@ annotation order. No prompt is stored here — the prompt is the single source i
     python -m scripts.prepare_coco            # -> data/coco/
     python -m scripts.prepare_coco --out /data/coco
 """
+
 import argparse
 import json
 import os
@@ -25,8 +26,24 @@ from scripts.prep_utils import download, unzip, out_dir, done_banner
 IMAGES_URL = "http://images.cocodataset.org/zips/val2017.zip"
 ANNOS_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 
+
 def build_openvocab(instances_json: str, images_dir: str, out_json: str) -> int:
-    """Build coco_val_openvocab_80.json from instances_val2017.json (matches the paper's file)."""
+    """Build the open-vocabulary COCO dataset JSON from the instances annotations.
+
+    Emits one record per image with the class names present, the object count, and the
+    ground-truth boxes scaled to ``[0, 1000]`` (the Qwen/InternVL grounding convention),
+    keeping COCO's annotation order and dropping ``iscrowd`` regions. Matches the exact
+    file the paper's ``coco`` adapter loads.
+
+    Args:
+        instances_json: path to ``instances_val2017.json`` (COCO GT).
+        images_dir: directory holding the ``val2017`` images; joined into each record's
+            ``image`` path.
+        out_json: path to write the open-vocab dataset JSON to.
+
+    Returns:
+        The number of image records written.
+    """
     import contextlib
     import io
     from pycocotools.coco import COCO
@@ -45,30 +62,50 @@ def build_openvocab(instances_json: str, images_dir: str, out_json: str) -> int:
             if a.get("iscrowd", 0):
                 continue  # skip crowd regions (large blanket boxes); matches the paper's dataset
             x, y, w, h = a["bbox"]
-            gt.append({
-                "bbox_2d": [round(x / W * 1000), round(y / H * 1000),
-                            round((x + w) / W * 1000), round((y + h) / H * 1000)],
-                "label": cat_name[a["category_id"]],
-            })
+            gt.append(
+                {
+                    "bbox_2d": [
+                        round(x / W * 1000),
+                        round(y / H * 1000),
+                        round((x + w) / W * 1000),
+                        round((y + h) / H * 1000),
+                    ],
+                    "label": cat_name[a["category_id"]],
+                }
+            )
         categories = sorted({g["label"] for g in gt})
-        records.append({
-            "id": iid,
-            "image": os.path.join(images_dir, img["file_name"]),
-            "categories": categories,
-            "num_objects": len(gt),
-            "gt": gt,                      # [{bbox_2d:[x1,y1,x2,y2] in [0,1000], label}, ...]
-        })
+        records.append(
+            {
+                "id": iid,
+                "image": os.path.join(images_dir, img["file_name"]),
+                "categories": categories,
+                "num_objects": len(gt),
+                "gt": gt,  # [{bbox_2d:[x1,y1,x2,y2] in [0,1000], label}, ...]
+            }
+        )
     with open(out_json, "w") as f:
         json.dump(records, f)
     return len(records)
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=None, help="output dir (default: <repo>/data/coco)")
-    ap.add_argument("--skip-images", action="store_true",
-                    help="skip the ~1GB val2017 image download (annotations + JSON only)")
+    """Download COCO val2017 and build the open-vocab dataset JSON.
+
+    Fetches the annotations (and, unless ``--skip-images``, the val2017 images) into
+    the ``--out`` directory, then builds ``coco_val_openvocab_80.json`` and prints the
+    config paths to set.
+    """
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out", default=None, help="output dir (default: <repo>/data/coco)"
+    )
+    ap.add_argument(
+        "--skip-images",
+        action="store_true",
+        help="skip the ~1GB val2017 image download (annotations + JSON only)",
+    )
     args = ap.parse_args()
     root = out_dir(args.out, "coco")
 
@@ -90,8 +127,7 @@ def main():
     n = build_openvocab(instances, images_dir, out_json)
     print(f"  built {out_json}  ({n} images)")
 
-    done_banner("COCO", [f"paths.data:    {out_json}",
-                         f"paths.coco_gt: {instances}"])
+    done_banner("COCO", [f"paths.data:    {out_json}", f"paths.coco_gt: {instances}"])
 
 
 if __name__ == "__main__":

@@ -17,11 +17,12 @@ pieces:
 Adapter modules are *discovered* (not eagerly imported) on the first ``resolve`` / ``available_*``
 call, so a config's ``model:`` / ``dataset:`` keys resolve to classes without a central list.
 """
-from .mtla_attn import mtla_localized_attention
-from .score import ALL_LAYERS, DEFAULT_BAND, LAYER_BANDS, mtla_score, reduce_band
-from .voting import iou, nms_fuse, tiou
-from .metrics import auroc, coco_map, moment_retrieval, recall_at_iou
-from .registry import (
+
+from mtla.mtla_attn import mtla_localized_attention
+from mtla.score import ALL_LAYERS, DEFAULT_BAND, LAYER_BANDS, mtla_score, reduce_band
+from mtla.voting import iou, nms_fuse, tiou
+from mtla.metrics import auroc, coco_map, moment_retrieval, recall_at_iou
+from mtla.registry import (
     resolve,
     register_model,
     register_dataset,
@@ -31,11 +32,23 @@ from .registry import (
 
 __all__ = [
     "mtla_localized_attention",
-    "DEFAULT_BAND", "ALL_LAYERS", "LAYER_BANDS", "reduce_band", "mtla_score",
-    "nms_fuse", "iou", "tiou",
-    "auroc", "coco_map", "moment_retrieval", "recall_at_iou",
-    "resolve", "register_model", "register_dataset",
-    "available_models", "available_datasets",
+    "DEFAULT_BAND",
+    "ALL_LAYERS",
+    "LAYER_BANDS",
+    "reduce_band",
+    "mtla_score",
+    "nms_fuse",
+    "iou",
+    "tiou",
+    "auroc",
+    "coco_map",
+    "moment_retrieval",
+    "recall_at_iou",
+    "resolve",
+    "register_model",
+    "register_dataset",
+    "available_models",
+    "available_datasets",
 ]
 
 __version__ = "0.1.0"

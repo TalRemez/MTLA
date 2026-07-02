@@ -9,6 +9,7 @@ exactly the rollouts that were extracted.
     python -m score --config configs/coco_internvl.yaml
     python -m score --config configs/coco_internvl.yaml --agg sum   # COCO N=16 voting headline
 """
+
 import argparse
 
 from mtla.config import load_config
@@ -18,9 +19,18 @@ from mtla.data.base import print_metrics
 
 
 def main() -> None:
+    """Parse CLI args and run the scoring stage, printing the benchmark metrics.
+
+    Applies the ``--config``/``--agg`` overrides, resolves the dataset adapter, and
+    calls ``mtla.evaluate.run_score``, which loads the extracted shards, reduces and
+    votes over the auto-discovered rollouts (no ``--n``), and computes the AUROC plus
+    the task metric; the result is then pretty-printed.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
-    ap.add_argument("--agg", default=None, help="override score.agg (max|sum|support|mean)")
+    ap.add_argument(
+        "--agg", default=None, help="override score.agg (max|sum|support|mean)"
+    )
     args = ap.parse_args()
 
     cfg = load_config(args.config)

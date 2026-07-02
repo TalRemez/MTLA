@@ -22,6 +22,7 @@ Everything model/dataset specific lives behind the adapter contract:
 
 Writes ``<predictions>/seed{K}/predictions.json`` (merged + idx-sorted across workers).
 """
+
 import argparse
 import json
 import os
@@ -38,22 +39,49 @@ from mtla.registry import resolve
 
 
 def generate_seed(cfg, model, dataset, seed: int, tuning: dict) -> None:
-    """Generate one rollout ``seed`` and write its predictions.json."""
+    """Generate one rollout for a single ``seed`` and write its predictions.json.
+
+    Loads the dataset work items, tags each with a deterministic ``idx``, resolves
+    the sampling temperature for this seed (rollout 0 may be a greedy anchor), then
+    dispatches to the execution strategy the dataset declares and writes the merged,
+    idx-sorted results to ``<predictions>/seed{seed}/predictions.json``.
+
+    Args:
+        cfg: the loaded run config (model/dataset names, paths, sampling knobs).
+        model: the resolved model adapter (builds vLLM requests).
+        dataset: the resolved dataset adapter (owns items, records, and the
+            generation strategy name).
+        seed: the rollout index; also seeds vLLM sampling when the model uses it.
+        tuning: backend tuning knobs (``tp``, ``max_model_len``, ``gpu_mem_util``,
+            ``concurrency``, ``num_cpu_workers``); the pooled path uses all of them,
+            the sharded path uses only the sampling knobs.
+
+    Returns:
+        None. Side effect: writes ``predictions.json`` for this seed.
+    """
     # rollout 0 may be a greedy anchor (T=0) if the dataset/config asks for it; else config temp.
     temperature = cfg.gen_temperature(seed, dataset.greedy_seed0)
     pred_dir = cfg.pred_dir(seed)
 
-    items = dataset.load_items(cfg)                    # the dataset owns its file I/O
+    items = dataset.load_items(cfg)  # the dataset owns its file I/O
     if cfg.generate.n_items:
-        items = items[:cfg.generate.n_items]
+        items = items[: cfg.generate.n_items]
     for i, it in enumerate(items):
-        it.setdefault("idx", i)                        # tag each item so workers can merge in order
+        it.setdefault("idx", i)  # tag each item so workers can merge in order
 
     # Effective sampling knobs (from the config) + backend tuning knobs, handed to the strategy.
-    sargs = {"seed": seed, "temperature": temperature, "top_p": cfg.generate.top_p,
-             "max_new_tokens": cfg.generate.max_new_tokens, **tuning}
-    print(f"[generate] model={cfg.model} dataset={cfg.dataset} task={dataset.task} "
-          f"strategy={dataset.gen_strategy} seed={seed} T={temperature} n={len(items)}", flush=True)
+    sargs = {
+        "seed": seed,
+        "temperature": temperature,
+        "top_p": cfg.generate.top_p,
+        "max_new_tokens": cfg.generate.max_new_tokens,
+        **tuning,
+    }
+    print(
+        f"[generate] model={cfg.model} dataset={cfg.dataset} task={dataset.task} "
+        f"strategy={dataset.gen_strategy} seed={seed} T={temperature} n={len(items)}",
+        flush=True,
+    )
 
     # The dataset declares HOW work is spread over GPUs: an async engine pool for many small
     # requests (images), or one blocking engine per GPU for heavy per-item work (video clips).
@@ -62,32 +90,71 @@ def generate_seed(cfg, model, dataset, seed: int, tuning: dict) -> None:
     else:
         results = run_sharded(cfg, items, sargs, pred_dir)
 
-    results.sort(key=lambda r: r.get("idx", 0))        # restore item order (workers finish out of order)
+    results.sort(
+        key=lambda r: r.get("idx", 0)
+    )  # restore item order (workers finish out of order)
     os.makedirs(pred_dir, exist_ok=True)
     with open(os.path.join(pred_dir, "predictions.json"), "w") as f:
         json.dump(results, f, indent=2)
     n_ok = sum(1 for r in results if r.get("response"))
-    print(f"[generate] saved {len(results)} predictions ({n_ok} non-empty) -> "
-          f"{pred_dir}/predictions.json", flush=True)
+    print(
+        f"[generate] saved {len(results)} predictions ({n_ok} non-empty) -> "
+        f"{pred_dir}/predictions.json",
+        flush=True,
+    )
 
 
 def main() -> None:
+    """Parse CLI args and run the generation stage over every requested seed.
+
+    Applies the ``--config``/``--n``/``--gpus``/``--limit`` overrides, resolves the
+    adapters, fetches the model snapshot once in the parent and goes offline (so the
+    spawned workers load from the local cache and avoid Hub rate-limiting), then calls
+    ``generate_seed`` for each seed in ``0..n-1``.
+    """
     ap = argparse.ArgumentParser(description="MTLA generation stage (vLLM).")
     ap.add_argument("--config", required=True, help="path to a configs/*.yaml")
-    ap.add_argument("--n", type=int, default=None,
-                    help="number of rollouts to produce (seeds 0..n-1; default 1)")
-    ap.add_argument("--gpus", type=int, nargs="+", default=None,
-                    help="GPU indices to run on (default: all visible GPUs)")
-    ap.add_argument("--limit", type=int, default=None,
-                    help="run on only the first N items (e.g. 100 for a quick test); "
-                         "default: the full set")
+    ap.add_argument(
+        "--n",
+        type=int,
+        default=None,
+        help="number of rollouts to produce (seeds 0..n-1; default 1)",
+    )
+    ap.add_argument(
+        "--gpus",
+        type=int,
+        nargs="+",
+        default=None,
+        help="GPU indices to run on (default: all visible GPUs)",
+    )
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="run on only the first N items (e.g. 100 for a quick test); "
+        "default: the full set",
+    )
     # Backend tuning knobs (not part of the run config; tune per box). The pool uses all of them;
     # the sharded path uses only the sampling knobs (temperature/top_p/max_new_tokens/seed).
-    ap.add_argument("--tp", type=int, default=1, help="vLLM tensor-parallel size per engine (pooled)")
-    ap.add_argument("--max_model_len", type=int, default=16384, help="pooled vLLM engine context")
+    ap.add_argument(
+        "--tp",
+        type=int,
+        default=1,
+        help="vLLM tensor-parallel size per engine (pooled)",
+    )
+    ap.add_argument(
+        "--max_model_len", type=int, default=16384, help="pooled vLLM engine context"
+    )
     ap.add_argument("--gpu_mem_util", type=float, default=0.92)
-    ap.add_argument("--concurrency", type=int, default=32, help="pooled: in-flight requests per engine")
-    ap.add_argument("--num_cpu_workers", type=int, default=16, help="pooled: request-prep workers")
+    ap.add_argument(
+        "--concurrency",
+        type=int,
+        default=32,
+        help="pooled: in-flight requests per engine",
+    )
+    ap.add_argument(
+        "--num_cpu_workers", type=int, default=16, help="pooled: request-prep workers"
+    )
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -98,8 +165,13 @@ def main() -> None:
     if args.limit is not None:
         cfg.generate.n_items = args.limit
     model, dataset = resolve(cfg.model, cfg.dataset)
-    tuning = {"tp": args.tp, "max_model_len": args.max_model_len, "gpu_mem_util": args.gpu_mem_util,
-              "concurrency": args.concurrency, "num_cpu_workers": args.num_cpu_workers}
+    tuning = {
+        "tp": args.tp,
+        "max_model_len": args.max_model_len,
+        "gpu_mem_util": args.gpu_mem_util,
+        "concurrency": args.concurrency,
+        "num_cpu_workers": args.num_cpu_workers,
+    }
 
     # Fetch the model ONCE in the parent (weights + config + processor), then go offline so the
     # spawned workers load purely from the local snapshot. Without this each worker fetches
@@ -107,6 +179,7 @@ def main() -> None:
     # the IP rate-limited (HTTP 429). snapshot_download (not just the processor) is required because
     # vLLM, once offline, resolves model_id to the local snapshot dir and needs config.json + weights.
     from huggingface_hub import snapshot_download
+
     snapshot_download(model.model_id)
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"

@@ -16,6 +16,7 @@ the clips yourself under the `videos/` dir.
     python -m scripts.prepare_qvhighlights                # annotations + videos (~134GB)
     python -m scripts.prepare_qvhighlights --skip-videos  # annotations only
 """
+
 import argparse
 import glob
 import os
@@ -30,11 +31,23 @@ VIDEOS_URL = "https://nlp.cs.unc.edu/data/jielei/qvh/qvhilights_videos.tar.gz"
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=None, help="output dir (default: <repo>/data/qvhighlights)")
-    ap.add_argument("--skip-videos", action="store_true",
-                    help="skip the ~134GB raw-video download (annotations only)")
+    """Download the QVHighlights val annotations and (optionally) the clips.
+
+    Fetches ``highlight_val_release.jsonl`` (used as-is by the ``qvhighlights`` adapter)
+    into the ``--out`` directory; unless ``--skip-videos``, also downloads and extracts
+    the raw video tarball (~134GB, all splits), then prints the config paths to set.
+    """
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--out", default=None, help="output dir (default: <repo>/data/qvhighlights)"
+    )
+    ap.add_argument(
+        "--skip-videos",
+        action="store_true",
+        help="skip the ~134GB raw-video download (annotations only)",
+    )
     args = ap.parse_args()
     root = out_dir(args.out, "qvhighlights")
 
@@ -43,13 +56,17 @@ def main():
         download(ANNO_ZIP_URL, ann)
     except Exception as e:
         print(f"  [warn] could not fetch annotations automatically ({e}).")
-        print("        Get highlight_val_release.jsonl from https://github.com/jayleicn/moment_detr"
-              f"\n        (data/ dir) and place it at {ann}")
+        print(
+            "        Get highlight_val_release.jsonl from https://github.com/jayleicn/moment_detr"
+            f"\n        (data/ dir) and place it at {ann}"
+        )
 
     videos = os.path.join(root, "videos")
     if args.skip_videos:
         os.makedirs(videos, exist_ok=True)
-        print(f"\n  [skip] videos (--skip-videos); place the {{vid}}.mp4 clips under: {videos}")
+        print(
+            f"\n  [skip] videos (--skip-videos); place the {{vid}}.mp4 clips under: {videos}"
+        )
     elif glob.glob(os.path.join(videos, "*.mp4")):
         print(f"\n  [skip] videos already present under {videos}")
     else:
@@ -57,8 +74,9 @@ def main():
         tar = download(VIDEOS_URL, os.path.join(root, "qvhilights_videos.tar.gz"))
         untar(tar, root)
 
-    done_banner("QVHighlights", [f"paths.ann:       {ann}",
-                                 f"paths.video_dir: {videos}"])
+    done_banner(
+        "QVHighlights", [f"paths.ann:       {ann}", f"paths.video_dir: {videos}"]
+    )
 
 
 if __name__ == "__main__":
