@@ -63,6 +63,13 @@ class InternVLImageAdapter(ModelAdapter):
     attn_module_path = "transformers.models.qwen3.modeling_qwen3"
     modality_pad_token = IMAGE_TOKEN
     overlap = staticmethod(iou)  # boxes use spatial IoU for the hallucination test
+    # InternVL's native grounding syntax; this suffix elicits it (parse_response reads it). Matches
+    # the paper's COCO prompt for InternVL.
+    detection_prompt_suffix = (
+        " and output the bounding boxes in the format "
+        "<ref>category</ref><box>[[x1, y1, x2, y2], ...]</box> "
+        "with coordinates normalized to [0, 1000]."
+    )
 
     def parse_response(self, response: str) -> list["Prediction"]:
         """Parse InternVL native grounding output into detection predictions.
@@ -127,7 +134,7 @@ class InternVLImageAdapter(ModelAdapter):
         """
         # `item` is a raw dataset item (from load_items), not a generation record.
         image = Image.open(item["image"]).convert("RGB")
-        msgs = self._image_message(image, dataset.prompt(item))
+        msgs = self._image_message(image, self.build_text_prompt(dataset, item))
         prompt = proc.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True
         )

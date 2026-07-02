@@ -15,8 +15,8 @@ Example (configs/coco_internvl.yaml)::
     paths:
       data: data/coco/coco_val_openvocab_80.json
       coco_gt: data/coco/annotations/instances_val2017.json
-      predictions: runs/coco/predictions
-      features: runs/coco/features
+      predictions: runs/coco/internvl_image/predictions   # runs/<dataset>/<model>/... so two
+      features: runs/coco/internvl_image/features          # models on one dataset never collide
     generate: {temperature: 0.7, top_p: 1.0, max_new_tokens: 4096}
     score:    {agg: sum}
     band: [8, 21]              # inclusive middle-layer band; null = all layers

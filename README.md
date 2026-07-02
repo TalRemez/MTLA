@@ -215,9 +215,22 @@ four bounding-box coordinates $x_1, y_1, x_2, y_2$, the `label` token, and (righ
 per-token **mean** (the quantity MTLA scores). Grounded predictions concentrate attention **inside**
 the proposed box; hallucinations scatter it across the scene.
 
+It reads the Qwen3-VL COCO predictions the generate stage wrote (the same
+`rollout0/predictions.json`), so generate that first (a handful of images is plenty — the figure
+renders one prediction per target):
+
 ```bash
-python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml
+# 1. produce a few Qwen3-VL COCO predictions for the figure to read
+python -m generate --config configs/coco_qwen3vl.yaml --limit 10
+
+# 2. render the figure. --targets is <image_id>:<pred_idx>:<grounded|hallu> ...; pick image ids that
+#    are actually in your predictions (the defaults are the paper's Fig. 3 images).
+python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml \
+    --targets 397133:0:grounded --out figure_pertoken.png
 ```
+
+The figure is Qwen3-VL–specific (it reads Qwen's `bbox_2d` output format), so it only supports the
+`coco_qwen3vl` config.
 
 <p align="center">
   <img src="assets/figure_pertoken.png" width="100%" alt="Per-token attention: a grounded zebra concentrates attention inside its box; a hallucinated cow labeled horse scatters it across the scene"/>

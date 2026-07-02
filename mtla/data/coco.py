@@ -104,11 +104,12 @@ COCO_CLASSES = [
     "toothbrush",
 ]
 
-PROMPT = (
-    "Please detect all instances of {cats} in the image. "
-    "Output the bounding boxes in the format <ref>category</ref><box>[[x1, y1, x2, y2], ...]</box> "
-    "with coordinates normalized to [0, 1000]."
-)
+# Task only, no output-FORMAT instruction: the format is model-specific and lives on the model
+# adapter (ModelAdapter.detection_prompt_suffix), so the dataset states only the task. Each model
+# appends the phrasing that elicits its natural grounding syntax (Qwen: "... in JSON format." ->
+# {"bbox_2d","label"}; InternVL: the <ref>label</ref><box>[[...]]</box> template), which its own
+# parse_response reads. build_text_prompt(dataset, item) composes the two.
+PROMPT = "Locate all instances of {cats} in this image"
 
 
 @register_dataset("coco")
@@ -156,7 +157,8 @@ class CocoDataset(DatasetAdapter):
             item: The image item (unused; the class list is fixed).
 
         Returns:
-            The prompt asking for normalized boxes over the 80 COCO classes.
+            The task prompt asking to detect the 80 COCO classes (no output-format
+            instruction; the model answers in its own natural grounding format).
         """
         return PROMPT.format(cats=", ".join(COCO_CLASSES))
 

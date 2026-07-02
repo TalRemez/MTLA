@@ -210,7 +210,7 @@ def main():
     model, dataset = resolve(cfg.model, cfg.dataset)
     # This figure is Qwen3-VL-specific: it loads the model with the Qwen3-VL classes and patches the
     # Qwen3-VL attention module. Other model configs would load the wrong weights into that class.
-    if cfg.model != "qwen3vl" or cfg.dataset != "coco":
+    if cfg.model != "qwen3vl_image" or cfg.dataset != "coco":
         raise SystemExit(
             f"figure_pertoken only supports the Qwen3-VL COCO config, got model={cfg.model} "
             f"dataset={cfg.dataset}. Run: python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml"
@@ -257,13 +257,17 @@ def main():
             print(f"[skip] {iid}: not in dataset/predictions")
             continue
         di, pr = ds_by_id[iid], preds_by_id[iid]
-        pbs = pr.get("pred_bboxes") or []
+        # Parse the boxes from the stored response with the model's own parser (the record holds the
+        # raw response, not pre-parsed boxes), and read the prompt AS STORED (do not regenerate it —
+        # it must match what generation sent, exactly as the extract stage teacher-forces it).
+        pbs = [
+            {"label": p.label, "box": p.region}
+            for p in model.parse_response(pr["response"])
+        ]
         if pi >= len(pbs):
             print(f"[skip] {iid} pi={pi}: only {len(pbs)} predictions")
             continue
-        prompt = dataset.prompt(
-            di
-        )  # canonical COCO prompt (mtla.data.coco), same as the pipeline
+        prompt = pr["prompt"]
         img = Image.open(di["image"]).convert("RGB")
         text = proc.apply_chat_template(
             [

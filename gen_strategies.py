@@ -237,6 +237,11 @@ def _pooled_gpu_worker(
                             rec = dataset.gen_record(
                                 cfg, task["item"], sample.text, truncated=trunc
                             )
+                            # Store the EXACT prompt the model sent (task + its format suffix), so the
+                            # extract stage teacher-forces the identical prompt.
+                            rec["prompt"] = model.build_text_prompt(
+                                dataset, task["item"]
+                            )
                             rec["idx"] = task["idx"]
                             rec["rollout"] = rollout
                             recs.append(rec)
@@ -490,6 +495,9 @@ def _sharded_worker(
                 if not response:
                     continue
                 rec = dataset.gen_record(cfg, item, response)
+                # Store the EXACT prompt the model sent (task + its format suffix), so the extract
+                # stage teacher-forces the identical prompt.
+                rec["prompt"] = model.build_text_prompt(dataset, item)
                 rec["idx"] = item.get("idx", cnt)
                 rec["rollout"] = rollout
                 results.append(rec)

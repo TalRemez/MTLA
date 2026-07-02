@@ -85,6 +85,29 @@ class ModelAdapter:
     attn_module_path: str = ""
     # modality pad token; its prompt positions are the input-modality tokens MTLA scores against.
     modality_pad_token: str = ""
+    # Optional per-model output-format instruction appended to the dataset's task prompt. The dataset
+    # prompt states only the task ("detect all instances of ..."); a model that needs to be steered
+    # toward its natural syntax sets this (e.g. Qwen: "... in JSON format."; InternVL: the <ref>/<box>
+    # template). Empty by default (video models emit numeric spans without prompting).
+    detection_prompt_suffix: str = ""
+
+    def build_text_prompt(self, dataset: Any, item: dict) -> str:
+        """Compose the exact text prompt this model sends for one item.
+
+        The dataset owns the task (which classes / which query); the model owns the optional
+        output-format suffix. This is the single source of truth for the prompt: ``build_vllm_request``
+        sends it, and the generation record stores its return so the extract stage re-encodes the
+        identical prompt (teacher forcing) and the figure script reads it verbatim.
+
+        Args:
+            dataset: the dataset adapter (supplies ``prompt(item)`` — the task).
+            item: the raw dataset item.
+
+        Returns:
+            The bare text prompt: ``dataset.prompt(item)`` plus this model's
+            ``detection_prompt_suffix`` (empty for models that need no format steer).
+        """
+        return dataset.prompt(item) + self.detection_prompt_suffix
 
     # ---- pure, CPU-testable ----
     def parse_response(self, response: str) -> list["Prediction"]:

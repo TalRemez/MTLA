@@ -159,6 +159,9 @@ class Qwen3VLImageAdapter(Qwen3VLBase):
     modality_pad_token = "<|image_pad|>"
     mm_keys = ("pixel_values", "image_grid_thw")
     overlap = staticmethod(iou)  # boxes use spatial IoU for the hallucination test
+    # Qwen3-VL's natural detection syntax is a JSON list of {"bbox_2d","label"}; this suffix elicits
+    # it (parse_response reads that JSON). Matches the paper's COCO prompt for Qwen.
+    detection_prompt_suffix = " and output the bbox coordinates in JSON format."
 
     def parse_response(self, response: str) -> list["Prediction"]:
         """Parse Qwen detection JSON into predictions.
@@ -224,7 +227,7 @@ class Qwen3VLImageAdapter(Qwen3VLBase):
             processed image inputs (empty ``multi_modal_data`` if none were produced).
         """
         image = Image.open(item["image"]).convert("RGB")
-        msgs = self._image_message(image, dataset.prompt(item))
+        msgs = self._image_message(image, self.build_text_prompt(dataset, item))
         text = proc.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True
         )
@@ -420,7 +423,9 @@ class Qwen3VLVideoAdapter(Qwen3VLBase):
         if not os.path.exists(video_path):
             print(f"[generate] skip: video not found {video_path}", flush=True)
             return None
-        msgs = self._video_message(video_path, dataset.prompt(item), cfg.preprocess)
+        msgs = self._video_message(
+            video_path, self.build_text_prompt(dataset, item), cfg.preprocess
+        )
         text = proc.apply_chat_template(
             msgs, tokenize=False, add_generation_prompt=True
         )

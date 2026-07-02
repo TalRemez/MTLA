@@ -7,8 +7,8 @@ dataset: charades
 paths:
   data: data/charades/charades_sta_test.parquet              # Charades-STA test split (scripts/prepare_charades.py)
   video_dir: data/charades/Charades_v1_480                   # {video_id}.mp4 clips
-  predictions: runs/charades/predictions
-  features: runs/charades/features                           # rollout{K}/shard*.pt
+  predictions: runs/charades/qwen3vl_video/predictions       # rollout{K}/predictions.json
+  features: runs/charades/qwen3vl_video/features             # rollout{K}/shard*.pt
 
 generate:
   temperature: 0.7
