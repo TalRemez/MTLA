@@ -10,7 +10,8 @@ This is a standalone GPU script (Qwen3-VL, HF-eager): it runs one forward per im
 the full per-token spatial attention `[n_token, L, H, n_patch]`, then reduces each token group to a
 `grid_h x grid_w` map (mean over the group's sub-tokens, the middle-layer band L8–21, and heads).
 Unlike the `extract` stage it keeps the map *spatial* (no inside-region masking) — the figure is
-about where attention lands. Rendering reuses `mtla.viz` (turbo overlay).
+about where attention lands. Rendering reuses `mtla.utils.heatmap` (upsample + smooth) under a
+turbo overlay.
 
     python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml
     python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml \
@@ -38,6 +39,11 @@ BAND = list(range(8, 22))  # middle-layer band (mtla.DEFAULT_BAND)
 COLS = ["prediction", "$x_1$", "$y_1$", "$x_2$", "$y_2$", "label", "mean"]
 GROUNDED_C = "#1F6FEB"
 HALLU_C = "#E7263F"
+
+# Turbo-overlay opacity ramp: transparent below the CLIP_PCT percentile, then ramping
+# linearly from FLOOR to AMAX opacity up to the peak.
+CLIP_PCT = 60  # percentile below which the overlay is fully transparent
+FLOOR, AMAX = 0.45, 0.88  # min / max overlay opacity
 
 
 def parse_targets(specs):
@@ -197,7 +203,7 @@ def main():
 
     from mtla.config import load_config
     from mtla.registry import resolve
-    from mtla import viz
+    from mtla.utils import heatmap
 
     targets = parse_targets(args.targets) if args.targets else DEFAULT_TARGETS
     cfg = load_config(args.config)
@@ -396,13 +402,11 @@ def main():
         for ci, gmap in enumerate(r["variants"]):
             ax = axes[ri, ci + 1]
             g = gmap / colref[ci] if colref is not None else gmap
-            hm = viz.heatmap(g, H, W)
-            # opacity ramp (transparent below the CLIP percentile, ramping to AMAX) — matches mtla.viz
-            lo = np.percentile(hm, viz.CLIP_PCT)
+            hm = heatmap(g, H, W)
+            # opacity ramp: transparent below the CLIP percentile, ramping to AMAX
+            lo = np.percentile(hm, CLIP_PCT)
             tt = np.clip((hm - lo) / (hm.max() - lo + 1e-9), 0, 1)
-            al = np.where(hm <= lo, 0.0, viz.FLOOR + (viz.AMAX - viz.FLOOR) * tt)[
-                ..., None
-            ]
+            al = np.where(hm <= lo, 0.0, FLOOR + (AMAX - FLOOR) * tt)[..., None]
             comp = (
                 (
                     (1 - al) * img.astype(np.float32)

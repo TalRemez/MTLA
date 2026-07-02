@@ -1,103 +1,60 @@
-"""Score stage: turn extracted attention shards into benchmark numbers.
+"""Score stage: turn voted candidates into benchmark numbers.
 
-This module owns **all** of the score-stage computation, so the dataset adapters stay purely
-declarative (they only say *which* signal / overlap / metric to use — see ``mtla.data.base``).
-The pipeline here is:
+This module owns the metric-assembly half of the score stage; the pipeline itself is composed
+step-by-step in ``score.py`` (load + score shards → hallucination AUROC → ``mtla.voting.vote`` →
+metric). Two things live here:
 
-  1. load every rollout's feature shards (``<features>/seed{K}/shard*.pt``);
-  2. reduce each prediction's ``[L, H]`` array to one scalar MTLA score (``mtla.score.reduce_band``,
-     paper eq. 4);
-  3. single-rollout hallucination AUROC (how well the score separates grounded from hallucinated);
-  4. self-consistency voting: pool candidates across rollouts and fuse / select them
-     (``mtla.voting.nms_fuse`` for detection & multi-window, ``argmax`` for single-span);
-  5. hand the fused candidates to the benchmark's pure metric (``mtla.metrics``).
+  * ``hallucination_auroc`` — the single-rollout detection score reported for every benchmark
+    (how well the MTLA score separates grounded from hallucinated predictions);
+  * ``compute_metric`` + the ``_coco`` / ``_moment_retrieval`` / ``_recall`` handlers — turn the
+    voted candidate groups into the benchmark's task metric, dispatching on the dataset's declared
+    ``metric``.
 
-Steps 4-5 are the only dataset-shaped part; they dispatch on the dataset's declared ``metric``.
-Adding a dataset that reuses an existing metric needs no change here; a genuinely new metric adds
-one pure function in ``mtla.metrics`` and one handler below.
-
-The shards are the complete input: each saved object carries its region, label, hallucination flag,
-and ``[L, H]`` arrays; each record carries the item id + ground truth. Nothing is re-parsed and no
-model is loaded — this stage is CPU-only.
+This is the only dataset-shaped part of scoring: adding a dataset that reuses an existing metric
+needs no change here; a genuinely new metric adds one pure computer in ``mtla.metrics`` and one
+handler below. The candidates are the complete input — nothing is re-parsed and no model is
+loaded, so this stage is CPU-only.
 """
 
 from __future__ import annotations
 
 import json
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
-import numpy as np
-
-from mtla.data.base import load_shards
 from mtla.metrics import auroc, coco_map, moment_retrieval, recall_at_iou
-from mtla.score import reduce_band
-from mtla.utils import iou, tiou
-from mtla.voting import nms_fuse
-from mtla.types import ItemId, OverlapFn, Region
+from mtla.types import FusedGroups, ItemId, ScoredCand
 
 if TYPE_CHECKING:
     from mtla.config import RunConfig
     from mtla.data.base import DatasetAdapter
 
-_OVERLAP: dict[str, OverlapFn] = {"iou": iou, "tiou": tiou}
 
-# A flattened scored candidate (one prediction in one rollout) built by ``_candidates``.
-Cand = dict[str, Any]
-# Fused output: ranked (region, score) lists keyed by (item id, label).
-FusedGroups = dict[tuple[ItemId, str], list[tuple[Region, float]]]
+def compute_metric(
+    cfg: "RunConfig",
+    dataset: "DatasetAdapter",
+    voted: FusedGroups,
+    gt_by_id: dict[ItemId, list],
+) -> dict:
+    """Dispatch the voted candidates to the dataset's benchmark metric handler.
 
-
-def _candidates(
-    cfg: "RunConfig", dataset: "DatasetAdapter"
-) -> tuple[list[Cand], dict[ItemId, list], list[int]]:
-    """Load every rollout's shards and flatten them into scored candidates.
-
-    Walks the discovered feature-shard directories (one per rollout seed), reduces each
-    prediction's ``[L, H]`` attention array for the dataset's signal to a scalar MTLA
-    score via ``reduce_band`` over the config's layer band (paper eq. 4), and collects
-    every prediction as a flat candidate. This is the shared front end for both the
-    hallucination-AUROC and the voting/metric paths.
+    Looks up the handler named by ``dataset.metric`` (see the ``_coco`` / ``_moment_retrieval`` /
+    ``_recall`` handlers below) and runs it over the voted groups. This is the only dataset-shaped
+    step of the score stage.
 
     Args:
-        cfg: the run config, supplying the layer band, the seeds on disk, and the
-            per-seed feature directories.
-        dataset: the dataset adapter, supplying ``signal`` (which stored array to
-            reduce).
+        cfg: the run config (passed through to the handler, e.g. for the COCO GT path).
+        dataset: the dataset adapter, supplying ``metric`` (which handler to run).
+        voted: the voted groups from ``mtla.voting.vote``, keyed by ``(id, label)``.
+        gt_by_id: per-item ground truth from ``load_candidates``.
 
     Returns:
-        A tuple ``(cands, gt_by_id, seeds)`` where ``cands`` is a list of dicts
-        ``{id, label, region, score, hallu, extracted, seed}`` (one per prediction per
-        rollout), ``gt_by_id`` maps each item id to its ground-truth region list, and
-        ``seeds`` is the sorted list of rollout seeds found on disk.
+        The benchmark-specific metrics dict from the handler.
     """
-    band = cfg.band_indices()
-    signal = dataset.signal
-    seeds = cfg.extracted_seeds()  # discovered from <features>/seed*/, not a flag
-    cands: list[Cand] = []
-    gt_by_id: dict[ItemId, list] = {}
-    for seed in seeds:
-        for rec in load_shards(cfg.feat_dir(seed)):
-            gt_by_id[rec["id"]] = rec["gt"]
-            for o in rec["objects"]:
-                arr = cast(
-                    np.ndarray, dict(o)[signal]
-                )  # dynamic signal key (not a TypedDict literal)
-                cands.append(
-                    {
-                        "id": rec["id"],
-                        "label": o["label"],
-                        "region": o["region"],
-                        "score": float(reduce_band(arr.astype(np.float32), band)),
-                        "hallu": bool(o["is_hallucinated"]),
-                        "extracted": bool(o.get("extracted", True)),
-                        "seed": seed,
-                    }
-                )
-    return cands, gt_by_id, seeds
+    return _METRICS[dataset.metric](cfg, voted, gt_by_id)
 
 
-def _hallucination_auroc(cands: list[Cand]) -> float:
+def hallucination_auroc(cands: list[ScoredCand]) -> float:
     """Single-rollout hallucination AUROC over the extracted candidates.
 
     Restricts to rollout 0 (the deterministic anchor) and to candidates that actually
@@ -106,8 +63,8 @@ def _hallucination_auroc(cands: list[Cand]) -> float:
     independent of the voting path.
 
     Args:
-        cands: the flattened candidates from ``_candidates`` (each carries ``score``,
-            ``hallu``, ``seed``, and ``extracted``).
+        cands: the flattened candidates from ``load_candidates`` (each carries
+            ``score``, ``hallu``, ``seed``, and ``extracted``).
 
     Returns:
         The AUROC in ``[0, 1]`` (positive class is grounded), or ``nan`` when no
@@ -118,43 +75,8 @@ def _hallucination_auroc(cands: list[Cand]) -> float:
     return auroc(s, y) if s else float("nan")
 
 
-def _fuse_groups(
-    cands: list[Cand], overlap_fn: OverlapFn, agg: str, select: str
-) -> FusedGroups:
-    """Pool candidates per ``(id, label)`` and fuse or select across rollouts.
-
-    Implements the self-consistency step: candidates for the same item and label from
-    all rollouts are grouped, then either merged by NMS with cluster-score fusion
-    (``select="fuse"``, for detection and multi-window grounding) or reduced to the
-    single highest-scoring candidate (``select="argmax"``, for single-span grounding).
-
-    Args:
-        cands: the flattened candidates from ``_candidates``.
-        overlap_fn: region overlap function used by NMS (``iou`` for boxes, ``tiou``
-            for spans).
-        agg: the cluster-score aggregation mode for NMS fusion (``max`` | ``sum`` |
-            ``support`` | ``mean``); unused when ``select="argmax"``.
-        select: ``"fuse"`` to NMS-merge, or ``"argmax"`` to keep the top candidate.
-
-    Returns:
-        A mapping ``{(id, label): [(region, score), ...]}`` with each group's regions
-        ranked by score (descending).
-    """
-    groups: dict[tuple[ItemId, str], list] = defaultdict(list)
-    for c in cands:
-        groups[(c["id"], c["label"])].append((c["region"], c["score"], c["seed"]))
-    out: FusedGroups = {}
-    for key, members in groups.items():
-        if select == "argmax":
-            region, score, _ = max(members, key=lambda m: m[1])
-            out[key] = [(region, score)]
-        else:
-            out[key] = nms_fuse(members, agg=agg, iou_fn=overlap_fn)
-    return out
-
-
 # ---------------------------------------------------------------------------
-# Metric handlers: fused candidates -> metric dict. One per metric name.
+# Metric handlers: voted candidates -> metric dict. One per metric name.
 # ---------------------------------------------------------------------------
 def _coco(cfg: "RunConfig", fused: FusedGroups, gt_by_id: dict[ItemId, list]) -> dict:
     """Assemble COCO detections from the fused groups and score bbox mAP.
@@ -166,7 +88,7 @@ def _coco(cfg: "RunConfig", fused: FusedGroups, gt_by_id: dict[ItemId, list]) ->
 
     Args:
         cfg: the run config, supplying the ``coco_gt`` annotations path.
-        fused: the fused groups from ``_fuse_groups``, keyed by ``(image_id, label)``.
+        fused: the voted groups from ``mtla.voting.vote``, keyed by ``(image_id, label)``.
         gt_by_id: per-item ground truth (unused here; COCO scores against the GT JSON).
 
     Returns:
@@ -211,7 +133,7 @@ def _moment_retrieval(
 
     Args:
         cfg: the run config (unused here; kept for the uniform handler signature).
-        fused: the fused groups from ``_fuse_groups``, keyed by ``(qid, label)``.
+        fused: the voted groups from ``mtla.voting.vote``, keyed by ``(qid, label)``.
         gt_by_id: per-query ground-truth relevant windows, keyed by qid.
 
     Returns:
@@ -245,7 +167,7 @@ def _recall(cfg: "RunConfig", fused: FusedGroups, gt_by_id: dict[ItemId, list]) 
 
     Args:
         cfg: the run config (unused here; kept for the uniform handler signature).
-        fused: the fused groups from ``_fuse_groups``, keyed by ``(qid, label)``.
+        fused: the voted groups from ``mtla.voting.vote``, keyed by ``(qid, label)``.
         gt_by_id: per-query ground-truth regions, keyed by qid.
 
     Returns:
@@ -264,36 +186,3 @@ _METRICS = {
     "moment_retrieval": _moment_retrieval,
     "recall_at_iou": _recall,
 }
-
-
-def run_score(cfg: "RunConfig", dataset: "DatasetAdapter") -> dict:
-    """Run the whole score stage for one run and return its metrics.
-
-    The score-stage entry point: loads and scores every rollout's candidates, computes
-    the single-rollout hallucination AUROC, fuses candidates across rollouts (NMS or
-    argmax per the dataset), and dispatches the fused groups to the benchmark's metric
-    handler. CPU-only; the feature shards are the complete input and no model is loaded.
-
-    Args:
-        cfg: the run config, supplying paths, the layer band, and the voting ``agg``.
-        dataset: the dataset adapter, supplying ``overlap``, ``signal``, ``select``,
-            and ``metric``.
-
-    Returns:
-        A metrics dict with ``auroc_mtla``, ``n_rollouts``, ``agg``, and the
-        benchmark-specific keys from the metric handler, or ``{"error": ...}`` if no
-        candidates were found (the extract stage did not run).
-    """
-    overlap_fn = _OVERLAP[dataset.overlap]
-    cands, gt_by_id, seeds = _candidates(cfg, dataset)
-    if not cands:
-        return {"error": "no candidates found — did the extract stage run?"}
-    print(f"[score] found {len(seeds)} rollout(s) on disk: seeds {seeds}", flush=True)
-    fused = _fuse_groups(cands, overlap_fn, cfg.score.agg, dataset.select)
-    metrics = {
-        "auroc_mtla": _hallucination_auroc(cands),
-        "n_rollouts": len(seeds),
-        "agg": cfg.score.agg,
-    }
-    metrics.update(_METRICS[dataset.metric](cfg, fused, gt_by_id))
-    return metrics

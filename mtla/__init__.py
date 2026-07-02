@@ -19,8 +19,8 @@ call, so a config's ``model:`` / ``dataset:`` keys resolve to classes without a 
 """
 
 from mtla.mtla_attn import mtla_localized_attention
-from mtla.score import ALL_LAYERS, DEFAULT_BAND, LAYER_BANDS, mtla_score, reduce_band
-from mtla.voting import iou, nms_fuse, tiou
+from mtla.score import DEFAULT_BAND, reduce_band
+from mtla.voting import iou, nms_fuse, tiou, vote
 from mtla.metrics import auroc, coco_map, moment_retrieval, recall_at_iou
 from mtla.registry import (
     resolve,
@@ -33,11 +33,9 @@ from mtla.registry import (
 __all__ = [
     "mtla_localized_attention",
     "DEFAULT_BAND",
-    "ALL_LAYERS",
-    "LAYER_BANDS",
     "reduce_band",
-    "mtla_score",
     "nms_fuse",
+    "vote",
     "iou",
     "tiou",
     "auroc",

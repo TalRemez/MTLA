@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from mtla.types import OverlapFn
+
 if TYPE_CHECKING:
+    import numpy as np
     import torch
 
 
@@ -52,6 +55,13 @@ def tiou(a: list[float], b: list[float]) -> float:
     inter = max(0.0, e - s)
     union = max(a[1], b[1]) - min(a[0], b[0])
     return inter / union if union > 1e-9 else 0.0
+
+
+def overlap_fn(name: str) -> OverlapFn:
+    """Resolve a dataset's ``overlap`` descriptor to its function: ``"iou"`` -> :func:`iou` (boxes),
+    ``"tiou"`` -> :func:`tiou` (temporal spans). Raises ``KeyError`` for an unknown name.
+    """
+    return {"iou": iou, "tiou": tiou}[name]
 
 
 # ---------------------------------------------------------------------------
@@ -105,3 +115,44 @@ def tokens_overlapping_char_span(
         Token indices whose ``[char_start, char_end)`` overlaps ``[lo, hi)``, in token order.
     """
     return [ti for ti, (ts, te) in enumerate(offsets) if ts < hi and te > lo]
+
+
+# ---------------------------------------------------------------------------
+# Visualization
+# ---------------------------------------------------------------------------
+def heatmap(grid_map: "np.ndarray", H: int, W: int, sigma: float = 1.2) -> "np.ndarray":
+    """Upsample, smooth, and peak-normalize a coarse attention map to image size.
+
+    Nearest-neighbor upsamples the ``[grid_h, grid_w]`` map to ``(H, W)``, Gaussian
+    smooths it, and normalizes to ``[0, 1]`` by the smoothed map's own maximum. No upper
+    clipping: an earlier version divided by the 99th percentile and clipped to 1, which
+    flattened the hottest ~1% of cells into a saturated plateau and hid the falloff at
+    the edges of the attended region. Keeping the full positive range and renormalizing
+    the smoothed map puts the peak at 1.0 while the whole gradient (edges included)
+    stays visible.
+
+    scipy is imported inside the function so importing this module (used across the core
+    pipeline) never pulls the plotting/imaging stack — it is only needed for the qualitative
+    figure script.
+
+    Args:
+        grid_map: coarse per-patch attention for one prediction, shape
+            ``[grid_h, grid_w]``.
+        H: target image height in pixels.
+        W: target image width in pixels.
+        sigma: Gaussian smoothing width in upscaled-patch units (scaled by the
+            upsampling factor). Defaults to ``1.2``.
+
+    Returns:
+        A ``(H, W)`` float32 array in ``[0, 1]`` with its peak at 1.0.
+    """
+    import numpy as np
+    from scipy.ndimage import gaussian_filter, zoom
+
+    g = np.asarray(grid_map, dtype=np.float32)
+    gh, gw = g.shape
+    up = zoom(
+        np.clip(g, 0, None), (H / gh, W / gw), order=0
+    )  # keep full range, drop negatives only
+    up = gaussian_filter(up, sigma * max(H / gh, W / gw))
+    return up / (up.max() + 1e-9)

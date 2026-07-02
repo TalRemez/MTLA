@@ -3,15 +3,15 @@
 A dataset adapter is **declarative**: it says what the benchmark *is* (how to load items, the
 prompt, the ground truth, the uniform generation record) and *declares* how it should be scored
 (which MTLA signal, overlap function, candidate selection, and metric). It does **no** computation
-— shard loading, band reduction, voting, NMS, and metric evaluation all live in ``mtla.evaluate``
-and ``mtla.metrics``. This keeps every adapter small and identical in shape.
+— shard loading, band reduction, voting, NMS, and metric evaluation all live in ``mtla.evaluate``,
+``mtla.voting``, and ``mtla.metrics``. This keeps every adapter small and identical in shape.
 
-Scoring descriptors (read by ``mtla.evaluate.run_score``):
+Scoring descriptors (read by the ``score.py`` pipeline: ``mtla.evaluate`` + ``mtla.voting.vote``):
   * ``signal``  — which saved ``[L, H]`` array to reduce: ``local_attention`` (images) or
     ``first_digit`` (video, the validated choice).
   * ``overlap`` — ``iou`` (boxes) or ``tiou`` (temporal spans), used for both voting and metrics.
-  * ``select``  — ``fuse`` (NMS pool across rollouts; detection, multi-window) or ``argmax``
-    (keep the single best candidate; single-span grounding).
+  * ``select``  — ``fuse`` (keep every NMS-fused cluster; detection, multi-window) or ``argmax``
+    (keep the single best; single-span grounding — voted with ``top_k=1``).
   * ``metric``  — names a pure computer in ``mtla.metrics`` (``coco_map`` | ``moment_retrieval`` |
     ``recall_at_iou``).
 
@@ -57,14 +57,14 @@ def load_shards(features_dir: str) -> list["ItemRecord"]:
 def print_metrics(name: str, metrics: dict, indent: str = "  ") -> None:
     """Pretty-print a (possibly nested) metrics dict to stdout.
 
-    Renders the mapping produced by ``mtla.evaluate.run_score``. Top-level float
+    Renders the metrics mapping the ``score.py`` pipeline assembles. Top-level float
     values print as ``key = value`` (4 decimals); nested dict values (e.g. a
     ``coco_map`` sub-dict) print on one line as space-joined ``ik=iv`` pairs.
 
     Args:
         name: Label for the header line, printed as ``[name] results:`` (typically
             the benchmark or run name).
-        metrics: Metrics mapping from ``run_score``. Values may be floats, plain
+        metrics: The score-stage metrics mapping. Values may be floats, plain
             scalars (int/str), or nested dicts of the same.
         indent: Leading whitespace prepended to each metric line. Defaults to two
             spaces.
@@ -93,7 +93,7 @@ class DatasetAdapter:
     scored; it performs no scoring itself. It implements four small methods
     (:meth:`load_items`, :meth:`prompt`, :meth:`ground_truth`, :meth:`gen_record`;
     video adapters add ``video_path``) and sets a handful of class attributes that
-    ``mtla.evaluate.run_score`` reads to route the prediction through the right
+    the ``score.py`` pipeline reads to route the prediction through the right
     signal, overlap, selection, and metric. This keeps every adapter uniform.
 
     Class attributes:

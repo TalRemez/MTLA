@@ -252,11 +252,11 @@ gen_strategies.py      vLLM execution strategies for generate (pooled / sharded)
 
 mtla/                  core library (imported in place, no pip install)
   mtla_attn.py         the MTLA computation: eager-attn capture + per-item driver
-  score.py             reduce_band / mtla_score — layer-band + head reduction
-  voting.py            self-consistency NMS fusion (max / sum / support / mean)
-  evaluate.py          CPU scoring driver (band -> voting -> metrics)
+  score.py             reduce_band — layer-band + head reduction (paper eq. 4)
+  voting.py            self-consistency voting (vote / nms_fuse; max / sum / support / mean)
+  evaluate.py          hallucination AUROC + benchmark-metric assembly
   metrics.py           AUROC, COCO mAP, moment-retrieval / R@1
-  utils.py  viz.py     iou/tiou + token-span helpers; attention heatmap overlays
+  utils.py             iou/tiou (+ overlap_fn), token-span helpers, attention heatmap upsampling
   registry.py          @register_model / @register_dataset + resolve(model, dataset)
   config.py            YAML -> RunConfig
   models/              model adapters: internvl.py, qwen3vl.py  (+ base.py)

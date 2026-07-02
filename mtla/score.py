@@ -18,19 +18,9 @@ from typing import Sequence
 
 import numpy as np
 
-# Default middle-layer band. L8-21 (14 layers) is the paper default and is used for
-# every image/video model we tested (Qwen3-VL, InternVL: 36 layers; Gemma-4: 42).
-# Audio (Audio Flamingo 3, 28 layers) uses all layers; pass ``band=ALL_LAYERS``.
+# Default middle-layer band. L8-21 (14 layers) is the paper default, used for both models here
+# (Qwen3-VL and InternVL3.5-8B, 36 layers each). Pass ``band=None`` to reduce over all layers.
 DEFAULT_BAND: list[int] = list(range(8, 22))
-ALL_LAYERS = None  # sentinel: use every layer present in the tensor
-
-# Convenience presets keyed by model family (number of decoder layers in parentheses).
-LAYER_BANDS = {
-    "qwen3-vl-8b": list(range(8, 22)),  # 36 layers
-    "internvl3.5-8b": list(range(8, 22)),  # 36 layers
-    "gemma-4": list(range(8, 22)),  # 42 layers
-    "audio-flamingo-3": None,  # 28 layers, all-layers
-}
 
 
 def reduce_band(
@@ -79,27 +69,3 @@ def reduce_band(
         a[:, layers, :].mean(axis=2).mean(axis=1)
     )  # mean over heads, mean over band
     return float(scores[0]) if single else scores
-
-
-def mtla_score(
-    obj: dict,
-    signal: str = "local_attention",
-    band: Sequence[int] | None = DEFAULT_BAND,
-) -> float:
-    """Compute the scalar MTLA score for one extracted prediction object.
-
-    Thin convenience wrapper over :func:`reduce_band` that first picks which saved attention array
-    to reduce.
-
-    Args:
-        obj: An extracted prediction object (a shard's ``PredObject``) holding the ``[L, H]``
-            attention arrays keyed by signal name.
-        signal: Which saved array to reduce — ``"local_attention"`` (default; MTLA, meaned over all
-            the prediction's Q_p tokens) or ``"first_digit"`` (read at only the first coordinate
-            token, x1).
-        band: Layer band forwarded to :func:`reduce_band`; ``None`` uses all layers.
-
-    Returns:
-        The prediction's scalar MTLA score.
-    """
-    return float(reduce_band(obj[signal], band))  # single [L,H] input -> scalar

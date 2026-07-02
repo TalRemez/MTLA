@@ -23,11 +23,12 @@ rows/cols MTLA reads (the query positions Q_p and the modality tokens) and offlo
 runs afterward from the CPU list. Because the wrapper reuses the model's own forward verbatim, the
 captured weights are bit-for-bit what the model computed, for any model / transformers version.
 
-Public API:
+Public API (in file order):
   * `mtla_localized_attention(attn, region_idx)` — the pure MTLA math (eqs. 2-3).
-  * `CaptureState` / `install_capture(module_path, state)` — install the capture wrapper.
   * `compute_mtla(adapter, record, ctx, rank)` — per-item driver (image boxes or video windows);
     builds inputs, runs one captured forward, reduces per prediction, returns the saved record.
+  * `CaptureState` / `install_capture(module_path, state)` — the attention-capture machinery
+    `compute_mtla` relies on (below it, since it is plumbing rather than the interface).
 
 The model/task-specific pieces (prompt build, prediction parsing + hallucination flags,
 Q_p token finding, region mask, forward kwargs, record fields) live in the model adapters'
@@ -42,6 +43,7 @@ import importlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, cast
 
+import numpy as np
 import torch
 
 from mtla.types import BuildInputs, Ctx, ItemRecord, PredObject, TokenRange
@@ -73,6 +75,183 @@ def mtla_localized_attention(
     x = x.sum(dim=-1)  # sum over the region   -> LA   (eq.2) [L,H,Q_p]
     x = x.mean(dim=-1)  # mean over Q_p         -> MTLA (eq.3) [L,H]
     return x
+
+
+# ---------------------------------------------------------------------------
+# Per-item driver: one item's response -> its feature-shard record.
+# ---------------------------------------------------------------------------
+# `compute_mtla` is the whole extraction for one item; it is identical for image boxes and video
+# spans — only the adapter callbacks it calls differ:
+#   build_inputs      preprocess + build the prompt, PARSE the response into predictions +
+#                     hallucination flags, and locate the modality tokens  (None to skip the item)
+#   query_tokens      per prediction, its response tokens Q_p (label/coord, or window digits)
+#   region_mask       the modality-token indices inside one prediction's region M(R_p)
+#   forward_kwargs    kwargs for the single captured forward
+#   prediction_record / item_record   how to shape the saved per-prediction / top-level record
+
+
+@dataclass
+class _Pred:
+    """One prediction as it flows through the driver, so no parallel arrays are kept aligned by hand.
+
+    ``qp`` holds its absolute Q_p positions (empty when its response tokens couldn't be located — it
+    then stays a zero-filled, ``extracted=False`` candidate); ``x1`` is its first coordinate/digit
+    position; ``la`` / ``fd`` are the ``[L, H]`` reductions, filled once the attention is captured.
+    """
+
+    idx: int  # index into the parsed `predictions` list
+    pred: Any  # the Prediction (region + label)
+    qp: list[int]  # absolute Q_p positions ([] if not locatable)
+    x1: int | None = None  # first coordinate/digit position, or None
+    la: "np.ndarray | None" = None  # local_attention  (over all Q_p tokens)
+    fd: "np.ndarray | None" = None  # first_digit      (over the x1 token only)
+
+
+def _slots(
+    predictions: list,
+    token_ranges: list[TokenRange | None],
+    prompt_len: int,
+    total_len: int,
+) -> list[_Pred]:
+    """One ``_Pred`` per prediction, carrying it plus its absolute Q_p positions.
+
+    ``query_tokens`` reports each prediction's Q_p as offsets within the response; the teacher-forced
+    sequence is ``[prompt, response]``, so offsets are shifted past the prompt and dropped past the
+    sequence end. A prediction whose tokens can't be located keeps ``qp=[]`` (rather than being
+    dropped) so the shard still emits a candidate for it.
+
+    Args:
+        predictions: the item's parsed predictions, index-aligned with ``token_ranges``.
+        token_ranges: Per-prediction ``TokenRange`` (or ``None``) from the adapter's ``query_tokens``.
+        prompt_len: Number of prompt tokens preceding the response in the teacher-forced sequence.
+        total_len: Length of the full ``[prompt, response]`` sequence (clamp bound).
+
+    Returns:
+        One ``_Pred`` per input prediction, in the same order.
+    """
+    slots: list[_Pred] = []
+    for i, tr in enumerate(token_ranges):
+        qp: list[int] = []
+        x1: int | None = None
+        if tr is not None and tr["first_label_tok"] is not None:
+            label = [
+                prompt_len + t for t in tr["label_toks"] if prompt_len + t < total_len
+            ]
+            coord = [
+                prompt_len + t for t in tr["coord_toks"] if prompt_len + t < total_len
+            ]
+            qp = sorted(set((label or [prompt_len + tr["first_label_tok"]]) + coord))
+            x1 = coord[0] if coord else None
+        slots.append(_Pred(idx=i, pred=predictions[i], qp=qp, x1=x1))
+    return slots
+
+
+def compute_mtla(
+    adapter: "ModelAdapter", record: "GenRecord", ctx: Ctx, rank: int = 0
+) -> "ItemRecord | None":
+    """Compute MTLA for every prediction in one item and return its feature-shard record.
+
+    Build the input and parse the response into predictions (``build_inputs``), teacher-force the
+    prompt+response through one attention-capturing forward, then per prediction take its Q_p rows
+    out of the captured attention and reduce them with ``mtla_localized_attention`` to an ``[L, H]``
+    array. Two arrays are stored per prediction: ``local_attention`` (over all Q_p tokens) and
+    ``first_digit`` (the first coordinate/digit token only). This is the per-item core of the
+    extract stage, and it is identical for image detection (boxes) and video grounding (spans) —
+    only the adapter callbacks differ.
+
+    Args:
+        adapter: the resolved model adapter supplying the task-specific callbacks
+            (``build_inputs``, ``query_tokens``, ``region_mask``, ``forward_kwargs``).
+        record: a self-contained generation record ``{id, prompt, response, gt, extra}`` for one item.
+        ctx: the extraction context (model, tokenizer, capture state, device, layer/head counts,
+            task); see ``mtla.types.Ctx``.
+        rank: worker rank for multi-GPU logging; does not affect the result.
+
+    Returns:
+        The ``ItemRecord`` to save (one ``PredObject`` per prediction with its ``[L, H]`` arrays), or
+        ``None`` when there is nothing to build or no prediction had locatable response tokens.
+    """
+    device, tokenizer, model = ctx["device"], ctx["tokenizer"], ctx["model"]
+    n_layers, n_heads = ctx["n_layers"], ctx["n_heads"]
+    # Let a multi-task model's callbacks dispatch on the task (single-task models ignore it).
+    adapter._task = ctx.get("task", adapter.tasks[0] if adapter.tasks else None)
+
+    inp: BuildInputs | None = adapter.build_inputs(record, ctx, rank)
+    if inp is None:
+        return None
+    response, predictions, meta = inp["response"], inp["predictions"], inp["meta"]
+    prompt_ids = inp["prompt_ids"]
+
+    # Teacher-force [prompt, response], then locate each prediction's Q_p (aligned with predictions).
+    resp_ids = torch.tensor(
+        tokenizer(response, add_special_tokens=False)["input_ids"],
+        dtype=prompt_ids.dtype,
+        device=device,
+    )
+    full_ids = torch.cat([prompt_ids, resp_ids]).unsqueeze(0)
+    total_len = full_ids.shape[1]
+    token_ranges = adapter.query_tokens(response, predictions, tokenizer)
+    assert len(token_ranges) == len(
+        predictions
+    ), f"query_tokens must align with predictions: {len(token_ranges)} vs {len(predictions)}"
+    slots = _slots(predictions, token_ranges, prompt_ids.shape[0], total_len)
+    if not any(s.qp for s in slots):
+        return None
+
+    # Capture only the rows (union of all Q_p) and cols (modality tokens) the reduction reads.
+    query_positions = sorted({p for s in slots for p in s.qp})
+    row_of = {pos: r for r, pos in enumerate(query_positions)}
+    attn = _run_captured_forward(
+        model,
+        ctx["state"],
+        adapter.forward_kwargs(full_ids, total_len, device, inp),
+        query_positions,
+        inp["modality_idx_l"],
+        n_layers,
+        device,
+        rank,
+    )  # [L, H, N_q, n_mod]
+    if attn is None:
+        return None
+
+    def reduce_to_region(positions: list[int], region: "torch.Tensor") -> "np.ndarray":
+        """Reduce this prediction's captured attention onto its region M(R_p) -> [L,H] (eqs. 2-3);
+        ``positions`` are absolute Q_p positions, mapped back to the compressed capture rows.
+        """
+        rows = torch.tensor(
+            [row_of[p] for p in positions], dtype=torch.long, device=device
+        )
+        out = mtla_localized_attention(attn.index_select(2, rows), region)
+        return out.to(torch.float16).cpu().numpy()
+
+    # Reduce per prediction: local_attention over all Q_p tokens, first_digit over the x1 token only.
+    for s in slots:
+        if not s.qp:
+            continue
+        region = torch.tensor(
+            adapter.region_mask(s.pred, meta), dtype=torch.long, device=device
+        )
+        s.la = reduce_to_region(s.qp, region)
+        s.fd = reduce_to_region([s.x1], region) if s.x1 is not None else s.la
+
+    # Emit an object for EVERY prediction so the shards are the complete candidate set at score time;
+    # a prediction whose Q_p couldn't be located gets a zero array and `extracted=False`.
+    zeros = np.zeros((n_layers, n_heads), dtype=np.float16)
+    out_objs: list[PredObject] = []
+    for s in slots:
+        obj = adapter.prediction_record(s.pred, s.idx, meta)
+        obj["is_hallucinated"] = bool(inp["hallu_flags"][s.idx])
+        obj["extracted"] = s.la is not None
+        obj["local_attention"] = s.la if s.la is not None else zeros
+        obj["first_digit"] = s.fd if s.fd is not None else zeros
+        out_objs.append(cast(PredObject, obj))
+    rec = adapter.item_record(record, meta, out_objs, n_predictions=len(predictions))
+
+    del attn
+    ctx["state"].qpos = ctx["state"].modidx = ctx["state"].captured = None
+    torch.cuda.empty_cache()
+    gc.collect()
+    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -158,64 +337,6 @@ def install_capture(module_path: str, state: CaptureState) -> Any:
     return mod
 
 
-# ---------------------------------------------------------------------------
-# Per-item driver (shared by image_det AND video_span).
-# ---------------------------------------------------------------------------
-# All model/task specifics come from the adapter callbacks the helpers below call:
-#   build_inputs      -> preprocess input, build prompt, PARSE the response into predictions +
-#                        hallucination flags, locate modality tokens  (None to skip the item)
-#   query_tokens      -> per prediction, its response tokens Q_p (label/coord or window digits)
-#   region_mask       -> the modality-token indices inside one prediction's region M(R_p)
-#   forward_kwargs    -> kwargs for the single captured forward
-#   prediction_record -> per-prediction record fields (box/window + geometry)
-#   item_record       -> the top-level record wrapper (id keys, counts, objects)
-
-
-def _resolve_qp_positions(
-    token_ranges: list[TokenRange | None], prompt_len: int, total_len: int
-) -> tuple[list[int], list[list[int]], list[int | None]]:
-    """Shift each prediction's response-token indices to absolute positions in the full sequence.
-
-    ``query_tokens`` reports a prediction's Q_p as offsets within the response; the teacher-forced
-    sequence is ``[prompt, response]``, so each offset is shifted past the prompt and dropped if it
-    lands beyond the sequence. Predictions whose tokens cannot be located (``None`` range, no first
-    label token, or nothing left after clamping) are skipped.
-
-    Args:
-        token_ranges: Per-prediction ``TokenRange`` (or ``None``), index-aligned with the item's
-            predictions, as returned by the adapter's ``query_tokens``.
-        prompt_len: Number of prompt tokens preceding the response in the teacher-forced sequence.
-        total_len: Length of the full ``[prompt, response]`` sequence (clamp bound).
-
-    Returns:
-        A ``(kept, qp_positions, x1_positions)`` triple over the locatable predictions only:
-        ``kept[j]`` is the prediction's index into the item's prediction list, ``qp_positions[j]``
-        the sorted absolute positions of its Q_p tokens, and ``x1_positions[j]`` the absolute
-        position of its first coordinate/digit token (or ``None`` if it has none).
-    """
-    kept: list[int] = []
-    qp_positions: list[list[int]] = []
-    x1_positions: list[int | None] = []
-    for i, tr in enumerate(token_ranges):
-        if tr is None or tr["first_label_tok"] is None:
-            continue
-        label_abs = [
-            prompt_len + t for t in tr["label_toks"] if prompt_len + t < total_len
-        ]
-        coord_abs = [
-            prompt_len + t for t in tr["coord_toks"] if prompt_len + t < total_len
-        ]
-        if not label_abs:
-            label_abs = [prompt_len + tr["first_label_tok"]]
-        qp = sorted(set(label_abs + coord_abs))
-        if not qp:
-            continue
-        kept.append(i)
-        qp_positions.append(qp)
-        x1_positions.append(coord_abs[0] if coord_abs else None)
-    return kept, qp_positions, x1_positions
-
-
 def _run_captured_forward(
     model: Any,
     state: CaptureState,
@@ -261,121 +382,3 @@ def _run_captured_forward(
     # The per-layer slices are tiny, so stacking + reducing stays on the compute device; upcast to
     # fp32 once here so the MTLA reduction matches the paper's math.
     return torch.stack(state.captured, dim=0).float()
-
-
-def compute_mtla(
-    adapter: "ModelAdapter", record: "GenRecord", ctx: Ctx, rank: int = 0
-) -> "ItemRecord | None":
-    """Compute MTLA for every prediction in one item and return its feature-shard record.
-
-    Steps: build the input and parse the response into predictions (``build_inputs``);
-    teacher-force the prompt+response through one attention-capturing forward; then, per
-    prediction, take its Q_p rows out of the captured attention and reduce them with
-    ``mtla_localized_attention`` to an ``[L, H]`` array. Two arrays are stored per
-    prediction: ``local_attention`` (over all Q_p tokens) and ``first_digit`` (the first
-    coordinate/digit token only). This is the per-item core of the extract stage.
-
-    Works for both image detection (predictions = boxes) and video grounding
-    (predictions = time spans); only the adapter callbacks differ.
-
-    Args:
-        adapter: the resolved model adapter supplying the task-specific callbacks
-            (``build_inputs``, ``query_tokens``, ``region_mask``, ``forward_kwargs``).
-        record: a self-contained generation record
-            ``{id, prompt, response, gt, extra}`` for one item.
-        ctx: the extraction context (model, processor, tokenizer, capture state,
-            device, layer/head counts, task); see ``mtla.types.Ctx``.
-        rank: worker rank for multi-GPU logging; does not affect the result.
-
-    Returns:
-        The ``ItemRecord`` to save (id, gt, extra, prediction counts, and one
-        ``PredObject`` per locatable prediction carrying the ``[L, H]`` arrays), or
-        ``None`` to skip the item when there is nothing to build or no prediction had
-        locatable response tokens.
-    """
-    state = ctx["state"]
-    device = ctx["device"]
-    tokenizer = ctx["tokenizer"]
-    model = ctx["model"]
-    n_layers, n_heads = ctx["n_layers"], ctx["n_heads"]
-    # Let a multi-task model's callbacks dispatch on the task (single-task models ignore it).
-    adapter._task = ctx.get("task", adapter.tasks[0] if adapter.tasks else None)
-
-    inp = adapter.build_inputs(record, ctx, rank)
-    if inp is None:
-        return None
-    response = inp["response"]
-    predictions = inp["predictions"]
-    hallu_flags = inp["hallu_flags"]
-    meta = inp["meta"]
-    prompt_ids = inp["prompt_ids"]
-    prompt_len = prompt_ids.shape[0]
-
-    # Teacher-force prompt + response through the model.
-    resp_ids = torch.tensor(
-        tokenizer(response, add_special_tokens=False)["input_ids"],
-        dtype=prompt_ids.dtype,
-        device=device,
-    )
-    full_ids = torch.cat([prompt_ids, resp_ids]).unsqueeze(0)
-    total_len = full_ids.shape[1]
-
-    # Locate each prediction's response tokens Q_p (index-aligned with `predictions`).
-    token_ranges = adapter.query_tokens(response, predictions, tokenizer)
-    assert len(token_ranges) == len(
-        predictions
-    ), f"query_tokens must align with predictions: {len(token_ranges)} vs {len(predictions)}"
-    kept, qp_positions, x1_positions = _resolve_qp_positions(
-        token_ranges, prompt_len, total_len
-    )
-    if not kept:
-        return None
-
-    # Capture only the rows (union of all Q_p) and cols (modality tokens) the reduction reads.
-    query_positions = sorted({p for qp in qp_positions for p in qp})
-    row_of = {pos: r for r, pos in enumerate(query_positions)}
-    fk = adapter.forward_kwargs(full_ids, total_len, device, inp)
-    attn = _run_captured_forward(
-        model, state, fk, query_positions, inp["modality_idx_l"], n_layers, device, rank
-    )  # [L, H, N_q, n_mod]
-    if attn is None:
-        return None
-
-    # Reduce per prediction: local_attention over all Q_p tokens, first_digit over the x1 token.
-    la_by_i, fd_by_i = {}, {}
-    for j, i in enumerate(kept):
-        region_idx = torch.tensor(
-            adapter.region_mask(predictions[i], meta), dtype=torch.long, device=device
-        )
-        qp_rows = torch.tensor(
-            [row_of[p] for p in qp_positions[j]], dtype=torch.long, device=device
-        )
-        la_by_i[i] = mtla_localized_attention(
-            attn.index_select(2, qp_rows), region_idx
-        ).cpu()
-        x1_pos = x1_positions[j]
-        if x1_pos is not None:
-            x1_row = torch.tensor([row_of[x1_pos]], dtype=torch.long, device=device)
-            fd_by_i[i] = mtla_localized_attention(
-                attn.index_select(2, x1_row), region_idx
-            ).cpu()
-
-    # Emit an object for EVERY prediction so the shards are the complete candidate set at score time;
-    # a prediction whose Q_p couldn't be located gets a zero array and `extracted=False`.
-    zeros = torch.zeros(n_layers, n_heads)
-    out_objs: list[PredObject] = []
-    for i, pred in enumerate(predictions):
-        la = la_by_i.get(i, zeros)
-        obj = adapter.prediction_record(pred, i, meta)
-        obj["is_hallucinated"] = bool(hallu_flags[i])
-        obj["extracted"] = i in la_by_i
-        obj["local_attention"] = la.to(torch.float16).numpy()
-        obj["first_digit"] = fd_by_i.get(i, la).to(torch.float16).numpy()
-        out_objs.append(cast(PredObject, obj))
-    rec = adapter.item_record(record, meta, out_objs, n_predictions=len(predictions))
-
-    del attn
-    state.qpos = state.modidx = state.captured = None
-    torch.cuda.empty_cache()
-    gc.collect()
-    return rec

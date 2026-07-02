@@ -1,26 +1,33 @@
 """Self-consistency voting: pool predictions from N rollouts, fuse overlaps, re-score.
 
-Sampling ``N`` stochastic rollouts per input enlarges the candidate pool (recall); we then
-merge overlapping predictions with non-maximum suppression and assign each kept prediction
-a fused score from its cluster's MTLA scores. The ``agg`` argument selects the fusion rule:
+Sampling ``N`` stochastic rollouts per input enlarges the candidate pool (recall). ``vote`` is the
+entry point: it groups the pooled candidates by ``(item id, label)``, merges the overlaps in each
+group with non-maximum suppression (``nms_fuse``), assigns each kept prediction a fused score from
+its cluster's MTLA scores, and keeps the top ``top_k`` per group. The ``agg`` argument selects the
+fusion rule:
 
   * ``"max"``     keep the single highest-scoring rollout         (default; video / audio)
   * ``"sum"``     sum the cluster's scores (rewards recurrence)   (COCO detection headline)
   * ``"support"`` ``#distinct seeds * max``                        (ablation)
   * ``"mean"``    average of the cluster's scores                 (ablation)
 
-Works for both spatial boxes (use ``iou``) and temporal spans (use ``tiou``); pass the
-matching overlap function via ``iou_fn``.
+Single-span grounding is just ``top_k=1``: NMS already ranks the highest-scoring cluster first, so
+its representative *is* the argmax — no separate selection path is needed. Detection and
+multi-window retrieval keep every fused cluster (``top_k=None``).
+
+Works for both spatial boxes (use ``iou``) and temporal spans (use ``tiou``); pass the matching
+overlap function via ``iou_fn``.
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Sequence
 
 # Spatial/temporal IoU live in mtla.utils (the shared primitives home); re-exported here so
 # `from mtla.voting import iou, tiou` and `nms_fuse(..., iou_fn=iou)` keep working.
 from mtla.utils import iou, tiou
-from mtla.types import OverlapFn, Region
+from mtla.types import FusedGroups, ItemId, OverlapFn, Region, ScoredCand
 
 CLUSTER_IOU = 0.5  # overlap threshold for "same prediction" across rollouts
 
@@ -102,3 +109,42 @@ def nms_fuse(
                 member_scores.append(candidates[j][1])
         kept.append((region_i, _fuse(agg, score_i, member_scores, len(seeds))))
     return kept
+
+
+def vote(
+    candidates: Sequence[ScoredCand],
+    agg: str = "max",
+    iou_fn: OverlapFn = iou,
+    top_k: int | None = None,
+) -> FusedGroups:
+    """Group scored candidates by ``(id, label)`` and NMS-fuse each group across rollouts.
+
+    The self-consistency step. Candidates for the same item and label from all rollouts are
+    pooled and merged with :func:`nms_fuse`, so a prediction the model repeated across rollouts
+    collapses to one fused-score region. Detection and multi-window retrieval keep every fused
+    cluster (``top_k=None``); single-span grounding keeps only the top one (``top_k=1``), which is
+    the argmax because NMS ranks the highest-scoring cluster first.
+
+    Args:
+        candidates: The flat scored candidates from ``score.load_candidates`` (one ``ScoredCand``
+            per prediction per rollout); this reads ``id`` / ``label`` / ``region`` / ``score`` /
+            ``seed``.
+        agg: Cluster fusion rule passed to :func:`nms_fuse` (``max`` / ``sum`` / ``support`` /
+            ``mean``).
+        iou_fn: Overlap function — :func:`mtla.utils.iou` for boxes, :func:`mtla.utils.tiou` for
+            spans.
+        top_k: Keep at most this many fused regions per group (already ranked by score); ``None``
+            keeps all.
+
+    Returns:
+        A mapping ``{(id, label): [(region, score), ...]}`` with each group's regions ranked by
+        fused score (descending), truncated to ``top_k``.
+    """
+    groups: dict[tuple[ItemId, str], list[Candidate]] = defaultdict(list)
+    for c in candidates:
+        groups[(c["id"], c["label"])].append((c["region"], c["score"], c["seed"]))
+    out: FusedGroups = {}
+    for key, members in groups.items():
+        fused = nms_fuse(members, agg=agg, iou_fn=iou_fn)
+        out[key] = fused[:top_k] if top_k is not None else fused
+    return out

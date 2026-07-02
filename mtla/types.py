@@ -21,6 +21,8 @@ Region = list[float]
 ItemId = Union[int, str]
 # Overlap function: iou (boxes) or tiou (spans), ``(region, region) -> float``.
 OverlapFn = Callable[[Region, Region], float]
+# Voting output: per ``(item id, label)`` group, its kept regions ranked by fused score.
+FusedGroups = dict[tuple[ItemId, str], list[tuple[Region, float]]]
 
 
 class GTRegion(TypedDict):
@@ -112,6 +114,26 @@ class ItemRecord(TypedDict):
     n_predictions: int
     n_extracted: int
     objects: list[PredObject]
+
+
+class ScoredCand(TypedDict):
+    """One flattened, scored prediction — the atom the score stage votes over.
+
+    Produced by ``score.load_candidates`` (one per prediction per rollout) and consumed by
+    ``mtla.evaluate.hallucination_auroc`` (reads ``score`` / ``hallu`` / ``extracted`` / ``seed``)
+    and by ``mtla.voting.vote`` (reads ``id`` / ``label`` / ``region`` / ``score`` / ``seed``).
+    ``score`` is the scalar MTLA value after band reduction, ``hallu`` the detection label,
+    ``extracted`` whether attention was captured for this prediction, and ``seed`` the rollout it
+    came from.
+    """
+
+    id: ItemId
+    label: str
+    region: Region
+    score: float
+    hallu: bool
+    extracted: bool
+    seed: int
 
 
 # The extraction context built by ``load_for_extract`` and read by ``compute_mtla`` + callbacks.
