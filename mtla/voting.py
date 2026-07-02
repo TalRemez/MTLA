@@ -126,7 +126,7 @@ def vote(
     the argmax because NMS ranks the highest-scoring cluster first.
 
     Args:
-        candidates: The flat scored candidates from ``score.load_candidates`` (one ``ScoredCand``
+        candidates: The flat scored candidates from ``evaluate.load_candidates`` (one ``ScoredCand``
             per prediction per rollout); this reads ``id`` / ``label`` / ``region`` / ``score`` /
             ``seed``.
         agg: Cluster fusion rule passed to :func:`nms_fuse` (``max`` / ``sum`` / ``support`` /

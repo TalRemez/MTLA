@@ -147,7 +147,7 @@ Each stage is one config-driven command; they chain by writing files the next st
                           │  [L, H] attention shards   (per seed K)
                           v
 ┌────────────────────────────────────────────────────┐
-│  score.py       band + voting              (CPU)   │
+│  evaluate.py    band + voting + metrics    (CPU)   │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -168,7 +168,7 @@ Drop the flags to run the full benchmark.
 ```bash
 python -m generate --config configs/coco_internvl.yaml --n 2 --limit 50
 python -m extract --config configs/coco_internvl.yaml --limit 50
-python -m score --config configs/coco_internvl.yaml
+python -m evaluate --config configs/coco_internvl.yaml
 ```
 
 The full single-rollout run (`python -m generate --config configs/coco_internvl.yaml`, then
@@ -182,7 +182,7 @@ The headline detection result: **mAP 41.9** (COCO uses sum-of-cluster fusion, `-
 ```bash
 python -m generate --config configs/coco_internvl.yaml --n 16
 python -m extract --config configs/coco_internvl.yaml
-python -m score --config configs/coco_internvl.yaml --agg sum
+python -m evaluate --config configs/coco_internvl.yaml --agg sum
 ```
 
 ### Video (QVHighlights & Charades-STA) — N=16 self-consistency voting
@@ -193,13 +193,13 @@ R@1@0.5 55.1. **Charades-STA**: R@1@0.5 55.4, R@1@0.3 76.3.
 ```bash
 python -m generate --config configs/qvhighlights_qwen3vl.yaml --n 16
 python -m extract --config configs/qvhighlights_qwen3vl.yaml
-python -m score --config configs/qvhighlights_qwen3vl.yaml
+python -m evaluate --config configs/qvhighlights_qwen3vl.yaml
 ```
 
 ```bash
 python -m generate --config configs/charades_qwen3vl.yaml --n 16
 python -m extract --config configs/charades_qwen3vl.yaml
-python -m score --config configs/charades_qwen3vl.yaml
+python -m evaluate --config configs/charades_qwen3vl.yaml
 ```
 
 Add `--gpus 0 1 2 3 ...` to any `generate`/`extract` command to pick GPUs (default: all visible).
@@ -247,15 +247,14 @@ Run everything from the repo root with `python -m` (no install; `mtla` is import
 ```
 generate.py            stage 1 CLI  (python -m generate)  — vLLM decoding
 extract.py             stage 2 CLI  (python -m extract)   — HF eager-attention capture
-score.py               stage 3 CLI  (python -m score)     — band + voting + metrics (CPU)
+evaluate.py            stage 3 CLI  (python -m evaluate)  — load shards + AUROC + voting + metrics (CPU)
 gen_strategies.py      vLLM execution strategies for generate (pooled / sharded)
 
 mtla/                  core library (imported in place, no pip install)
   mtla_attn.py         the MTLA computation: eager-attn capture + per-item driver
   score.py             reduce_band — layer-band + head reduction (paper eq. 4)
   voting.py            self-consistency voting (vote / nms_fuse; max / sum / support / mean)
-  evaluate.py          hallucination AUROC + benchmark-metric assembly
-  metrics.py           AUROC, COCO mAP, moment-retrieval / R@1
+  metrics.py           pure computers: AUROC, COCO mAP, moment-retrieval / R@1
   utils.py             iou/tiou (+ overlap_fn), token-span helpers, attention heatmap upsampling
   registry.py          @register_model / @register_dataset + resolve(model, dataset)
   config.py            YAML -> RunConfig

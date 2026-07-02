@@ -1,6 +1,6 @@
 """Stage 1 — generation. vLLM decoding for any model / dataset / modality.
 
-The first stage of the pipeline (then ``extract.py``, then ``score.py``). One config-driven script
+The first stage of the pipeline (then ``extract.py``, then ``evaluate.py``). One config-driven script
 for every benchmark; it owns only the modality-agnostic skeleton:
 
   1. load the run config + resolve the (model, dataset) adapters from the registry;

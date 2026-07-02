@@ -6,7 +6,7 @@ predicted this time span), did it actually look inside the region it claims?* Pr
 whose tokens attend to evidence inside their proposal region are grounded; those that attend
 elsewhere are likely hallucinations.
 
-The pipeline is three stages — ``generate.py`` → ``extract.py`` → ``score.py``. The library
+The pipeline is three stages — ``generate.py`` → ``extract.py`` → ``evaluate.py``. The library
 pieces:
 
     from mtla import mtla_localized_attention, reduce_band   # the MTLA math (eqs. 2-3, then 4)

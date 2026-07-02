@@ -80,7 +80,7 @@ class PredObject(TypedDict):
     """One prediction's saved MTLA features inside a feature shard.
 
     The atom the score stage reduces and votes over: written by ``compute_mtla`` and
-    read by ``mtla.evaluate``. ``region`` and ``label`` are the predicted grounding,
+    read by the ``evaluate.py`` stage. ``region`` and ``label`` are the predicted grounding,
     ``is_hallucinated`` is the detection label for AUROC, and ``extracted`` flags
     whether attention was actually captured for this prediction (``False`` predictions
     are skipped when computing AUROC). ``local_attention`` and ``first_digit`` are the
@@ -119,8 +119,8 @@ class ItemRecord(TypedDict):
 class ScoredCand(TypedDict):
     """One flattened, scored prediction — the atom the score stage votes over.
 
-    Produced by ``score.load_candidates`` (one per prediction per rollout) and consumed by
-    ``mtla.evaluate.hallucination_auroc`` (reads ``score`` / ``hallu`` / ``extracted`` / ``seed``)
+    Produced by ``evaluate.load_candidates`` (one per prediction per rollout) and consumed by
+    ``evaluate.hallucination_auroc`` (reads ``score`` / ``hallu`` / ``extracted`` / ``seed``)
     and by ``mtla.voting.vote`` (reads ``id`` / ``label`` / ``region`` / ``score`` / ``seed``).
     ``score`` is the scalar MTLA value after band reduction, ``hallu`` the detection label,
     ``extracted`` whether attention was captured for this prediction, and ``seed`` the rollout it

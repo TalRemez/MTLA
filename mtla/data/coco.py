@@ -1,8 +1,8 @@
 """COCO detection dataset adapter (open-vocabulary, val2017).
 
 Declarative: it loads items, builds the prompt + ground truth, and emits the uniform generation
-record. All scoring (band reduction, NMS voting, mAP) is done by ``mtla.evaluate`` /
-``mtla.metrics`` per the descriptors below.
+record. All scoring (band reduction, NMS voting, mAP) is done by the ``evaluate.py`` stage
+(+ ``mtla.voting`` / ``mtla.metrics``) per the descriptors below.
 
 Reproduces (InternVL3.5-8B): hallucination AUROC 0.873 (MTLA); detection mAP 41.9 at N=16.
 """

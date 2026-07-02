@@ -184,7 +184,7 @@ def main() -> None:
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
     set_start_method("spawn", force=True)
-    seeds = cfg.predicted_seeds()  # discovered from <predictions>/seed*/, not a flag
+    seeds = cfg.seeds_on_disk("predictions")  # what generate wrote, not a flag
     if not seeds:
         raise SystemExit(
             f"[extract] no rollouts found under {cfg.path('predictions')}/seed*/ — "
