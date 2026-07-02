@@ -1,0 +1,5 @@
+# Tooling config only. This repo is run in place (python -m ...), NOT pip-installed, so there is
+# deliberately no [build-system] / [project] table here — just formatter/type-checker settings.
+[tool.black]
+line-length = 88
+target-version = ["py310"]

@@ -1,0 +1,19 @@
+# COCO detection with InternVL3.5-8B.
+# Reproduces: hallucination AUROC 0.873 (MTLA); single-rollout mAP 36.2.
+# For the 41.9 mAP headline, add N=16 self-consistency voting at launch: --n 16 --agg sum.
+model: internvl_image
+dataset: coco
+
+paths:
+  data: data/coco/coco_val_openvocab_80.json                  # open-vocab dataset json (scripts/prepare_coco.py)
+  coco_gt: data/coco/annotations/instances_val2017.json       # COCO annotations (for mAP)
+  predictions: runs/coco/predictions                          # seed{K}/predictions.json
+  features: runs/coco/features                                # seed{K}/shard*.pt
+
+generate:
+  temperature: 0.7
+
+score:
+  agg: max
+
+band: [8, 21]                                      # middle-layer band (null = all layers)
