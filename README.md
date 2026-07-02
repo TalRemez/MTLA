@@ -210,27 +210,57 @@ datasets are independent adapters.
 ## Visualize the per-token attention
 
 `scripts/figure_pertoken.py` shows *why* MTLA works: for a chosen prediction it runs one HF-eager
-forward and renders where **each** of the prediction's response tokens attends over the image — the
-four bounding-box coordinates $x_1, y_1, x_2, y_2$, the `label` token, and (right of the dashed rule) their
-per-token **mean** (the quantity MTLA scores). Grounded predictions concentrate attention **inside**
-the proposed box; hallucinations scatter it across the scene.
+forward and renders where **each** of the prediction's response tokens attends over the image. Each
+row is one prediction; the columns are:
 
-It reads the Qwen3-VL COCO predictions the generate stage wrote (the same
-`rollout0/predictions.json`), so generate that first (a handful of images is plenty — the figure
-renders one prediction per target):
+- **prediction** — the image with the predicted box drawn on it;
+- **$x_1, y_1, x_2, y_2$** — the attention of each of the four bounding-box coordinate tokens (the
+  digits Qwen emits for that coordinate), upsampled and overlaid on the image;
+- **label** — the attention of the class-label token;
+- **mean** (right of the dashed rule) — the per-token average, i.e. the quantity MTLA scores.
+
+Grounded predictions concentrate this attention **inside** the proposed box; hallucinations scatter
+it across the scene. The figure is Qwen3-VL–specific (it reads Qwen's `bbox_2d` output and hooks the
+Qwen3-VL attention module), so it only runs on the `coco_qwen3vl` config.
+
+**Full reproduction.**
 
 ```bash
-# 1. produce a few Qwen3-VL COCO predictions for the figure to read
+# 0. prepare COCO once (images + annotations); see "Prepare the data" above.
+python -m scripts.prepare_coco
+
+# 1. generate a few Qwen3-VL COCO predictions for the figure to read. The figure renders one
+#    prediction per target, so a handful of images is plenty; it reads rollout0/predictions.json
+#    under runs/coco/qwen3vl_image/predictions/.
 python -m generate --config configs/coco_qwen3vl.yaml --limit 10
 
-# 2. render the figure. --targets is <image_id>:<pred_idx>:<grounded|hallu> ...; pick image ids that
-#    are actually in your predictions (the defaults are the paper's Fig. 3 images).
+# 2. render. --targets is a space-separated list of <image_id>:<pred_idx>:<grounded|hallu>:
+#      image_id  = a COCO image id present in step 1's predictions,
+#      pred_idx  = which parsed box in that image's response (0 = first),
+#      grounded|hallu = only the row's colour/label (blue vs red); it does not change the attention.
 python -m scripts.figure_pertoken --config configs/coco_qwen3vl.yaml \
     --targets 397133:0:grounded --out figure_pertoken.png
 ```
 
-The figure is Qwen3-VL–specific (it reads Qwen's `bbox_2d` output format), so it only supports the
-`coco_qwen3vl` config.
+To pick valid `--targets`, list the image ids that produced boxes in step 1:
+
+```bash
+python - <<'PY'
+import json
+from mtla.registry import resolve
+model, _ = resolve("qwen3vl_image", "coco")
+preds = json.load(open("runs/coco/qwen3vl_image/predictions/rollout0/predictions.json"))
+for r in preds[:10]:
+    n = len(model.parse_response(r["response"]))
+    print(f"image_id={r['id']}  n_predictions={n}")   # use any id with n_predictions >= 1
+PY
+```
+
+With no `--targets`, the script uses the paper's Fig. 3 image ids (`64499`, `60823`); those only
+render if those images are in your predictions (run without `--limit`, or add them to the target
+list). Other flags: `--out` (path; a `.png` is always also written), `--gpu` (device index), and
+`--norm per-column|per-map` (shared colour scale per token across rows, or each panel by its own
+peak).
 
 <p align="center">
   <img src="assets/figure_pertoken.png" width="100%" alt="Per-token attention: a grounded zebra concentrates attention inside its box; a hallucinated cow labeled horse scatters it across the scene"/>
