@@ -276,12 +276,17 @@ def compute_mtla(
 
     def reduce_to_region(positions: list[int], region: "torch.Tensor") -> "np.ndarray":
         """Reduce this prediction's captured attention onto its region M(R_p) -> [L,H] (eqs. 2-3);
-        ``positions`` are absolute Q_p positions, mapped back to the compressed capture rows.
+        ``positions`` are absolute Q_p positions, mapped back to the compressed capture rows. The
+        per-prediction slice is upcast to fp32 here (not the whole [L,H,N_q,n_mod] tensor) so the
+        reduction matches the paper's math without the memory cost of a full fp32 stack.
         """
         rows = torch.tensor(
             [row_of[p] for p in positions], dtype=torch.long, device=device
         )
-        out = mtla_localized_attention(attn.index_select(2, rows), region)
+        sl = attn.index_select(
+            2, rows
+        ).float()  # [L,H,|Q_p|,n_mod], small -> fp32 is cheap
+        out = mtla_localized_attention(sl, region)
         return out.to(torch.float16).cpu().numpy()
 
     # Reduce per prediction: local_attention over all Q_p tokens, first_digit over the x1 token only.
@@ -436,8 +441,9 @@ def _run_captured_forward(
         rank: Worker rank, used only for the OOM-skip log line.
 
     Returns:
-        The captured attention stacked as ``[L, H, N_q, n_mod]`` (fp32, on ``device``), or ``None``
-        if the forward ran out of GPU memory for this item.
+        The captured attention stacked as ``[L, H, N_q, n_mod]`` in the model dtype, on ``device``
+        (the fp32 upcast is deferred to the small per-prediction reduction), or ``None`` if the item
+        ran out of GPU memory.
     """
     state.qpos = torch.tensor(query_positions, dtype=torch.long, device=device)
     state.modidx = torch.tensor(modality_idx, dtype=torch.long, device=device)
@@ -446,11 +452,19 @@ def _run_captured_forward(
         state.active = True
         with torch.no_grad():
             model(**fk)
+        # Stack INSIDE the OOM guard: for a response with many predictions the union of Q_p rows
+        # (N_q) is large, and even the [L, H, N_q, n_mod] stack can exhaust memory after the forward
+        # succeeds. That is still a "this one item is too big" event, so it is skipped like a forward
+        # OOM rather than crashing the shard. Keep the model dtype here (do NOT .float() the whole
+        # [L,H,N_q,n_mod] tensor — that doubled peak memory and caused ~30 GiB OOMs on 200-box COCO
+        # images); the fp32 upcast happens later on the tiny per-prediction slice in the reduction.
+        attn = torch.stack(state.captured, dim=0)
     except torch.cuda.OutOfMemoryError as e:
         state.n_oom += 1
+        n_qp = len(query_positions)
         print(
             f"[worker {rank}] OOM on one item (seq_len={fk['input_ids'].shape[-1]}, "
-            f"n_mod={len(modality_idx)}); skipping it: {e}",
+            f"n_qp={n_qp}, n_mod={len(modality_idx)}); skipping it: {e}",
             flush=True,
         )
         state.captured = None
@@ -459,5 +473,5 @@ def _run_captured_forward(
     finally:
         state.active = False  # must reset even if the forward raises
     # The per-layer slices are tiny, so stacking + reducing stays on the compute device; upcast to
-    # fp32 once here so the MTLA reduction matches the paper's math.
-    return torch.stack(state.captured, dim=0).float()
+    # fp32 once above so the MTLA reduction matches the paper's math.
+    return attn
