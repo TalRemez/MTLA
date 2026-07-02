@@ -1,4 +1,4 @@
-# MTLA: Multi-Token Localized Attention
+# Propose and Attend: Training-free MLLM Grounding Confidence via Multi-Token Localized Attention
 
 **Does a multimodal LLM actually look where it says it's looking?**
 
