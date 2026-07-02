@@ -3,10 +3,10 @@
 A dataset adapter is **declarative**: it says what the benchmark *is* (how to load items, the
 prompt, the ground truth, the uniform generation record) and *declares* how it should be scored
 (which MTLA signal, overlap function, candidate selection, and metric). It does **no** computation
-— shard loading, band reduction, voting, NMS, and metric evaluation all live in ``mtla.evaluate``,
+— shard loading, band reduction, voting, NMS, and metric evaluation all live in the ``evaluate.py`` stage,
 ``mtla.voting``, and ``mtla.metrics``. This keeps every adapter small and identical in shape.
 
-Scoring descriptors (read by the ``score.py`` pipeline: ``mtla.evaluate`` + ``mtla.voting.vote``):
+Scoring descriptors (read by the ``evaluate.py`` stage + ``mtla.voting.vote``):
   * ``signal``  — which saved ``[L, H]`` array to reduce: ``local_attention`` (images) or
     ``first_digit`` (video, the validated choice).
   * ``overlap`` — ``iou`` (boxes) or ``tiou`` (temporal spans), used for both voting and metrics.
@@ -57,7 +57,7 @@ def load_shards(features_dir: str) -> list["ItemRecord"]:
 def print_metrics(name: str, metrics: dict, indent: str = "  ") -> None:
     """Pretty-print a (possibly nested) metrics dict to stdout.
 
-    Renders the metrics mapping the ``score.py`` pipeline assembles. Top-level float
+    Renders the metrics mapping the ``evaluate.py`` stage assembles. Top-level float
     values print as ``key = value`` (4 decimals); nested dict values (e.g. a
     ``coco_map`` sub-dict) print on one line as space-joined ``ik=iv`` pairs.
 
@@ -93,7 +93,7 @@ class DatasetAdapter:
     scored; it performs no scoring itself. It implements four small methods
     (:meth:`load_items`, :meth:`prompt`, :meth:`ground_truth`, :meth:`gen_record`;
     video adapters add ``video_path``) and sets a handful of class attributes that
-    the ``score.py`` pipeline reads to route the prediction through the right
+    the ``evaluate.py`` stage reads to route the prediction through the right
     signal, overlap, selection, and metric. This keeps every adapter uniform.
 
     Class attributes:
@@ -123,7 +123,7 @@ class DatasetAdapter:
     name: str = ""
     task: str = ""
 
-    # ---- scoring descriptors (see module docstring; read by mtla.evaluate) ----
+    # ---- scoring descriptors (see module docstring; read by the evaluate.py stage) ----
     signal: str = "local_attention"
     overlap: str = "iou"
     select: str = "fuse"

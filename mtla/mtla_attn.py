@@ -7,12 +7,13 @@ inside its proposal region M(R_p)::
     x = attn[..., region_idx]   # keep modality tokens inside the region M(R_p)
     x = x.sum(-1)               # sum over the region     -> Localized Attention   (eq. 2)
     x = x.mean(-1)              # mean over Q_p            -> Multi-Token LA         (eq. 3)
-    # (head/layer reduction, eq. 4, is done later on CPU in mtla.score.reduce_band)
+    # (`reduce_band` finishes the score, eq. 4, at score time: mean over heads + a layer band)
 
 `mtla_localized_attention` below is exactly that — an independent, model-agnostic function that
 takes a prediction's `[L, H, Q_p, n_mod]` attention slice and its region mask and returns the
-`[L, H]` localized-attention array. Everything else in this module just *gets the model's real
-attention weights to that function*.
+`[L, H]` localized-attention array. `reduce_band` collapses that `[L, H]` array to the final scalar
+score (eq. 4); it runs later, on CPU, in the evaluation stage. Everything else in this module just
+*gets the model's real attention weights to those two functions*.
 
 Getting the weights is the only hard part. A fused attention kernel never exposes the weights, and
 `output_attentions=True` materializes every layer's `[H, Q, Q]` map at once — hundreds of GB for a
@@ -27,6 +28,7 @@ transformers version.
 
 Public API (in file order):
   * `mtla_localized_attention(attn, region_idx)` — the pure MTLA math (eqs. 2-3).
+  * `reduce_band(attn, band)` / `DEFAULT_BAND` — the score-time head+layer reduction (eq. 4).
   * `compute_mtla(adapter, record, ctx, rank)` — per-item driver (image boxes or video windows);
     builds inputs, runs one captured forward, reduces per prediction, returns the saved record.
   * `CaptureState` / `install_capture(module_path, state)` — the attention-capture machinery
@@ -44,7 +46,7 @@ from __future__ import annotations
 import gc
 import importlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, Sequence, cast
 
 import numpy as np
 import torch
@@ -78,6 +80,61 @@ def mtla_localized_attention(
     x = x.sum(dim=-1)  # sum over the region   -> LA   (eq.2) [L,H,Q_p]
     x = x.mean(dim=-1)  # mean over Q_p         -> MTLA (eq.3) [L,H]
     return x
+
+
+# Default middle-layer band. L8-21 (14 layers) is the paper default, used for both models here
+# (Qwen3-VL and InternVL3.5-8B, 36 layers each). Pass ``band=None`` to reduce over all layers.
+DEFAULT_BAND: list[int] = list(range(8, 22))
+
+
+def reduce_band(
+    attn: np.ndarray | Sequence | None,
+    band: Sequence[int] | None = DEFAULT_BAND,
+) -> float | np.ndarray:
+    """Collapse a per-prediction ``[L, H]`` localized-attention array to one scalar score (eq. 4).
+
+    The score-time tail of MTLA: ``mtla_localized_attention`` produced the ``[L, H]`` array during
+    extraction (eqs. 2-3); this keeps only the band's layers, then means over heads and over those
+    layers — ``attn[band].mean(over heads).mean(over layers)``. Higher means more grounded. Pure
+    NumPy and CPU-side, so the evaluation stage calls it without loading a model.
+
+    Args:
+        attn: Attention aggregate of shape ``[L, H]`` for a single prediction, or ``[N, L, H]`` for
+            a batch (``L`` layers, ``H`` heads). ``None`` is treated as an absent prediction.
+        band: Layer indices to keep before reducing; ``None`` uses every layer. Out-of-range
+            indices are dropped so one band works across model depths (36-layer vs 42-layer, ...).
+
+    Returns:
+        ``0.0`` if ``attn`` is ``None``; a Python ``float`` for a single ``[L, H]`` input; or a
+        ``[N]`` array of floats for a batched ``[N, L, H]`` input.
+
+    Raises:
+        ValueError: If ``attn`` is not 2-D or 3-D, or if ``band`` selects no valid layer for the
+            given tensor depth.
+    """
+    if attn is None:
+        return 0.0
+    a = np.asarray(attn, dtype=np.float32)
+    single = a.ndim == 2
+    if single:
+        a = a[None, ...]  # -> [1, L, H]
+    if a.ndim != 3:
+        raise ValueError(f"expected [L,H] or [N,L,H], got shape {a.shape}")
+
+    n_layers = a.shape[1]
+    if band is None:
+        layers = list(range(n_layers))
+    else:
+        layers = [l for l in band if 0 <= l < n_layers]
+        if not layers:
+            raise ValueError(
+                f"band {list(band)} has no valid layer for {n_layers}-layer tensor"
+            )
+
+    scores = (
+        a[:, layers, :].mean(axis=2).mean(axis=1)
+    )  # mean over heads, mean over band
+    return float(scores[0]) if single else scores
 
 
 # ---------------------------------------------------------------------------

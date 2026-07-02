@@ -2,7 +2,7 @@
 
 Declarative: loads items, builds the prompt + ground truth, emits the uniform generation record.
 Scoring (per-window hallucination AUROC + moment-retrieval mAP / R@1 via the vendored Moment-DETR
-evaluator, after NMS pooling across rollouts) is done by ``mtla.evaluate`` / ``mtla.metrics``.
+evaluator, after NMS pooling across rollouts) is done by the ``evaluate.py`` stage (+ ``mtla.voting`` / ``mtla.metrics``).
 
 Reproduces: NMS-MTLA mAP 36.6, R@1@0.5 55.1, R@1@0.7 39.5 (N=16 self-consistency).
 """

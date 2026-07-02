@@ -1,6 +1,6 @@
 """Run configuration: one YAML file fully specifies a model x dataset run.
 
-A single ``{generate,extract,score}.py --config <file>.yaml`` invocation reads a ``RunConfig`` and
+A single ``{generate,extract,evaluate}.py --config <file>.yaml`` invocation reads a ``RunConfig`` and
 resolves it to one model adapter (``mtla.models``) and one dataset adapter (``mtla.data``). The
 same three stages apply to every benchmark.
 
@@ -122,7 +122,7 @@ class RunConfig:
         """Expand the ``band`` range into the explicit layer indices to reduce over.
 
         Turns the stored inclusive ``[lo, hi]`` band (the L8-21 middle band in every
-        shipped config) into the list of layer indices ``mtla.score.reduce_band`` selects
+        shipped config) into the list of layer indices ``mtla.mtla_attn.reduce_band`` selects
         when reducing an ``[L, H]`` attention array to a scalar.
 
         Returns:
@@ -146,12 +146,13 @@ class RunConfig:
         """
         return list(range(max(1, self.n_rollouts)))
 
-    def _seeds_on_disk(self, root_key: str) -> list:
+    def seeds_on_disk(self, root_key: str) -> list:
         """Discover the rollout seeds a previous stage actually wrote to disk.
 
         Scans ``<root_key>/seed{K}/`` directories and parses their integer seeds, so
         extract and score infer their input seed set from what exists rather than from
-        an ``--n`` flag.
+        an ``--n`` flag. Extract passes ``"predictions"`` (what generate wrote); score
+        passes ``"features"`` (what extract wrote).
 
         Args:
             root_key: the ``paths`` key of the directory to scan (``"predictions"`` or
@@ -170,28 +171,6 @@ class RunConfig:
             if m and os.path.isdir(d):
                 found.append(int(m.group(1)))
         return sorted(found)
-
-    def predicted_seeds(self) -> list:
-        """Rollout seeds that have a predictions directory on disk.
-
-        This is the input set the extract stage consumes, discovered from what generate
-        wrote under ``<predictions>/seed{K}/``.
-
-        Returns:
-            The sorted seed integers with a predictions directory (empty if none).
-        """
-        return self._seeds_on_disk("predictions")
-
-    def extracted_seeds(self) -> list:
-        """Rollout seeds that have a features directory on disk.
-
-        This is the input set the score stage consumes, discovered from what extract
-        wrote under ``<features>/seed{K}/``.
-
-        Returns:
-            The sorted seed integers with a features directory (empty if none).
-        """
-        return self._seeds_on_disk("features")
 
     def stage_gpus(self, stage: str) -> list:
         """Resolve the GPU list a stage should run on.

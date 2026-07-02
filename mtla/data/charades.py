@@ -1,7 +1,8 @@
 """Charades-STA single-span temporal-grounding dataset adapter.
 
 Declarative: loads items, builds the prompt + ground truth, emits the uniform generation record.
-Scoring (hallucination AUROC + R@1 @ IoU{0.3,0.5,0.7} + mIoU) is done by ``mtla.evaluate`` /
+Scoring (hallucination AUROC + R@1 @ IoU{0.3,0.5,0.7} + mIoU) is done by the ``evaluate.py`` stage
+(+ ``mtla.voting`` / ``mtla.metrics``) /
 ``mtla.metrics``. Charades emits ONE span per query, so voting is span SELECTION across rollouts
 (``select="argmax"``: keep the single highest-MTLA span — the headline rule).
 
