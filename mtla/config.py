@@ -98,7 +98,7 @@ class RunConfig:
     Non-obvious fields: ``band`` is an inclusive ``[lo, hi]`` layer range, or ``None``
     (the default) for all layers; the L8-21 middle band is opt-in per config;
     ``n_rollouts`` is the single knob for
-    self-consistency (stages produce/consume seeds ``0 .. n_rollouts-1``);
+    self-consistency (stages produce/consume rollouts ``0 .. n_rollouts-1``);
     ``config_path`` is the absolute path the config was loaded from, stored so a GPU
     stage subprocess can rebuild the same run.
     """
@@ -106,8 +106,8 @@ class RunConfig:
     model: str  # adapter key in mtla.models
     dataset: str  # adapter key in mtla.data
     paths: dict = field(default_factory=dict)
-    n_rollouts: int = 1  # the single rollout knob: generate/extract produce seeds
-    # 0..n_rollouts-1; score votes over the same range.
+    n_rollouts: int = 1  # the single rollout knob: generate/extract produce rollouts
+    # 0..n_rollouts-1; evaluate votes over the same range.
     generate: StageCfg = field(default_factory=StageCfg)
     extract: StageCfg = field(default_factory=StageCfg)
     score: StageCfg = field(default_factory=StageCfg)
@@ -134,40 +134,28 @@ class RunConfig:
         lo, hi = self.band
         return list(range(lo, hi + 1))
 
-    def seeds(self) -> list:
-        """Rollout seeds this run should produce.
+    def rollouts_on_disk(self, root_key: str) -> list:
+        """Discover the rollout numbers a previous stage actually wrote to disk.
 
-        The generate/extract stages iterate over these seeds to write one rollout
-        directory each; ``--n`` on generate sets ``n_rollouts``, which drives this.
-
-        Returns:
-            ``[0, ..., n_rollouts-1]`` (always at least ``[0]``, since a run has one
-            rollout minimum).
-        """
-        return list(range(max(1, self.n_rollouts)))
-
-    def seeds_on_disk(self, root_key: str) -> list:
-        """Discover the rollout seeds a previous stage actually wrote to disk.
-
-        Scans ``<root_key>/seed{K}/`` directories and parses their integer seeds, so
-        extract and score infer their input seed set from what exists rather than from
-        an ``--n`` flag. Extract passes ``"predictions"`` (what generate wrote); score
-        passes ``"features"`` (what extract wrote).
+        Scans ``<root_key>/rollout{K}/`` directories and parses their integer rollout
+        numbers, so extract and evaluate infer their input set from what exists rather
+        than from an ``--n`` flag. Extract passes ``"predictions"`` (what generate wrote);
+        evaluate passes ``"features"`` (what extract wrote).
 
         Args:
             root_key: the ``paths`` key of the directory to scan (``"predictions"`` or
                 ``"features"``).
 
         Returns:
-            The discovered seed integers, sorted ascending (empty if none exist).
+            The discovered rollout numbers, sorted ascending (empty if none exist).
         """
         import glob
         import re
 
         root = self.path(root_key)
         found = []
-        for d in glob.glob(os.path.join(root, "seed*")):
-            m = re.fullmatch(r"seed(\d+)", os.path.basename(d))
+        for d in glob.glob(os.path.join(root, "rollout*")):
+            m = re.fullmatch(r"rollout(\d+)", os.path.basename(d))
             if m and os.path.isdir(d):
                 found.append(int(m.group(1)))
         return sorted(found)
@@ -190,28 +178,6 @@ class RunConfig:
         g = getattr(self, stage).gpus
         return list(g) if g else all_visible_gpus()
 
-    def gen_temperature(self, seed: int, dataset_greedy_seed0: bool = False) -> float:
-        """Effective decode temperature for one rollout.
-
-        Implements the paper's N=16 recipe: when greedy-seed0 is on, rollout 0 decodes
-        greedily (T=0) as a deterministic anchor and rollouts 1..N-1 sample at the
-        configured ``temperature``. The config's ``greedy_seed0`` overrides the dataset
-        default when set.
-
-        Args:
-            seed: the rollout index being generated.
-            dataset_greedy_seed0: the dataset's default for greedy-seed0, used only when
-                the config leaves ``generate.greedy_seed0`` as ``None``.
-
-        Returns:
-            ``0.0`` when greedy-seed0 is in effect and ``seed == 0``, otherwise the
-            configured sampling temperature.
-        """
-        greedy0 = self.generate.greedy_seed0
-        if greedy0 is None:
-            greedy0 = dataset_greedy_seed0
-        return 0.0 if (greedy0 and seed == 0) else self.generate.temperature
-
     def path(self, key: str) -> str:
         """Look up a configured path by key, with ``~`` expanded.
 
@@ -232,29 +198,29 @@ class RunConfig:
             raise KeyError(f"config paths is missing '{key}'")
         return os.path.expanduser(self.paths[key])
 
-    def pred_dir(self, seed: int) -> str:
+    def pred_dir(self, rollout: int) -> str:
         """Directory holding one rollout's predictions.
 
         Args:
-            seed: the rollout index.
+            rollout: the rollout number.
 
         Returns:
-            The path ``<predictions>/seed{seed}/``, which holds that rollout's
+            The path ``<predictions>/rollout{rollout}/``, which holds that rollout's
             ``predictions.json``.
         """
-        return os.path.join(self.path("predictions"), f"seed{seed}")
+        return os.path.join(self.path("predictions"), f"rollout{rollout}")
 
-    def feat_dir(self, seed: int) -> str:
+    def feat_dir(self, rollout: int) -> str:
         """Directory holding one rollout's feature shards.
 
         Args:
-            seed: the rollout index.
+            rollout: the rollout number.
 
         Returns:
-            The path ``<features>/seed{seed}/``, which holds that rollout's
+            The path ``<features>/rollout{rollout}/``, which holds that rollout's
             ``shard*.pt`` files.
         """
-        return os.path.join(self.path("features"), f"seed{seed}")
+        return os.path.join(self.path("features"), f"rollout{rollout}")
 
 
 def _stage(d: dict | None) -> StageCfg:

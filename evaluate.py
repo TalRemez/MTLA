@@ -1,6 +1,6 @@
 """Stage 3 — evaluation. Turn the extracted attention shards into benchmark numbers (CPU only).
 
-Reads every ``<features>/seed{K}/shard*.pt`` the extract stage wrote and computes the hallucination
+Reads every ``<features>/rollout{K}/shard*.pt`` the extract stage wrote and computes the hallucination
 AUROC + the benchmark's task metric. No GPU and no model weights. The stage is a short, explicit
 pipeline, composed in ``main`` so every step is visible:
 
@@ -12,7 +12,7 @@ pipeline, composed in ``main`` so every step is visible:
 The reusable pieces live in the ``mtla`` package — ``reduce_band`` (band reduction), ``vote``
 (voting), and the pure ``metrics`` computers; this script owns the evaluation glue: loading and
 scoring the shards, the hallucination AUROC, and reshaping voted candidates into each benchmark's
-metric input (the ``_coco`` / ``_moment_retrieval`` / ``_recall`` handlers). The rollout seed set is
+metric input (the ``_coco`` / ``_moment_retrieval`` / ``_recall`` handlers). The rollout set is
 discovered from the features dir, so there is no ``--n``: it votes over exactly the rollouts that
 were extracted.
 
@@ -48,31 +48,31 @@ def load_candidates(
 ) -> tuple[list[ScoredCand], dict[ItemId, list], list[int]]:
     """Load every rollout's shards and flatten them into scored candidates.
 
-    Walks the discovered feature-shard directories (one per rollout seed), reduces each
+    Walks the discovered feature-shard directories (one per rollout), reduces each
     prediction's ``[L, H]`` attention array for the dataset's signal to a scalar MTLA
     score via ``reduce_band`` over the config's layer band (paper eq. 4), and collects
     every prediction as a flat candidate. This is the shared front end for both the
     hallucination-AUROC and the voting/metric paths.
 
     Args:
-        cfg: the run config, supplying the layer band, the seeds on disk, and the
-            per-seed feature directories.
+        cfg: the run config, supplying the layer band, the rollouts on disk, and the
+            per-rollout feature directories.
         dataset: the dataset adapter, supplying ``signal`` (which stored array to
             reduce).
 
     Returns:
-        A tuple ``(cands, gt_by_id, seeds)`` where ``cands`` is a list of
+        A tuple ``(cands, gt_by_id, rollouts)`` where ``cands`` is a list of
         ``ScoredCand`` (one per prediction per rollout), ``gt_by_id`` maps each item id
-        to its ground-truth region list, and ``seeds`` is the sorted list of rollout
-        seeds found on disk.
+        to its ground-truth region list, and ``rollouts`` is the sorted list of rollout
+        numbers found on disk.
     """
     band = cfg.band_indices()
     signal = dataset.signal
-    seeds = cfg.seeds_on_disk("features")  # what extract wrote, not a flag
+    rollouts = cfg.rollouts_on_disk("features")  # what extract wrote, not a flag
     cands: list[ScoredCand] = []
     gt_by_id: dict[ItemId, list] = {}
-    for seed in seeds:
-        for rec in load_shards(cfg.feat_dir(seed)):
+    for rollout in rollouts:
+        for rec in load_shards(cfg.feat_dir(rollout)):
             gt_by_id[rec["id"]] = rec["gt"]
             for o in rec["objects"]:
                 arr = cast(
@@ -86,10 +86,10 @@ def load_candidates(
                         "score": float(reduce_band(arr.astype(np.float32), band)),
                         "hallu": bool(o["is_hallucinated"]),
                         "extracted": bool(o.get("extracted", True)),
-                        "seed": seed,
+                        "rollout": rollout,
                     }
                 )
-    return cands, gt_by_id, seeds
+    return cands, gt_by_id, rollouts
 
 
 def hallucination_auroc(cands: list[ScoredCand]) -> float:
@@ -102,14 +102,14 @@ def hallucination_auroc(cands: list[ScoredCand]) -> float:
 
     Args:
         cands: the flattened candidates from ``load_candidates`` (each carries
-            ``score``, ``hallu``, ``seed``, and ``extracted``).
+            ``score``, ``hallu``, ``rollout``, and ``extracted``).
 
     Returns:
         The AUROC in ``[0, 1]`` (positive class is grounded), or ``nan`` when no
-        seed-0 extracted candidate exists.
+        rollout-0 extracted candidate exists.
     """
-    s = [c["score"] for c in cands if c["seed"] == 0 and c["extracted"]]
-    y = [c["hallu"] for c in cands if c["seed"] == 0 and c["extracted"]]
+    s = [c["score"] for c in cands if c["rollout"] == 0 and c["extracted"]]
+    y = [c["hallu"] for c in cands if c["rollout"] == 0 and c["extracted"]]
     return auroc(s, y) if s else float("nan")
 
 
@@ -271,7 +271,7 @@ def main() -> None:
         cfg.score.agg = args.agg
     _, dataset = resolve(cfg.model, cfg.dataset)
 
-    cands, gt_by_id, seeds = load_candidates(cfg, dataset)
+    cands, gt_by_id, rollouts = load_candidates(cfg, dataset)
     if not cands:
         print_metrics(
             f"{cfg.dataset}/{cfg.model}",
@@ -279,7 +279,7 @@ def main() -> None:
         )
         return
     print(
-        f"[evaluate] found {len(seeds)} rollout(s) on disk: seeds {seeds}", flush=True
+        f"[evaluate] found {len(rollouts)} rollout(s) on disk: {rollouts}", flush=True
     )
 
     # Single-span grounding keeps one region per query (top_k=1); detection and multi-window keep
@@ -291,7 +291,7 @@ def main() -> None:
 
     metrics = {
         "auroc_mtla": hallucination_auroc(cands),
-        "n_rollouts": len(seeds),
+        "n_rollouts": len(rollouts),
         "agg": cfg.score.agg,
     }
     metrics.update(compute_metric(cfg, dataset, voted, gt_by_id))

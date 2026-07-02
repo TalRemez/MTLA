@@ -8,7 +8,7 @@ fusion rule:
 
   * ``"max"``     keep the single highest-scoring rollout         (default; video / audio)
   * ``"sum"``     sum the cluster's scores (rewards recurrence)   (COCO detection headline)
-  * ``"support"`` ``#distinct seeds * max``                        (ablation)
+  * ``"support"`` ``#distinct rollouts * max``                     (ablation)
   * ``"mean"``    average of the cluster's scores                 (ablation)
 
 Single-span grounding is just ``top_k=1``: NMS already ranks the highest-scoring cluster first, so
@@ -31,22 +31,22 @@ from mtla.types import FusedGroups, ItemId, OverlapFn, Region, ScoredCand
 
 CLUSTER_IOU = 0.5  # overlap threshold for "same prediction" across rollouts
 
-# A pooled candidate: (region, MTLA score, seed it came from).
+# A pooled candidate: (region, MTLA score, rollout it came from).
 Candidate = tuple[Region, float, int]
 
 
 def _fuse(
-    agg: str, rep_score: float, member_scores: Sequence[float], n_seeds: int
+    agg: str, rep_score: float, member_scores: Sequence[float], n_rollouts: int
 ) -> float:
     """Combine one NMS cluster's member scores into a single fused score.
 
     Args:
         agg: Fusion rule (see module docstring): ``"max"`` returns the cluster representative's
-            score, ``"support"`` scales it by the number of distinct seeds, ``"sum"`` adds all
+            score, ``"support"`` scales it by the number of distinct rollouts, ``"sum"`` adds all
             member scores, ``"mean"`` averages them.
         rep_score: Score of the cluster representative (the highest-scoring member).
         member_scores: Scores of every candidate absorbed into the cluster (includes the rep).
-        n_seeds: Number of distinct rollout seeds represented in the cluster.
+        n_rollouts: Number of distinct rollouts represented in the cluster.
 
     Returns:
         The fused cluster score under ``agg``.
@@ -57,7 +57,7 @@ def _fuse(
     if agg == "max":
         return rep_score
     if agg == "support":
-        return n_seeds * rep_score
+        return n_rollouts * rep_score
     if agg == "sum":
         return sum(member_scores)
     if agg == "mean":
@@ -79,9 +79,9 @@ def nms_fuse(
     de-duplicates predictions the model produced across rollouts and lets recurrence boost a score.
 
     Args:
-        candidates: Pooled candidates as ``(region, score, seed)`` triples, where ``region`` is a
-            box (``[x1,y1,x2,y2]``) or span (``[t0,t1]``), ``score`` is its MTLA value, and ``seed``
-            identifies the rollout it came from.
+        candidates: Pooled candidates as ``(region, score, rollout)`` triples, where ``region`` is a
+            box (``[x1,y1,x2,y2]``) or span (``[t0,t1]``), ``score`` is its MTLA value, and
+            ``rollout`` identifies the rollout it came from.
         iou_th: Overlap at or above which a candidate is absorbed into the current cluster.
         agg: Cluster fusion rule passed to :func:`_fuse` (``max`` / ``sum`` / ``support`` / ``mean``).
         iou_fn: Overlap function — :func:`mtla.utils.iou` for boxes, :func:`mtla.utils.tiou` for spans.
@@ -97,17 +97,17 @@ def nms_fuse(
         if taken[i]:
             continue
         taken[i] = True
-        region_i, score_i, seed_i = candidates[i]
-        seeds = {seed_i}
+        region_i, score_i, rollout_i = candidates[i]
+        rollouts = {rollout_i}
         member_scores = [score_i]
         for j in order:
             if taken[j] or j == i:
                 continue
             if iou_fn(region_i, candidates[j][0]) >= iou_th:
                 taken[j] = True
-                seeds.add(candidates[j][2])
+                rollouts.add(candidates[j][2])
                 member_scores.append(candidates[j][1])
-        kept.append((region_i, _fuse(agg, score_i, member_scores, len(seeds))))
+        kept.append((region_i, _fuse(agg, score_i, member_scores, len(rollouts))))
     return kept
 
 
@@ -126,9 +126,9 @@ def vote(
     the argmax because NMS ranks the highest-scoring cluster first.
 
     Args:
-        candidates: The flat scored candidates from ``score.load_candidates`` (one ``ScoredCand``
+        candidates: The flat scored candidates from ``evaluate.load_candidates`` (one ``ScoredCand``
             per prediction per rollout); this reads ``id`` / ``label`` / ``region`` / ``score`` /
-            ``seed``.
+            ``rollout``.
         agg: Cluster fusion rule passed to :func:`nms_fuse` (``max`` / ``sum`` / ``support`` /
             ``mean``).
         iou_fn: Overlap function — :func:`mtla.utils.iou` for boxes, :func:`mtla.utils.tiou` for
@@ -142,7 +142,7 @@ def vote(
     """
     groups: dict[tuple[ItemId, str], list[Candidate]] = defaultdict(list)
     for c in candidates:
-        groups[(c["id"], c["label"])].append((c["region"], c["score"], c["seed"]))
+        groups[(c["id"], c["label"])].append((c["region"], c["score"], c["rollout"]))
     out: FusedGroups = {}
     for key, members in groups.items():
         fused = nms_fuse(members, agg=agg, iou_fn=iou_fn)

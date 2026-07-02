@@ -119,12 +119,12 @@ class ItemRecord(TypedDict):
 class ScoredCand(TypedDict):
     """One flattened, scored prediction — the atom the score stage votes over.
 
-    Produced by ``score.load_candidates`` (one per prediction per rollout) and consumed by
-    ``evaluate.hallucination_auroc`` (reads ``score`` / ``hallu`` / ``extracted`` / ``seed``)
-    and by ``mtla.voting.vote`` (reads ``id`` / ``label`` / ``region`` / ``score`` / ``seed``).
+    Produced by ``evaluate.load_candidates`` (one per prediction per rollout) and consumed by
+    ``evaluate.hallucination_auroc`` (reads ``score`` / ``hallu`` / ``extracted`` / ``rollout``)
+    and by ``mtla.voting.vote`` (reads ``id`` / ``label`` / ``region`` / ``score`` / ``rollout``).
     ``score`` is the scalar MTLA value after band reduction, ``hallu`` the detection label,
-    ``extracted`` whether attention was captured for this prediction, and ``seed`` the rollout it
-    came from.
+    ``extracted`` whether attention was captured for this prediction, and ``rollout`` the rollout
+    number it came from.
     """
 
     id: ItemId
@@ -133,7 +133,7 @@ class ScoredCand(TypedDict):
     score: float
     hallu: bool
     extracted: bool
-    seed: int
+    rollout: int
 
 
 # The extraction context built by ``load_for_extract`` and read by ``compute_mtla`` + callbacks.

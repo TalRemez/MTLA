@@ -33,14 +33,14 @@ if TYPE_CHECKING:
 
 
 def load_shards(features_dir: str) -> list["ItemRecord"]:
-    """Load and concatenate all ``shard*.pt`` records under one seed's feature dir.
+    """Load and concatenate all ``shard*.pt`` records under one rollout's feature dir.
 
-    The extract stage writes features as ``<features>/seedK/shard*.pt``; this reads
-    every shard for a single seed and flattens them into one list, preserving shard
+    The extract stage writes features as ``<features>/rollout{K}/shard*.pt``; this reads
+    every shard for a single rollout and flattens them into one list, preserving shard
     order (shards are sorted lexicographically by filename).
 
     Args:
-        features_dir: Path to a single seed directory, e.g. ``<features>/seed0``,
+        features_dir: Path to a single rollout directory, e.g. ``<features>/rollout0``,
             containing one or more ``shard*.pt`` files. Each file is a pickled
             ``list[ItemRecord]`` loaded onto CPU.
 
@@ -112,7 +112,7 @@ class DatasetAdapter:
         metric: Name of a pure computer in ``mtla.metrics`` used for the benchmark
             score: ``"coco_map"`` | ``"moment_retrieval"`` | ``"recall_at_iou"``.
         greedy_seed0: Whether rollout 0 is a greedy (temperature 0) anchor in the
-            N=16 self-consistency recipe (greedy seed 0 + N-1 stochastic). Video
+            N=16 self-consistency recipe (greedy rollout 0 + N-1 stochastic). Video
             benchmarks set ``True``; a config ``generate.greedy_seed0`` may override.
         gen_strategy: Execution strategy for ``generate.py``. ``"pooled"`` uses an
             async multi-engine vLLM pool (throughput on many small requests, e.g.
@@ -131,8 +131,8 @@ class DatasetAdapter:
 
     # ---- generation behaviour ----
     # Whether rollout 0 is a greedy (T=0) anchor for self-consistency voting. Video benchmarks set
-    # True (the N=16 recipe: greedy seed 0 + N-1 stochastic); a config `generate.greedy_seed0`
-    # overrides it. See RunConfig.gen_temperature.
+    # True (the N=16 recipe: greedy rollout 0 + N-1 stochastic); a config `generate.greedy_seed0`
+    # overrides it. See generate.rollout_plan.
     greedy_seed0: bool = False
     # Execution strategy for generate.py: "pooled" = async multi-engine vLLM pool
     # (throughput on many small requests, e.g. 5k COCO images); "sharded" = one engine per GPU

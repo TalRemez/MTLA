@@ -7,8 +7,8 @@ dataset: coco
 paths:
   data: data/coco/coco_val_openvocab_80.json                  # open-vocab dataset json (scripts/prepare_coco.py)
   coco_gt: data/coco/annotations/instances_val2017.json       # COCO annotations (for mAP)
-  predictions: runs/coco_qwen/predictions                     # seed{K}/predictions.json
-  features: runs/coco_qwen/features                           # seed{K}/shard*.pt
+  predictions: runs/coco_qwen/predictions                     # rollout{K}/predictions.json
+  features: runs/coco_qwen/features                           # rollout{K}/shard*.pt
 
 generate:
   temperature: 0.7

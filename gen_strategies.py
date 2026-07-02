@@ -11,15 +11,21 @@ Both drive the SAME adapter contract (``model.build_vllm_request`` / ``model.vll
                  pins ONE GPU (CUDA_VISIBLE_DEVICES before torch import) and loops its chunk. Best
                  for HEAVY per-item work (video clips).
 
-Both return the merged list of uniform generation records (``dataset.gen_record`` output); the
-record schema is owned by the dataset, so the strategies never touch it. Every record keeps its
-``idx`` so generate.py can merge in a deterministic order.
+Both return the merged list of uniform generation records (``dataset.gen_record`` output), one per
+item per rollout; the record schema is owned by the dataset, so the strategies never touch it beyond
+tagging each with its ``idx`` (item order) and ``rollout`` (which rollout it belongs to), which
+generate.py uses to split the flat list into per-rollout ``predictions.json`` files.
+
+All rollouts are produced in one pass: the rollout plan (``args["groups"]``) groups rollouts by
+temperature, and each group is one vLLM request with ``SamplingParams(n=<#rollouts>)`` so the prompt
+is prefilled once per group and the KV cache is shared across that group's samples.
 """
 
 import asyncio
 import json
 import os
 import queue
+import shutil
 import sys
 import threading
 import time
@@ -61,8 +67,8 @@ def _pooled_cpu_worker(
         worker_id: this prep worker's index, used only for log messages.
 
     Returns:
-        None. Side effect: enqueues per-item request dicts (or ``skip``/``error``
-        markers) onto the ready queues.
+        None. Side effect: enqueues per-item request dicts (or a ``skip`` marker when the
+        adapter returns ``None``, e.g. missing media) onto the ready queues.
     """
     try:
         os.environ["OMP_NUM_THREADS"] = "1"
@@ -104,23 +110,24 @@ def _pooled_gpu_worker(
 
     A pooled-strategy GPU worker: it pins its GPU group (via ``CUDA_VISIBLE_DEVICES``
     before importing vLLM), builds a persistent ``AsyncLLMEngine``, and concurrently
-    decodes requests pulled from ``ready_queue`` (up to ``concurrency`` in flight),
-    emitting one ``dataset.gen_record`` per item onto ``result_queue``. Skipped or
-    errored items still emit an empty record so the parent's count stays exact. Runs
-    in a spawned subprocess.
+    decodes requests pulled from ``ready_queue`` (up to ``concurrency`` in flight). For
+    each item it issues one request per temperature group with ``SamplingParams(n=...)``
+    (prompt prefilled once per group), and emits ONE result per item onto
+    ``result_queue``: the list of that item's rollout records. A skipped item emits an
+    empty list, so the parent's per-item count stays exact. Runs in a spawned subprocess.
 
     Args:
         engine_id: this engine's index, used for logging and cache-dir naming.
         gpu_ids_str: comma-joined GPU indices for this engine's tensor-parallel group.
-        ready_queue: shared queue of built request dicts (or skip/error markers); a
-            ``None`` sentinel signals shutdown.
-        result_queue: queue the parent drains; receives one generation record per item.
+        ready_queue: shared queue of built request dicts (or skip markers); a ``None``
+            sentinel signals shutdown.
+        result_queue: queue the parent drains; receives one list-of-records per item.
         config_path: path to the run config, reloaded to resolve the adapters.
-        args: tuning + sampling knobs (``tp``, ``max_model_len``, ``gpu_mem_util``,
-            ``concurrency``, ``temperature``, ``top_p``, ``max_new_tokens``, ``seed``).
+        args: ``groups`` (rollout plan) + tuning/sampling knobs (``tp``, ``concurrency``,
+            ``top_p``, ``max_new_tokens``).
 
     Returns:
-        None. Side effect: puts generation records on ``result_queue``.
+        None. Side effect: puts per-item record lists on ``result_queue``.
 
     Raises:
         SystemExit: exits the subprocess with code 1 on a fatal engine error.
@@ -128,13 +135,18 @@ def _pooled_gpu_worker(
     try:
         os.environ["CUDA_VISIBLE_DEVICES"] = gpu_ids_str
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        # User-scoped cache root: on shared boxes a dir owned by another user under /tmp is not
-        # writable, so per-user paths avoid cross-user PermissionErrors.
+        # Per-engine, user-scoped cache dirs. User-scoped: on shared boxes a dir owned by another
+        # user under /tmp is not writable (PermissionError). Per-engine: the engines run concurrently
+        # and torch.compile / inductor / triton caches are NOT safe to share across processes — a
+        # shared dir races (partial writes -> "UnpicklingError: pickle data was truncated"), so each
+        # engine gets its own VLLM / inductor / triton cache dir.
         cache_dir = (
             f"/tmp/vllm_cache_mtla_{os.environ.get('USER', 'u')}/engine_{engine_id}"
         )
         os.makedirs(cache_dir, exist_ok=True)
         os.environ["VLLM_CACHE_ROOT"] = cache_dir
+        os.environ["TORCHINDUCTOR_CACHE_DIR"] = f"{cache_dir}/inductor"
+        os.environ["TRITON_CACHE_DIR"] = f"{cache_dir}/triton"
         from vllm import AsyncLLMEngine, AsyncEngineArgs, SamplingParams
         from vllm.utils import random_uuid
 
@@ -158,17 +170,23 @@ def _pooled_gpu_worker(
             f"[Engine {engine_id}] ready (GPUs {gpu_ids_str}, TP={args['tp']})",
             flush=True,
         )
-        sampling = SamplingParams(
-            temperature=args["temperature"],
-            top_p=args["top_p"],
-            max_tokens=args["max_new_tokens"],
-            seed=args["seed"],
-        )
+        # One SamplingParams per temperature group (n = #rollouts in the group), so vLLM prefills
+        # the prompt once per group and shares the KV cache across that group's samples. Force
+        # FINAL_ONLY: the default streaming kind yields per-step deltas and the last yielded output
+        # can carry fewer than n samples (they finish at different steps) — FINAL_ONLY yields one
+        # complete output with all n samples, so no rollout is silently dropped.
+        from vllm.sampling_params import RequestOutputKind
+
+        samplings = []
+        for g in args["groups"]:
+            sp = _build_sampling(g, args, SamplingParams)
+            sp.output_kind = RequestOutputKind.FINAL_ONLY
+            samplings.append((sp, g["rollouts"]))
 
         async def run():
             local_q = asyncio.Queue(maxsize=args["concurrency"] * 2)
             active = set()
-            stats = {"done": 0, "err": 0}
+            stats = {"done": 0, "skip": 0}
             shutdown = False
 
             def bridge() -> None:
@@ -185,37 +203,44 @@ def _pooled_gpu_worker(
             threading.Thread(target=bridge, daemon=True).start()
 
             async def infer(task):
-                # A generation error propagates: it is re-raised where the tasks are
-                # awaited below, crashing the engine loudly rather than being logged as
-                # an "err" and masked. Only the CPU worker's explicit skip marker (e.g. a
-                # missing clip) yields an empty record, to keep the idx accounting complete.
+                # Emit exactly one queue put PER ITEM (a list of that item's rollout records), so the
+                # parent still drains len(samples) puts. A generation error propagates (re-raised
+                # where tasks are awaited below), crashing loudly rather than being masked; a skip
+                # marker (adapter returned None, e.g. missing media) emits an empty list.
                 try:
                     if task.get("skip"):
-                        rec = dataset.gen_record(cfg, task["item"], "")
-                        rec["idx"] = task["idx"]
-                        result_queue.put(rec)
-                        stats["err"] += 1
+                        result_queue.put([])
+                        stats["skip"] += 1
                         return
-                    final = None
-                    req = {
+                    base = {
                         "prompt": task["prompt"],
                         "multi_modal_data": task["multi_modal_data"],
                     }
                     if task.get("mm_processor_kwargs"):
-                        req["mm_processor_kwargs"] = task["mm_processor_kwargs"]
-                    async for r in engine.generate(req, sampling, random_uuid()):
-                        final = r
-                    response = final.outputs[0].text if final else ""
-                    trunc = (
-                        len(final.outputs[0].token_ids) >= args["max_new_tokens"]
-                        if final
-                        else False
-                    )
-                    rec = dataset.gen_record(
-                        cfg, task["item"], response, truncated=trunc
-                    )
-                    rec["idx"] = task["idx"]
-                    result_queue.put(rec)
+                        base["mm_processor_kwargs"] = task["mm_processor_kwargs"]
+                    recs = []
+                    for sp, rollouts in samplings:
+                        final = None
+                        async for r in engine.generate(base, sp, random_uuid()):
+                            final = r
+                        samples = final.outputs if final else []
+                        # FINAL_ONLY guarantees all n samples; a short count is a real bug, not a
+                        # per-item hiccup — fail loud rather than silently drop rollouts.
+                        if len(samples) != len(rollouts):
+                            raise RuntimeError(
+                                f"expected {len(rollouts)} samples (n={sp.n}) but got "
+                                f"{len(samples)} for idx {task['idx']}"
+                            )
+                        # One request -> len(rollouts) samples; sample k is rollout rollouts[k].
+                        for rollout, sample in zip(rollouts, samples):
+                            trunc = len(sample.token_ids) >= args["max_new_tokens"]
+                            rec = dataset.gen_record(
+                                cfg, task["item"], sample.text, truncated=trunc
+                            )
+                            rec["idx"] = task["idx"]
+                            rec["rollout"] = rollout
+                            recs.append(rec)
+                    result_queue.put(recs)
                     stats["done"] += 1
                 finally:
                     active.discard(asyncio.current_task())
@@ -241,7 +266,7 @@ def _pooled_gpu_worker(
             if active:
                 await asyncio.gather(*active)  # re-raise any straggler failure
             print(
-                f"[Engine {engine_id}] done={stats['done']} err={stats['err']}",
+                f"[Engine {engine_id}] done={stats['done']} skip={stats['skip']}",
                 flush=True,
             )
 
@@ -255,20 +280,20 @@ def run_pooled(cfg, samples: list, args: dict) -> list:
     """Run generation via an async multi-engine vLLM pool (throughput strategy).
 
     Spins up one ``AsyncLLMEngine`` per tensor-parallel GPU group plus a set of CPU
-    prep workers, streams the samples through the raw queue, and drains one generation
-    record per sample from the result queue (with a live throughput/ETA log), then
-    shuts the workers down. Best for many small requests (e.g. thousands of images).
+    prep workers, streams the samples through the raw queue, and drains one result PER
+    ITEM from the result queue — each result being the list of that item's rollout records
+    (one per rollout in the plan) — flattening them into the merged output. Best for many
+    small requests (e.g. thousands of images).
 
     Args:
         cfg: the loaded run config (provides the generate-stage GPUs and config path).
         samples: the tagged work items to generate for (each carries an ``idx``).
-        args: tuning + effective sampling knobs (``tp``, ``max_model_len``,
-            ``gpu_mem_util``, ``concurrency``, ``num_cpu_workers``, ``temperature``,
-            ``top_p``, ``max_new_tokens``, ``seed``).
+        args: ``groups`` (rollout plan) + tuning/sampling knobs (``tp``, ``concurrency``,
+            ``num_cpu_workers``, ``top_p``, ``max_new_tokens``).
 
     Returns:
-        The merged list of ``dataset.gen_record`` records (one per sample), unordered;
-        the caller sorts by ``idx``.
+        The merged list of ``dataset.gen_record`` records (one per item per rollout, each
+        tagged with ``idx`` and ``rollout``), unordered; the caller splits by ``rollout``.
 
     Raises:
         AssertionError: if the number of GPUs is not divisible by the tensor-parallel
@@ -318,17 +343,21 @@ def run_pooled(cfg, samples: list, args: dict) -> list:
         raw_q.put(None)
 
     results = []
+    n_items = (
+        0  # results are drained one PER ITEM (a list of that item's rollout records)
+    )
     start = time.time()
     last = start
-    while len(results) < len(samples):
+    while n_items < len(samples):
         try:
-            results.append(result_q.get(timeout=300))
+            results.extend(result_q.get(timeout=300))
+            n_items += 1
             now = time.time()
             if now - last > 10:
-                spd = len(results) / (now - start)
+                spd = n_items / (now - start)
                 print(
-                    f"  [{len(results)}/{len(samples)}] {spd:.1f}/s "
-                    f"ETA {(len(samples)-len(results))/max(spd,1e-9):.0f}s",
+                    f"  [{n_items}/{len(samples)}] {spd:.1f} items/s "
+                    f"ETA {(len(samples)-n_items)/max(spd,1e-9):.0f}s",
                     flush=True,
                 )
                 last = now
@@ -350,15 +379,50 @@ def run_pooled(cfg, samples: list, args: dict) -> list:
 # ===========================================================================
 # Strategy B — one blocking engine per GPU (heavy per-item work)
 # ===========================================================================
+def _build_sampling(group: dict, args: dict, SamplingParams):
+    """Build the ``SamplingParams`` for one temperature group's single ``n=K`` request.
+
+    The group's ``rollouts`` all share one request: ``n`` is their count, so vLLM prefills
+    the prompt once and shares the KV cache across the K samples. ``seed`` is the group's
+    RNG seed (the greedy and stochastic groups carry different seeds), so a rerun
+    reproduces the same K samples.
+
+    Args:
+        group: a rollout-plan group ``{"rollouts": [...], "temperature": float, "seed": int}``.
+        args: sampling knobs (``top_p``, ``max_new_tokens``).
+        SamplingParams: the vLLM class (imported inside the worker).
+
+    Returns:
+        A ``SamplingParams`` with ``n=len(group["rollouts"])`` at the group's temperature.
+    """
+    n = len(group["rollouts"])
+    temperature = group["temperature"]
+    if temperature and temperature > 0:
+        return SamplingParams(
+            n=n,
+            temperature=temperature,
+            top_p=args["top_p"],
+            max_tokens=args["max_new_tokens"],
+            seed=group["seed"],
+        )
+    # Greedy (T=0): deterministic, so n is 1 in practice; keep n for uniformity.
+    return SamplingParams(
+        n=n, temperature=0.0, max_tokens=args["max_new_tokens"], seed=group["seed"]
+    )
+
+
 def _sharded_worker(
     rank: int, gpu_id: int, items: list, out_dir: str, config_path: str, args: dict
 ) -> None:
-    """Generate for one chunk of items on a single GPU with a blocking vLLM engine.
+    """Generate every rollout for one chunk of items on a single GPU with a blocking engine.
 
     A sharded-strategy worker: it pins its GPU (via ``CUDA_VISIBLE_DEVICES`` before
-    importing vLLM), builds one blocking ``LLM`` engine, and loops its chunk one item
-    at a time, writing the resulting records to a per-rank shard file. Items that fail
-    or produce an empty response are skipped. Runs in a spawned subprocess.
+    importing vLLM), builds one blocking ``LLM`` engine, and loops its chunk one item at
+    a time. For each item it issues one request per temperature group (``args["groups"]``)
+    with ``SamplingParams(n=<#rollouts in group>)``, so the prompt is prefilled once per
+    group and the KV cache is shared across that group's samples. Each of the K outputs is
+    written as its own ``gen_record`` tagged with its rollout number. Runs in a spawned
+    subprocess.
 
     Args:
         rank: this worker's shard index; used to name the output shard file.
@@ -366,11 +430,12 @@ def _sharded_worker(
         items: this worker's slice of work items.
         out_dir: directory to write ``preds_rank{rank}.json`` into (created if missing).
         config_path: path to the run config, reloaded to resolve the adapters.
-        args: sampling knobs (``temperature``, ``top_p``, ``max_new_tokens``, ``seed``).
+        args: ``groups`` (the rollout plan) plus sampling knobs (``top_p``,
+            ``max_new_tokens``).
 
     Returns:
         None. Side effect: writes ``<out_dir>/preds_rank{rank}.json`` with this shard's
-        generation records.
+        generation records, each tagged with ``idx`` and ``rollout``.
     """
     os.environ["CUDA_VISIBLE_DEVICES"] = str(
         gpu_id
@@ -379,10 +444,10 @@ def _sharded_worker(
 
     cfg = load_config(config_path)
     model, dataset = resolve(cfg.model, cfg.dataset)
-    temperature = args["temperature"]
+    groups = args["groups"]
     print(
         f"[worker {rank}] sharded model={cfg.model} dataset={cfg.dataset} gpu={gpu_id} "
-        f"n={len(items)} seed={args['seed']} T={temperature}",
+        f"n={len(items)} groups={groups}",
         flush=True,
     )
 
@@ -394,17 +459,9 @@ def _sharded_worker(
         disable_log_stats=True,
         max_model_len=cfg.generate.max_model_len,
     )
-    sp_kwargs = (
-        dict(
-            temperature=temperature,
-            top_p=args["top_p"],
-            max_tokens=args["max_new_tokens"],
-        )
-        if temperature and temperature > 0
-        else dict(temperature=0.0, max_tokens=args["max_new_tokens"])
-    )
-    sp_kwargs["seed"] = args["seed"]
-    sp = SamplingParams(**sp_kwargs)
+    samplings = [
+        (_build_sampling(g, args, SamplingParams), g["rollouts"]) for g in groups
+    ]
 
     results = []
     for cnt, item in enumerate(items):
@@ -417,16 +474,28 @@ def _sharded_worker(
         }
         if req.get("mm_processor_kwargs"):
             gen_req["mm_processor_kwargs"] = req["mm_processor_kwargs"]
-        out = llm.generate([gen_req], sp, use_tqdm=False)
-        response = out[0].outputs[0].text.strip() if out and out[0].outputs else ""
-        if not response:
-            continue
-        rec = dataset.gen_record(cfg, item, response)
-        rec["idx"] = item.get("idx", cnt)
-        results.append(rec)
+        for sp, rollouts in samplings:
+            out = llm.generate([gen_req], sp, use_tqdm=False)
+            # One request -> len(rollouts) samples; sample k is rollout rollouts[k]. The blocking
+            # LLM.generate returns completed outputs (no streaming), so all n should be present; a
+            # short count is a real bug, not a per-item hiccup — fail loud rather than drop rollouts.
+            samples = out[0].outputs if out else []
+            if len(samples) != len(rollouts):
+                raise RuntimeError(
+                    f"expected {len(rollouts)} samples (n={sp.n}) but got {len(samples)} "
+                    f"for idx {item.get('idx', cnt)}"
+                )
+            for rollout, sample in zip(rollouts, samples):
+                response = sample.text.strip()
+                if not response:
+                    continue
+                rec = dataset.gen_record(cfg, item, response)
+                rec["idx"] = item.get("idx", cnt)
+                rec["rollout"] = rollout
+                results.append(rec)
         if (cnt + 1) % 25 == 0:
             print(
-                f"[worker {rank}] [{cnt+1}/{len(items)}] done={len(results)}",
+                f"[worker {rank}] [{cnt + 1}/{len(items)}] records={len(results)}",
                 flush=True,
             )
 
@@ -443,7 +512,7 @@ def _sharded_worker(
     with open(f"{out_dir}/preds_rank{rank}.json", "w") as f:
         json.dump(results, f)
     print(
-        f"[worker {rank}] saved {len(results)} -> {out_dir}/preds_rank{rank}.json",
+        f"[worker {rank}] saved {len(results)} records -> {out_dir}/preds_rank{rank}.json",
         flush=True,
     )
 
@@ -452,24 +521,29 @@ def run_sharded(cfg, samples: list, args: dict, out_dir: str) -> list:
     """Run generation via one blocking vLLM engine per GPU (heavy-per-item strategy).
 
     Splits the samples evenly across the generate-stage GPUs, spawns one
-    ``_sharded_worker`` per GPU, joins them, then merges their per-rank shard files.
-    Best for heavy per-item work such as video clips. Fails loudly if any worker
-    crashes, since a missing shard would silently produce an incomplete run.
+    ``_sharded_worker`` per GPU (each producing every rollout for its chunk), joins them,
+    then merges their per-rank shard files into one flat, rollout-tagged list. Best for
+    heavy per-item work such as video clips. Fails loudly if any worker crashes, since a
+    missing shard would silently produce an incomplete run.
 
     Args:
         cfg: the loaded run config (provides the generate-stage GPUs and config path).
         samples: the tagged work items to generate for.
-        args: sampling knobs passed through to each worker (see ``_sharded_worker``).
-        out_dir: directory the workers write their per-rank shards into.
+        args: ``groups`` (rollout plan) + sampling knobs (see ``_sharded_worker``).
+        out_dir: base directory; per-rank shards go in an ``_sharded_staging`` subdir that
+            is removed after the merge (the caller writes the per-rollout files).
 
     Returns:
-        The merged list of generation records read back from the per-rank shard files.
+        The merged list of generation records (each tagged with ``idx`` and ``rollout``),
+        read back from the per-rank shard files.
 
     Raises:
         SystemExit: if one or more workers exit with a non-zero code, listing the
             failed ``(rank, exitcode)`` pairs; the shards on disk are incomplete.
     """
     gpu_ids = cfg.stage_gpus("generate")
+    staging = os.path.join(out_dir, "_sharded_staging")
+    os.makedirs(staging, exist_ok=True)
     print(f"[sharded] samples={len(samples)} gpus={gpu_ids}", flush=True)
     procs = []
     for rank, (gpu, chunk) in enumerate(
@@ -479,7 +553,7 @@ def run_sharded(cfg, samples: list, args: dict, out_dir: str) -> list:
             continue
         p = mp.Process(
             target=_sharded_worker,
-            args=(rank, gpu, list(chunk), out_dir, cfg.config_path, args),
+            args=(rank, gpu, list(chunk), staging, cfg.config_path, args),
         )
         p.start()
         procs.append((rank, p))
@@ -487,11 +561,12 @@ def run_sharded(cfg, samples: list, args: dict, out_dir: str) -> list:
     if failed:
         raise SystemExit(
             f"[sharded] {len(failed)} worker(s) failed (rank, exitcode): {failed}; "
-            f"shards under {out_dir} are INCOMPLETE — fix the error and re-run."
+            f"shards under {staging} are INCOMPLETE — fix the error and re-run."
         )
     merged = []
     for rank in range(len(gpu_ids)):
-        pp = f"{out_dir}/preds_rank{rank}.json"
+        pp = f"{staging}/preds_rank{rank}.json"
         if os.path.exists(pp):
             merged.extend(json.load(open(pp)))
+    shutil.rmtree(staging, ignore_errors=True)
     return merged

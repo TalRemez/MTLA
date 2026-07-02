@@ -269,7 +269,10 @@ def compute_mtla(
         inp["modality_idx_l"],
         n_layers,
         device,
+        rank,
     )  # [L, H, N_q, n_mod]
+    if attn is None:  # this item ran out of GPU memory (state.n_oom bumped); skip it
+        return None
 
     def reduce_to_region(positions: list[int], region: "torch.Tensor") -> "np.ndarray":
         """Reduce this prediction's captured attention onto its region M(R_p) -> [L,H] (eqs. 2-3);
@@ -338,6 +341,7 @@ class CaptureState:
     captured: list | None = (
         None  # per-layer [H, N_q, n_mod], model dtype, on the compute device
     )
+    n_oom: int = 0  # count of items skipped for CUDA OOM (the extract worker caps this)
 
 
 def make_capture_forward(state: CaptureState, orig_forward: Callable) -> Callable:
@@ -407,12 +411,18 @@ def _run_captured_forward(
     modality_idx: list[int],
     n_layers: int,
     device: str,
-) -> "torch.Tensor":
+    rank: int = 0,
+) -> "torch.Tensor | None":
     """Run one attention-capturing forward and return the stacked per-layer attention slice.
 
     Sets the rows/cols the capture wrapper keeps, runs a single ``torch.no_grad`` forward (which is
     what materializes the attention the wrapper slices per layer), then stacks the per-layer results.
-    A forward that raises propagates (it is a real model/input bug, not a per-item hiccup to swallow).
+
+    The one tolerated failure is CUDA out-of-memory: a pathologically long response materializes a
+    full ``[H, Q, K]`` map for one layer that does not fit, which is a property of that single item,
+    not a bug. It is caught, logged, and reported as ``None`` (the driver skips the item and the
+    extract worker caps how many such skips it tolerates before failing the run). Every OTHER
+    exception propagates — it is a real model/input bug, not a per-item hiccup to swallow.
 
     Args:
         model: The loaded HF model (its attention already patched by :func:`install_capture`).
@@ -423,9 +433,11 @@ def _run_captured_forward(
         modality_idx: Positions of the input-modality tokens (the columns to keep).
         n_layers: Number of decoder layers (size of the per-layer capture buffer).
         device: Device to place the row/col index tensors on.
+        rank: Worker rank, used only for the OOM-skip log line.
 
     Returns:
-        The captured attention stacked as ``[L, H, N_q, n_mod]`` (fp32, on ``device``).
+        The captured attention stacked as ``[L, H, N_q, n_mod]`` (fp32, on ``device``), or ``None``
+        if the forward ran out of GPU memory for this item.
     """
     state.qpos = torch.tensor(query_positions, dtype=torch.long, device=device)
     state.modidx = torch.tensor(modality_idx, dtype=torch.long, device=device)
@@ -434,6 +446,16 @@ def _run_captured_forward(
         state.active = True
         with torch.no_grad():
             model(**fk)
+    except torch.cuda.OutOfMemoryError as e:
+        state.n_oom += 1
+        print(
+            f"[worker {rank}] OOM on one item (seq_len={fk['input_ids'].shape[-1]}, "
+            f"n_mod={len(modality_idx)}); skipping it: {e}",
+            flush=True,
+        )
+        state.captured = None
+        torch.cuda.empty_cache()
+        return None
     finally:
         state.active = False  # must reset even if the forward raises
     # The per-layer slices are tiny, so stacking + reducing stays on the compute device; upcast to
