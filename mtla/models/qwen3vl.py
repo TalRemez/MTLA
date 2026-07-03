@@ -4,9 +4,10 @@ A shared ``Qwen3VLBase`` holds the family wiring (checkpoint, attention module t
 model loading, and the common capture-forward kwargs); two registered single-task
 adapters build on it:
 
-  * ``Qwen3VLImageAdapter`` (key ``qwen3vl_image``): COCO detection. ``parse_response``
-    reads JSON ``{"bbox_2d","label"}``; the region masks onto the merged patch grid.
-    Reproduces the paper's COCO AUROC 0.902.
+  * ``Qwen3VLImageAdapter`` (key ``qwen3vl_image``): COCO detection, the headline COCO
+    detector. ``parse_response`` reads JSON ``{"bbox_2d","label"}``; the region masks onto
+    the merged patch grid. Prompted with all 80 COCO classes (open-vocab): hallucination
+    AUROC 0.890, and mAP 36.9 with N=16 self-consistency voting.
   * ``Qwen3VLVideoAdapter`` (key ``qwen3vl_video``): temporal grounding (QVHighlights
     multi-segment, Charades single-span). ``parse_response`` extracts ``[start, end]``
     spans; the region masks onto the frame tokens inside a span.

@@ -17,7 +17,7 @@ discovered from the features dir, so there is no ``--n``: it votes over exactly 
 were extracted.
 
     python -m evaluate --config configs/coco_internvl.yaml
-    python -m evaluate --config configs/coco_internvl.yaml --agg sum   # COCO N=16 voting headline
+    python -m evaluate --config configs/coco_qwen3vl.yaml --agg sum   # COCO N=16 voting headline
 """
 
 from __future__ import annotations

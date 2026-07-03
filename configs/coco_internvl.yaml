@@ -1,6 +1,6 @@
-# COCO detection with InternVL3.5-8B.
-# Reproduces: hallucination AUROC 0.873 (MTLA); single-rollout mAP 36.2.
-# For the 41.9 mAP headline, add N=16 self-consistency voting at launch: --n 16 --agg sum.
+# COCO detection with InternVL3.5-8B — the second COCO model (Qwen3-VL is the headline; see
+# configs/coco_qwen3vl.yaml). Same CocoDataset, different model:.
+# Reproduces: hallucination AUROC 0.916 (MTLA), under the full 80-class open-vocab prompt.
 model: internvl_image
 dataset: coco
 
