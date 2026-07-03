@@ -1,7 +1,6 @@
 # COCO detection with InternVL3.5-8B.
-# Reproduces: hallucination AUROC 0.873 (MTLA); single-rollout mAP 36.1.
-# For the 41.9 mAP headline: --n 16 (16 rollouts); score uses the support fusion (agg: support below),
-# scoring the coord-token inside-region signal (dataset signal=digits_local).
+# For the mAP headline: --n 16 (16 rollouts); score uses the support fusion (--agg support),
+# scoring the coord-token inside-region signal (score.slot=digits, score.attn_scope=local).
 model: internvl_image
 dataset: coco
 
@@ -16,5 +15,7 @@ generate:
 
 score:
   agg: max
+  slot: digits          # InternVL: coordinate tokens (paper coord_mean slot); MTLA headline
+  attn_scope: local     # local = inside the proposal region (MTLA); global = SVAR baseline
 
 band: [8, 21]                                      # middle-layer band (null = all layers)

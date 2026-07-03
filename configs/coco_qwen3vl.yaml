@@ -15,5 +15,7 @@ generate:
 
 score:
   agg: max
+  slot: all             # Qwen3-VL: all response tokens Q_p (best slot for this model)
+  attn_scope: local     # local = inside the proposal region (MTLA); global = SVAR baseline
 
 band: [8, 21]

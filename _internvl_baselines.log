@@ -1,1 +1,4 @@
 rollouts: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+baseline             agg     mAP   mAP50   mAP75     ndets
+raw                  sum   25.54   42.79   25.38   1043755
+first_global     support   34.62   56.67   34.93   1044285

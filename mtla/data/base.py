@@ -101,9 +101,14 @@ class DatasetAdapter:
         task: Task family. ``"image_det"`` (box detection) or ``"video_span"``
             (temporal grounding). Tells the model adapter which response parser and
             region mask to use, so any valid ``(model x dataset)`` pair runs.
-        signal: Which saved ``[L, H]`` (layers x heads) attention array to reduce.
-            ``"local_attention"`` for images; ``"first_digit"`` for video (the
-            validated choice: attention on the span's first coordinate digit).
+        slot: Which response tokens Q_p define the saved ``[L, H]`` array to reduce:
+            ``"first"`` | ``"digits"`` | ``"label"`` | ``"all"``. ``"digits"`` for
+            images (coordinate tokens); ``"first"`` for video (the validated choice:
+            the span's first coordinate digit).
+        attn_scope: Which key tokens the attention is summed over: ``"local"`` (inside
+            the proposal region M(R_p), i.e. MTLA) or ``"global"`` (all modality tokens,
+            i.e. the SVAR baseline). Adapters default to ``"local"``. The reduced array
+            lives under the shard key ``f"{slot}_{attn_scope}"`` (e.g. ``digits_local``).
         overlap: Overlap function for both voting and metrics. ``"iou"`` for boxes,
             ``"tiou"`` for temporal spans.
         select: How candidates from the N rollouts are combined. ``"fuse"`` pools
@@ -124,7 +129,10 @@ class DatasetAdapter:
     task: str = ""
 
     # ---- scoring descriptors (see module docstring; read by the evaluate.py stage) ----
-    signal: str = "local_attention"
+    # The scored shard key is f"{slot}_{attn_scope}"; a config's score.slot / score.attn_scope override
+    # these per (dataset, model). slot = which Q_p tokens; attn_scope = local (MTLA) | global (SVAR).
+    slot: str = "all"
+    attn_scope: str = "local"
     overlap: str = "iou"
     select: str = "fuse"
     metric: str = "coco_map"

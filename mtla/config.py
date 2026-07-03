@@ -73,6 +73,14 @@ class StageCfg:
     gpus: list | None = None  # None = all visible GPUs (see RunConfig.stage_gpus)
     n_items: int = 0  # 0 = all items; set at launch via --limit, not in configs
     agg: str = "max"  # score: voting fusion (max | sum | support | mean)
+    # score: which attention array to reduce, as two orthogonal choices whose product is the shard key
+    # "<slot>_<attn_scope>" (e.g. digits_local, all_global). slot = which response tokens Q_p
+    # (first | digits | label | all); attn_scope = local (inside the proposal region M(R_p), i.e. MTLA)
+    # or global (all modality tokens, i.e. the SVAR baseline). Both None = the dataset adapter's default.
+    # The best slot is model-specific (InternVL: digits; Qwen3-VL: all), so it is set per model config
+    # here rather than on the shared dataset adapter.
+    slot: str | None = None  # first | digits | label | all
+    attn_scope: str | None = None  # local (MTLA) | global (SVAR)
     temperature: float = 0.7  # generate: sampling temperature for stochastic rollouts
     top_p: float = 1.0  # generate: nucleus sampling top-p
     max_new_tokens: int = 4096  # generate: decode cap

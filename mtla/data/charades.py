@@ -35,16 +35,19 @@ class CharadesDataset(DatasetAdapter):
     """Charades-STA single-span temporal-grounding adapter (task ``video_span``).
 
     One item per (video, caption) query; the prompt asks for a single start/end
-    span in seconds. Scoring uses the ``first_digit`` signal with temporal IoU and
-    keeps the single highest-MTLA span per query (``select="argmax"``, the headline
-    rule), reporting R@1 at IoU {0.3, 0.5, 0.7} plus mIoU. Uses the N=16 recipe
-    (``greedy_seed0=True``) and the ``"sharded"`` engine-per-GPU strategy.
+    span in seconds. Scoring uses the ``first`` slot inside the region
+    (``first_local``) with temporal IoU and keeps the single highest-MTLA span per
+    query (``select="argmax"``, the headline rule), reporting R@1 at IoU {0.3, 0.5,
+    0.7} plus mIoU. Uses the N=16 recipe (``greedy_seed0=True``) and the
+    ``"sharded"`` engine-per-GPU strategy.
     """
 
     name = "charades"
     task = "video_span"
-    # scoring: first-digit MTLA; temporal overlap; single-span selection; recall @ IoU + mIoU.
-    signal = "first_digit"
+    # scoring: first-coordinate-token MTLA (inside region); temporal overlap; single-span selection;
+    # recall @ IoU + mIoU. The validated video slot is `first` (the span's first coordinate digit).
+    slot = "first"
+    attn_scope = "local"
     overlap = "tiou"
     select = "argmax"
     metric = "recall_at_iou"

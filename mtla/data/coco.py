@@ -117,18 +117,20 @@ class CocoDataset(DatasetAdapter):
     """COCO open-vocabulary detection adapter (val2017, task ``image_det``).
 
     One item per image; the prompt asks for boxes over the 80 COCO classes (or an
-    item-supplied subset). Scoring uses the ``local_attention`` signal with box
-    IoU, pools candidates across rollouts with NMS (``select="fuse"``), and reports
-    COCO mAP; generation runs on the ``"pooled"`` vLLM strategy for throughput over
-    the ~5000 small image requests.
+    item-supplied subset). Scoring uses the ``digits`` slot inside the region
+    (``digits_local``) with box IoU, pools candidates across rollouts with NMS
+    (``select="fuse"``), and reports COCO mAP; generation runs on the ``"pooled"``
+    vLLM strategy for throughput over the ~5000 small image requests.
     """
 
     name = "coco"
     task = "image_det"
-    # scoring: MTLA over the COORDINATE tokens (paper's coord_mean slot, inside-region signal); box
+    # scoring: MTLA over the COORDINATE tokens (paper's coord_mean slot), inside the region; box
     # overlap; NMS pool across rollouts scored by support x score; COCO mAP. Matches the paper's
-    # headline COCO recipe (coco_voting_nms_internvl.py: digits_local + support fusion).
-    signal = "digits_local"
+    # headline COCO recipe (coco_voting_nms_internvl.py: digits_local + support fusion). The best slot
+    # is model-specific (InternVL: digits; Qwen3-VL: all), overridden per model config via score.slot.
+    slot = "digits"
+    attn_scope = "local"
     overlap = "iou"
     select = "fuse"
     metric = "coco_map"

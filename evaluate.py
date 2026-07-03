@@ -49,16 +49,17 @@ def load_candidates(
     """Load every rollout's shards and flatten them into scored candidates.
 
     Walks the discovered feature-shard directories (one per rollout), reduces each
-    prediction's ``[L, H]`` attention array for the dataset's signal to a scalar MTLA
-    score via ``reduce_band`` over the config's layer band (paper eq. 4), and collects
-    every prediction as a flat candidate. This is the shared front end for both the
-    hallucination-AUROC and the voting/metric paths.
+    prediction's ``[L, H]`` attention array for the scored ``slot`` x ``attn_scope`` to a
+    scalar MTLA score via ``reduce_band`` over the config's layer band (paper eq. 4), and
+    collects every prediction as a flat candidate. This is the shared front end for both
+    the hallucination-AUROC and the voting/metric paths.
 
     Args:
-        cfg: the run config, supplying the layer band, the rollouts on disk, and the
-            per-rollout feature directories.
-        dataset: the dataset adapter, supplying ``signal`` (which stored array to
-            reduce).
+        cfg: the run config, supplying the layer band, the rollouts on disk, the
+            per-rollout feature directories, and the ``score.slot`` / ``score.attn_scope``
+            overrides.
+        dataset: the dataset adapter, supplying the default ``slot`` / ``attn_scope``
+            (which stored array to reduce).
 
     Returns:
         A tuple ``(cands, gt_by_id, rollouts)`` where ``cands`` is a list of
@@ -67,7 +68,12 @@ def load_candidates(
         numbers found on disk.
     """
     band = cfg.band_indices()
-    signal = dataset.signal
+    # The scored array is the shard key f"{slot}_{attn_scope}". Both are model-specific (InternVL:
+    # digits_local; Qwen3-VL: all_local), so a config's score.slot / score.attn_scope override the
+    # dataset adapter's defaults when set.
+    slot = cfg.score.slot or dataset.slot
+    attn_scope = cfg.score.attn_scope or dataset.attn_scope
+    signal = f"{slot}_{attn_scope}"
     rollouts = cfg.rollouts_on_disk("features")  # what extract wrote, not a flag
     cands: list[ScoredCand] = []
     gt_by_id: dict[ItemId, list] = {}

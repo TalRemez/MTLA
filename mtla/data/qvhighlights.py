@@ -33,17 +33,19 @@ class QVHighlightsDataset(DatasetAdapter):
     """QVHighlights multi-segment temporal-grounding adapter (task ``video_span``).
 
     One item per query; the prompt asks for every matching segment in the video.
-    Scoring uses the ``first_digit`` signal (the validated video signal) with
-    temporal IoU, pools segments across rollouts with NMS (``select="fuse"``), and
-    reports moment-retrieval mAP / R@1 via the vendored Moment-DETR evaluator. Uses
-    the N=16 recipe (``greedy_seed0=True``) and the ``"sharded"`` engine-per-GPU
-    strategy for the heavy per-clip work.
+    Scoring uses the ``first`` slot inside the region (``first_local``, the validated
+    video signal) with temporal IoU, pools segments across rollouts with NMS
+    (``select="fuse"``), and reports moment-retrieval mAP / R@1 via the vendored
+    Moment-DETR evaluator. Uses the N=16 recipe (``greedy_seed0=True``) and the
+    ``"sharded"`` engine-per-GPU strategy for the heavy per-clip work.
     """
 
     name = "qvhighlights"
     task = "video_span"
-    # scoring: first-digit MTLA (validated video signal); temporal overlap; NMS pool; moment mAP/R@1.
-    signal = "first_digit"
+    # scoring: first-coordinate-token MTLA (inside region, validated video slot); temporal overlap;
+    # NMS pool; moment mAP / R@1.
+    slot = "first"
+    attn_scope = "local"
     overlap = "tiou"
     select = "fuse"
     metric = "moment_retrieval"
