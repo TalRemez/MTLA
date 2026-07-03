@@ -1,0 +1,7 @@
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[coco/qwen3vl_image] results:
+  auroc_mtla = 0.9027
+  n_rollouts = 16
+  agg = sum
+  map: mAP=0.9458  mAP50=1.3209  mAP75=0.9793  AP_small=0.4113  AP_medium=1.0308  AP_large=1.2906
+  n_dets = 6900

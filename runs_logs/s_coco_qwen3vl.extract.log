@@ -1,0 +1,35 @@
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 167353.78it/s]
+[extract] found 2 rollout(s) on disk: [0, 1]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.20s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.23s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.21s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.25s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.29s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.32s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:04,  1.33s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.29s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.04s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.07s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.17s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.10s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.12s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.12s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.17s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.33s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.01it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.01it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.10s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.06s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.08s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.09s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.07s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.08it/s]
+[worker 7] model=qwen3vl_image dataset=coco gpu=7 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.08it/s]
+[worker 4] model=qwen3vl_image dataset=coco gpu=4 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.22s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.09it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.00s/it]
+[worker 2] model=qwen3vl_image dataset=coco gpu=2 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.02it/s]
+[worker 1] model=qwen3vl_image dataset=coco gpu=1 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.09it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.00it/s]
+[worker 0] model=qwen3vl_image dataset=coco gpu=0 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.07it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.01s/it]
+[worker 5] model=qwen3vl_image dataset=coco gpu=5 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.12it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.01it/s]
+[worker 6] model=qwen3vl_image dataset=coco gpu=6 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.05it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.07s/it]
+[worker 3] model=qwen3vl_image dataset=coco gpu=3 rollouts=[0, 1] L=36 H=32
+[worker 7] rollout 0: saved 2 records / 12 preds -> runs/coco/qwen3vl_image/features/rollout0/shard7.pt
+[worker 4] rollout 0: saved 2 records / 7 preds -> runs/coco/qwen3vl_image/features/rollout0/shard4.pt
+[worker 1] rollout 0: saved 2 records / 35 preds -> runs/coco/qwen3vl_image/features/rollout0/shard1.pt
+[worker 2] rollout 0: saved 2 records / 14 preds -> runs/coco/qwen3vl_image/features/rollout0/shard2.pt
+[worker 3] rollout 0: saved 2 records / 15 preds -> runs/coco/qwen3vl_image/features/rollout0/shard3.pt
+[worker 7] rollout 1: saved 2 records / 10 preds -> runs/coco/qwen3vl_image/features/rollout1/shard7.pt
+[worker 4] rollout 1: saved 2 records / 9 preds -> runs/coco/qwen3vl_image/features/rollout1/shard4.pt
+[worker 2] rollout 1: saved 2 records / 14 preds -> runs/coco/qwen3vl_image/features/rollout1/shard2.pt
+[worker 1] rollout 1: saved 2 records / 31 preds -> runs/coco/qwen3vl_image/features/rollout1/shard1.pt
+[worker 3] rollout 1: saved 2 records / 22 preds -> runs/coco/qwen3vl_image/features/rollout1/shard3.pt
+[worker 0] rollout 0: saved 2 records / 142 preds -> runs/coco/qwen3vl_image/features/rollout0/shard0.pt
+[worker 6] rollout 0: saved 2 records / 128 preds -> runs/coco/qwen3vl_image/features/rollout0/shard6.pt
+[worker 5] rollout 0: saved 2 records / 144 preds -> runs/coco/qwen3vl_image/features/rollout0/shard5.pt
+[worker 0] rollout 1: saved 2 records / 148 preds -> runs/coco/qwen3vl_image/features/rollout1/shard0.pt
+[worker 6] rollout 1: saved 2 records / 128 preds -> runs/coco/qwen3vl_image/features/rollout1/shard6.pt
+[worker 5] rollout 1: saved 2 records / 146 preds -> runs/coco/qwen3vl_image/features/rollout1/shard5.pt
+[extract] done: extracted 2 rollout(s) -> runs/coco/qwen3vl_image/features

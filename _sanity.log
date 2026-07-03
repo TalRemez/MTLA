@@ -1,0 +1,64 @@
+===== SANITY START Thu Jul  2 22:52:23 UTC 2026 =====
+### coco_internvl  START 22:52:23
+  [coco_internvl] generate  22:52:28
+  [coco_internvl] extract   22:53:57
+  [coco_internvl] evaluate (--agg sum)  22:54:26
+  [coco_internvl] RESULT:
+[evaluate] found 2 rollout(s) on disk: [0, 1]
+[coco/internvl_image] results:
+  auroc_mtla = 0.7697
+  n_rollouts = 2
+  agg = sum
+  map: mAP=0.2374  mAP50=0.3389  mAP75=0.2513  AP_small=0.1173  AP_medium=0.2836  AP_large=0.1448
+  n_dets = 1058
+  [coco_internvl] errors: runs_logs/s_coco_internvl.evaluate.log:0
+runs_logs/s_coco_internvl.extract.log:0
+runs_logs/s_coco_internvl.generate.log:0
+### coco_internvl DONE 22:54:39
+### coco_qwen3vl  START 22:54:39
+  [coco_qwen3vl] generate  22:54:44
+  [coco_qwen3vl] extract   22:56:10
+  [coco_qwen3vl] evaluate (--agg sum)  22:56:36
+  [coco_qwen3vl] RESULT:
+[evaluate] found 2 rollout(s) on disk: [0, 1]
+[coco/qwen3vl_image] results:
+  auroc_mtla = 0.8572
+  n_rollouts = 2
+  agg = sum
+  map: mAP=0.2142  mAP50=0.3023  mAP75=0.2244  AP_small=0.0573  AP_medium=0.2938  AP_large=0.1349
+  n_dets = 528
+  [coco_qwen3vl] errors: runs_logs/s_coco_qwen3vl.evaluate.log:0
+runs_logs/s_coco_qwen3vl.extract.log:0
+runs_logs/s_coco_qwen3vl.generate.log:0
+### coco_qwen3vl DONE 22:56:48
+### qvh_qwen3vl  START 22:56:48
+  [qvh_qwen3vl] generate  22:56:53
+  [qvh_qwen3vl] extract   22:57:50
+  [qvh_qwen3vl] evaluate ()  22:58:21
+  [qvh_qwen3vl] RESULT:
+[evaluate] found 2 rollout(s) on disk: [0, 1]
+[qvhighlights/qwen3vl_video] results:
+  auroc_mtla = 0.8857
+  n_rollouts = 2
+  agg = max
+  nms_mtla: mAP=42.6700  mAP@0.5=62.2200  mAP@0.75=42.2200  R1@0.5=66.6700  R1@0.7=46.6700
+  [qvh_qwen3vl] errors: runs_logs/s_qvh_qwen3vl.evaluate.log:0
+runs_logs/s_qvh_qwen3vl.extract.log:0
+runs_logs/s_qvh_qwen3vl.generate.log:2
+### qvh_qwen3vl DONE 22:58:27
+### charades_qwen3vl  START 22:58:27
+  [charades_qwen3vl] generate  22:58:31
+  [charades_qwen3vl] extract   22:59:26
+  [charades_qwen3vl] evaluate ()  22:59:53
+  [charades_qwen3vl] RESULT:
+[evaluate] found 2 rollout(s) on disk: [0, 1]
+[charades/qwen3vl_video] results:
+  auroc_mtla = 0.6458
+  n_rollouts = 2
+  agg = max
+  mtla: R@0.3=87.5000  R@0.5=81.2500  R@0.7=43.7500  mIoU=0.5958
+  [charades_qwen3vl] errors: runs_logs/s_charades_qwen3vl.evaluate.log:0
+runs_logs/s_charades_qwen3vl.extract.log:0
+runs_logs/s_charades_qwen3vl.generate.log:0
+### charades_qwen3vl DONE 22:59:58
+===== SANITY DONE Thu Jul  2 22:59:58 UTC 2026 =====

@@ -1,0 +1,6 @@
+[evaluate] found 2 rollout(s) on disk: [0, 1]
+[qvhighlights/qwen3vl_video] results:
+  auroc_mtla = 0.8857
+  n_rollouts = 2
+  agg = max
+  nms_mtla: mAP=42.6700  mAP@0.5=62.2200  mAP@0.75=42.2200  R1@0.5=66.6700  R1@0.7=46.6700

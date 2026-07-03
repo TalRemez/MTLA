@@ -75,17 +75,24 @@ def load_candidates(
         for rec in load_shards(cfg.feat_dir(rollout)):
             gt_by_id[rec["id"]] = rec["gt"]
             for o in rec["objects"]:
-                arr = cast(
-                    np.ndarray, dict(o)[signal]
-                )  # dynamic signal key (not a TypedDict literal)
+                # The signal is a per-(slot x signal) key (e.g. "digits_local"). A prediction whose
+                # slot had no tokens (e.g. a box with no located coord tokens) omits that key -> it
+                # is treated as not-extracted (zero score, dropped from AUROC), like `extracted`.
+                arr = dict(o).get(signal)  # dynamic signal key (not a TypedDict literal)
+                extracted = bool(o.get("extracted", True)) and arr is not None
+                score = (
+                    float(reduce_band(cast(np.ndarray, arr).astype(np.float32), band))
+                    if arr is not None
+                    else 0.0
+                )
                 cands.append(
                     {
                         "id": rec["id"],
                         "label": o["label"],
                         "region": o["region"],
-                        "score": float(reduce_band(arr.astype(np.float32), band)),
+                        "score": score,
                         "hallu": bool(o["is_hallucinated"]),
-                        "extracted": bool(o.get("extracted", True)),
+                        "extracted": extracted,
                         "rollout": rollout,
                     }
                 )

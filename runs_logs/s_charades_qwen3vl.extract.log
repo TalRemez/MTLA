@@ -1,0 +1,43 @@
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 188508.04it/s]
+[extract] found 2 rollout(s) on disk: [0, 1]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:00<00:02,  1.00it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:00<00:02,  1.12it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.06s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.14s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.20s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.27s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.17s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.10s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:01<00:01,  1.11it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:01<00:01,  1.05it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:01<00:01,  1.03it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:01,  1.01it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.02s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.11s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.15s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.11s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.12it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.10it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.09it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.06it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.05it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.01it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.28it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.20it/s]
+[worker 0] model=qwen3vl_video dataset=charades gpu=0 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.34it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.23it/s]
+[worker 1] model=qwen3vl_video dataset=charades gpu=1 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.06s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.24it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.16it/s]
+[worker 6] model=qwen3vl_video dataset=charades gpu=6 rollouts=[0, 1] L=36 H=32
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.04s/it]qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.23it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.13it/s]
+[worker 4] model=qwen3vl_video dataset=charades gpu=4 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.21it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]
+[worker 5] model=qwen3vl_video dataset=charades gpu=5 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.07it/s]
+[worker 7] model=qwen3vl_video dataset=charades gpu=7 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.05it/s]
+[worker 2] model=qwen3vl_video dataset=charades gpu=2 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.14it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.05it/s]
+[worker 3] model=qwen3vl_video dataset=charades gpu=3 rollouts=[0, 1] L=36 H=32
+qwen-vl-utils using decord to read video.
+[worker 0] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard0.pt
+[worker 6] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard6.pt
+[worker 1] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard1.pt
+[worker 7] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard7.pt
+[worker 4] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard4.pt
+[worker 5] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard5.pt
+[worker 2] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard2.pt
+[worker 3] rollout 0: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout0/shard3.pt
+[worker 6] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard6.pt
+[worker 0] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard0.pt
+[worker 1] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard1.pt
+[worker 7] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard7.pt
+[worker 4] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard4.pt
+[worker 5] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard5.pt
+[worker 2] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard2.pt
+[worker 3] rollout 1: saved 2 records / 2 preds -> runs/charades/qwen3vl_video/features/rollout1/shard3.pt
+[extract] done: extracted 2 rollout(s) -> runs/charades/qwen3vl_video/features

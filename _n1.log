@@ -1,0 +1,7 @@
+[evaluate] found 1 rollout(s) on disk: [0]
+[coco/internvl_image] results:
+  auroc_mtla = 0.9155
+  n_rollouts = 1
+  agg = sum
+  map: mAP=21.9371  mAP50=34.0834  mAP75=22.4132  AP_small=8.2428  AP_medium=23.6278  AP_large=41.0075
+  n_dets = 118902

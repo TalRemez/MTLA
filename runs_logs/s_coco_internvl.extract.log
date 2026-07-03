@@ -1,0 +1,35 @@
+Fetching 22 files:   0%|          | 0/22 [00:00<?, ?it/s]Fetching 22 files: 100%|██████████| 22/22 [00:00<00:00, 197590.34it/s]
+[extract] found 2 rollout(s) on disk: [0, 1]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 40.97it/s]
+Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 41.01it/s]
+Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 40.17it/s]
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:00<00:00, 29.25it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 37.30it/s]
+Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 39.88it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 39.83it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 41.79it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 38.75it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 38.67it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:00<00:00, 29.73it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 38.25it/s]
+[worker 7] model=internvl_image dataset=coco gpu=7 rollouts=[0, 1] L=36 H=32
+[worker 3] model=internvl_image dataset=coco gpu=3 rollouts=[0, 1] L=36 H=32
+[worker 6] model=internvl_image dataset=coco gpu=6 rollouts=[0, 1] L=36 H=32
+[worker 1] model=internvl_image dataset=coco gpu=1 rollouts=[0, 1] L=36 H=32
+[worker 5] model=internvl_image dataset=coco gpu=5 rollouts=[0, 1] L=36 H=32
+[worker 0] model=internvl_image dataset=coco gpu=0 rollouts=[0, 1] L=36 H=32
+[worker 4] model=internvl_image dataset=coco gpu=4 rollouts=[0, 1] L=36 H=32
+[worker 2] model=internvl_image dataset=coco gpu=2 rollouts=[0, 1] L=36 H=32
+[worker 7] rollout 0: saved 2 records / 61 preds -> runs/coco/internvl_image/features/rollout0/shard7.pt
+[worker 0] rollout 0: saved 2 records / 70 preds -> runs/coco/internvl_image/features/rollout0/shard0.pt
+[worker 3] rollout 0: saved 2 records / 113 preds -> runs/coco/internvl_image/features/rollout0/shard3.pt
+[worker 4] rollout 0: saved 2 records / 172 preds -> runs/coco/internvl_image/features/rollout0/shard4.pt
+[worker 1] rollout 0: saved 2 records / 141 preds -> runs/coco/internvl_image/features/rollout0/shard1.pt
+[worker 2] rollout 0: saved 2 records / 48 preds -> runs/coco/internvl_image/features/rollout0/shard2.pt
+[worker 6] rollout 0: saved 2 records / 129 preds -> runs/coco/internvl_image/features/rollout0/shard6.pt
+[worker 7] rollout 1: saved 2 records / 129 preds -> runs/coco/internvl_image/features/rollout1/shard7.pt
+[worker 5] rollout 0: saved 2 records / 276 preds -> runs/coco/internvl_image/features/rollout0/shard5.pt
+[worker 4] rollout 1: saved 2 records / 17 preds -> runs/coco/internvl_image/features/rollout1/shard4.pt
+[worker 0] rollout 1: saved 2 records / 208 preds -> runs/coco/internvl_image/features/rollout1/shard0.pt
+[worker 2] rollout 1: saved 2 records / 46 preds -> runs/coco/internvl_image/features/rollout1/shard2.pt
+[worker 1] rollout 1: saved 2 records / 89 preds -> runs/coco/internvl_image/features/rollout1/shard1.pt
+[worker 3] rollout 1: saved 2 records / 127 preds -> runs/coco/internvl_image/features/rollout1/shard3.pt
+[worker 5] rollout 1: saved 2 records / 143 preds -> runs/coco/internvl_image/features/rollout1/shard5.pt
+[worker 6] rollout 1: saved 2 records / 261 preds -> runs/coco/internvl_image/features/rollout1/shard6.pt
+[extract] done: extracted 2 rollout(s) -> runs/coco/internvl_image/features

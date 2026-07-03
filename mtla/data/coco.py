@@ -125,8 +125,10 @@ class CocoDataset(DatasetAdapter):
 
     name = "coco"
     task = "image_det"
-    # scoring: MTLA over all Q_p tokens; box overlap; NMS pool across rollouts; COCO mAP.
-    signal = "local_attention"
+    # scoring: MTLA over the COORDINATE tokens (paper's coord_mean slot, inside-region signal); box
+    # overlap; NMS pool across rollouts scored by support x score; COCO mAP. Matches the paper's
+    # headline COCO recipe (coco_voting_nms_internvl.py: digits_local + support fusion).
+    signal = "digits_local"
     overlap = "iou"
     select = "fuse"
     metric = "coco_map"

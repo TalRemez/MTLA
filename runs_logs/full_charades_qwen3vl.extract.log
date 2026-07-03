@@ -1,0 +1,1108 @@
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 170327.07it/s]
+[extract] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.13s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.22s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.27s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.33s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:04,  1.37s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:04,  1.39s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:04,  1.40s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:04,  1.39s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:01<00:01,  1.03it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.00s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.04s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.13s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.16s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.17s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.33s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.06it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.05it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.42s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.04it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.00it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.02s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.04s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.22it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.13it/s]
+[worker 3] model=qwen3vl_video dataset=charades gpu=3 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.21it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]
+qwen-vl-utils using decord to read video.
+[worker 6] model=qwen3vl_video dataset=charades gpu=6 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.14s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.19it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.09it/s]
+[worker 2] model=qwen3vl_video dataset=charades gpu=2 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.18it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.06it/s]
+[worker 5] model=qwen3vl_video dataset=charades gpu=5 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.17s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.01it/s]
+[worker 4] model=qwen3vl_video dataset=charades gpu=4 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.00it/s]
+qwen-vl-utils using decord to read video.
+[worker 7] model=qwen3vl_video dataset=charades gpu=7 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.12it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.03s/it]
+[worker 1] model=qwen3vl_video dataset=charades gpu=1 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.02it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.10s/it]
+[worker 0] model=qwen3vl_video dataset=charades gpu=0 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+[worker 3] rollout 0 [26/465] done=25
+[worker 4] rollout 0 [25/465] done=25
+[worker 0] rollout 0 [25/465] done=25
+[worker 6] rollout 0 [25/465] done=25
+[worker 7] rollout 0 [25/465] done=25
+[worker 1] rollout 0 [25/465] done=25
+[worker 5] rollout 0 [25/465] done=25
+[worker 2] rollout 0 [25/465] done=25
+[worker 3] rollout 0 [51/465] done=50
+[worker 7] rollout 0 [50/465] done=50
+[worker 1] rollout 0 [50/465] done=50
+[worker 5] rollout 0 [50/465] done=50
+[worker 4] rollout 0 [50/465] done=50
+[worker 0] rollout 0 [50/465] done=50
+[worker 6] rollout 0 [50/465] done=50
+[worker 2] rollout 0 [50/465] done=50
+[worker 3] rollout 0 [76/465] done=75
+[worker 7] rollout 0 [76/465] done=75
+[worker 4] rollout 0 [75/465] done=75
+[worker 1] rollout 0 [75/465] done=75
+[worker 5] rollout 0 [75/465] done=75
+[worker 0] rollout 0 [75/465] done=75
+[worker 6] rollout 0 [75/465] done=75
+[worker 2] rollout 0 [76/465] done=75
+[worker 3] rollout 0 [101/465] done=100
+[worker 7] rollout 0 [101/465] done=100
+[worker 4] rollout 0 [100/465] done=100
+[worker 5] rollout 0 [100/465] done=100
+[worker 6] rollout 0 [101/465] done=100
+[worker 1] rollout 0 [100/465] done=100
+[worker 0] rollout 0 [100/465] done=100
+[worker 2] rollout 0 [101/465] done=100
+[worker 3] rollout 0 [126/465] done=125
+[worker 7] rollout 0 [126/465] done=125
+[worker 1] rollout 0 [126/465] done=125
+[worker 4] rollout 0 [125/465] done=125
+[worker 5] rollout 0 [125/465] done=125
+[worker 2] rollout 0 [127/465] done=125
+[worker 6] rollout 0 [127/465] done=125
+[worker 0] rollout 0 [126/465] done=125
+[worker 7] rollout 0 [151/465] done=150
+[worker 1] rollout 0 [152/465] done=150
+[worker 3] rollout 0 [153/465] done=150
+[worker 2] rollout 0 [152/465] done=150
+[worker 6] rollout 0 [152/465] done=150
+[worker 0] rollout 0 [151/465] done=150
+[worker 5] rollout 0 [152/465] done=150
+[worker 4] rollout 0 [150/465] done=150
+[worker 7] rollout 0 [179/465] done=175
+[worker 1] rollout 0 [177/465] done=175
+[worker 2] rollout 0 [179/465] done=175
+[worker 3] rollout 0 [178/465] done=175
+[worker 0] rollout 0 [176/465] done=175
+[worker 6] rollout 0 [177/465] done=175
+[worker 5] rollout 0 [179/465] done=175
+[worker 4] rollout 0 [175/465] done=175
+[worker 7] rollout 0 [207/465] done=200
+[worker 1] rollout 0 [202/465] done=200
+[worker 2] rollout 0 [205/465] done=200
+[worker 0] rollout 0 [201/465] done=200
+[worker 3] rollout 0 [203/465] done=200
+[worker 6] rollout 0 [202/465] done=200
+[worker 4] rollout 0 [201/465] done=200
+[worker 5] rollout 0 [206/465] done=200
+[worker 7] rollout 0 [232/465] done=225
+[worker 1] rollout 0 [227/465] done=225
+[worker 2] rollout 0 [230/465] done=225
+[worker 0] rollout 0 [229/465] done=225
+[worker 6] rollout 0 [227/465] done=225
+[worker 5] rollout 0 [231/465] done=225
+[worker 3] rollout 0 [228/465] done=225
+[worker 4] rollout 0 [226/465] done=225
+[worker 1] rollout 0 [252/465] done=250
+[worker 7] rollout 0 [257/465] done=250
+[worker 0] rollout 0 [254/465] done=250
+[worker 2] rollout 0 [255/465] done=250
+[worker 4] rollout 0 [252/465] done=250
+[worker 6] rollout 0 [252/465] done=250
+[worker 5] rollout 0 [256/465] done=250
+[worker 3] rollout 0 [253/465] done=250
+[worker 1] rollout 0 [277/465] done=275
+[worker 0] rollout 0 [279/465] done=275
+[worker 7] rollout 0 [282/465] done=275
+[worker 2] rollout 0 [280/465] done=275
+[worker 4] rollout 0 [278/465] done=275
+[worker 5] rollout 0 [282/465] done=275
+[worker 6] rollout 0 [277/465] done=275
+[worker 3] rollout 0 [279/465] done=275
+[worker 1] rollout 0 [302/465] done=300
+[worker 0] rollout 0 [305/465] done=300
+[worker 7] rollout 0 [307/465] done=300
+[worker 2] rollout 0 [305/465] done=300
+[worker 5] rollout 0 [308/465] done=300
+[worker 3] rollout 0 [304/465] done=300
+[worker 4] rollout 0 [303/465] done=300
+[worker 1] rollout 0 [328/465] done=325
+[worker 6] rollout 0 [303/465] done=300
+[worker 0] rollout 0 [330/465] done=325
+[worker 7] rollout 0 [333/465] done=325
+[worker 2] rollout 0 [330/465] done=325
+[worker 3] rollout 0 [329/465] done=325
+[worker 5] rollout 0 [333/465] done=325
+[worker 1] rollout 0 [355/465] done=350
+[worker 4] rollout 0 [328/465] done=325
+[worker 0] rollout 0 [356/465] done=350
+[worker 6] rollout 0 [328/465] done=325
+[worker 7] rollout 0 [358/465] done=350
+[worker 2] rollout 0 [355/465] done=350
+[worker 3] rollout 0 [355/465] done=350
+[worker 5] rollout 0 [358/465] done=350
+[worker 4] rollout 0 [353/465] done=350
+[worker 1] rollout 0 [381/465] done=375
+[worker 0] rollout 0 [381/465] done=375
+[worker 7] rollout 0 [383/465] done=375
+[worker 6] rollout 0 [353/465] done=350
+[worker 2] rollout 0 [380/465] done=375
+[worker 3] rollout 0 [380/465] done=375
+[worker 4] rollout 0 [378/465] done=375
+[worker 5] rollout 0 [383/465] done=375
+[worker 1] rollout 0 [407/465] done=400
+[worker 7] rollout 0 [409/465] done=400
+[worker 0] rollout 0 [406/465] done=400
+[worker 6] rollout 0 [378/465] done=375
+[worker 2] rollout 0 [405/465] done=400
+[worker 4] rollout 0 [403/465] done=400
+[worker 5] rollout 0 [408/465] done=400
+[worker 3] rollout 0 [405/465] done=400
+[worker 1] rollout 0 [433/465] done=425
+[worker 7] rollout 0 [434/465] done=425
+[worker 0] rollout 0 [432/465] done=425
+[worker 6] rollout 0 [403/465] done=400
+[worker 2] rollout 0 [431/465] done=425
+[worker 5] rollout 0 [433/465] done=425
+[worker 7] rollout 0 [459/465] done=450
+[worker 3] rollout 0 [430/465] done=425
+[worker 4] rollout 0 [428/465] done=425
+[worker 1] rollout 0 [459/465] done=450
+[worker 0] rollout 0 [457/465] done=450
+[worker 7] rollout 0: saved 456 records / 456 preds -> runs/charades/qwen3vl_video/features/rollout0/shard7.pt
+[worker 2] rollout 0 [456/465] done=450
+[worker 1] rollout 0: saved 456 records / 456 preds -> runs/charades/qwen3vl_video/features/rollout0/shard1.pt
+[worker 6] rollout 0 [428/465] done=425
+[worker 2] rollout 0: saved 459 records / 459 preds -> runs/charades/qwen3vl_video/features/rollout0/shard2.pt
+[worker 0] rollout 0: saved 458 records / 458 preds -> runs/charades/qwen3vl_video/features/rollout0/shard0.pt
+[worker 5] rollout 0 [458/465] done=450
+[worker 3] rollout 0 [457/465] done=450
+[worker 7] rollout 1 [25/465] done=25
+[worker 5] rollout 0: saved 457 records / 457 preds -> runs/charades/qwen3vl_video/features/rollout0/shard5.pt
+[worker 1] rollout 1 [25/465] done=25
+[worker 0] rollout 1 [25/465] done=25
+[worker 3] rollout 0: saved 458 records / 458 preds -> runs/charades/qwen3vl_video/features/rollout0/shard3.pt
+[worker 4] rollout 0 [453/465] done=450
+[worker 6] rollout 0 [453/465] done=450
+[worker 2] rollout 1 [25/465] done=25
+[worker 4] rollout 0: saved 462 records / 462 preds -> runs/charades/qwen3vl_video/features/rollout0/shard4.pt
+[worker 7] rollout 1 [50/465] done=50
+[worker 6] rollout 0: saved 462 records / 462 preds -> runs/charades/qwen3vl_video/features/rollout0/shard6.pt
+[worker 1] rollout 1 [50/465] done=50
+[worker 3] rollout 1 [26/465] done=25
+[worker 5] rollout 1 [25/465] done=25
+[worker 0] rollout 1 [50/465] done=50
+[worker 2] rollout 1 [50/465] done=50
+[worker 4] rollout 1 [25/465] done=25
+[worker 7] rollout 1 [76/465] done=75
+[worker 6] rollout 1 [25/465] done=25
+[worker 3] rollout 1 [51/465] done=50
+[worker 5] rollout 1 [50/465] done=50
+[worker 1] rollout 1 [75/465] done=75
+[worker 0] rollout 1 [75/465] done=75
+[worker 2] rollout 1 [76/465] done=75
+[worker 4] rollout 1 [50/465] done=50
+[worker 7] rollout 1 [101/465] done=100
+[worker 6] rollout 1 [50/465] done=50
+[worker 3] rollout 1 [76/465] done=75
+[worker 5] rollout 1 [75/465] done=75
+[worker 1] rollout 1 [100/465] done=100
+[worker 0] rollout 1 [101/465] done=100
+[worker 2] rollout 1 [103/465] done=100
+[worker 4] rollout 1 [75/465] done=75
+[worker 7] rollout 1 [126/465] done=125
+[worker 6] rollout 1 [75/465] done=75
+[worker 3] rollout 1 [101/465] done=100
+[worker 5] rollout 1 [100/465] done=100
+[worker 1] rollout 1 [126/465] done=125
+[worker 2] rollout 1 [129/465] done=125
+[worker 0] rollout 1 [127/465] done=125
+[worker 4] rollout 1 [101/465] done=100
+[worker 7] rollout 1 [151/465] done=150
+[worker 6] rollout 1 [101/465] done=100
+[worker 3] rollout 1 [126/465] done=125
+[worker 5] rollout 1 [125/465] done=125
+[worker 1] rollout 1 [151/465] done=150
+[worker 2] rollout 1 [154/465] done=150
+[worker 0] rollout 1 [152/465] done=150
+[worker 4] rollout 1 [126/465] done=125
+[worker 7] rollout 1 [179/465] done=175
+[worker 6] rollout 1 [126/465] done=125
+[worker 3] rollout 1 [153/465] done=150
+[worker 2] rollout 1 [181/465] done=175
+[worker 5] rollout 1 [151/465] done=150
+[worker 0] rollout 1 [178/465] done=175
+[worker 1] rollout 1 [176/465] done=175
+[worker 7] rollout 1 [207/465] done=200
+[worker 6] rollout 1 [151/465] done=150
+[worker 2] rollout 1 [207/465] done=200
+[worker 4] rollout 1 [151/465] done=150
+[worker 3] rollout 1 [178/465] done=175
+[worker 5] rollout 1 [177/465] done=175
+[worker 1] rollout 1 [201/465] done=200
+[worker 0] rollout 1 [203/465] done=200
+[worker 7] rollout 1 [232/465] done=225
+[worker 6] rollout 1 [176/465] done=175
+[worker 4] rollout 1 [176/465] done=175
+[worker 2] rollout 1 [232/465] done=225
+[worker 0] rollout 1 [231/465] done=225
+[worker 3] rollout 1 [203/465] done=200
+[worker 1] rollout 1 [226/465] done=225
+[worker 5] rollout 1 [203/465] done=200
+[worker 7] rollout 1 [257/465] done=250
+[worker 4] rollout 1 [202/465] done=200
+[worker 6] rollout 1 [201/465] done=200
+[worker 2] rollout 1 [257/465] done=250
+[worker 0] rollout 1 [256/465] done=250
+[worker 1] rollout 1 [251/465] done=250
+[worker 5] rollout 1 [228/465] done=225
+[worker 3] rollout 1 [228/465] done=225
+[worker 7] rollout 1 [282/465] done=275
+[worker 0] rollout 1 [281/465] done=275
+[worker 6] rollout 1 [226/465] done=225
+[worker 4] rollout 1 [227/465] done=225
+[worker 2] rollout 1 [283/465] done=275
+[worker 1] rollout 1 [276/465] done=275
+[worker 5] rollout 1 [253/465] done=250
+[worker 3] rollout 1 [253/465] done=250
+[worker 7] rollout 1 [307/465] done=300
+[worker 4] rollout 1 [253/465] done=250
+[worker 0] rollout 1 [307/465] done=300
+[worker 6] rollout 1 [251/465] done=250
+[worker 2] rollout 1 [308/465] done=300
+[worker 1] rollout 1 [301/465] done=300
+[worker 5] rollout 1 [279/465] done=275
+[worker 3] rollout 1 [279/465] done=275
+[worker 7] rollout 1 [333/465] done=325
+[worker 0] rollout 1 [332/465] done=325
+[worker 4] rollout 1 [280/465] done=275
+[worker 2] rollout 1 [333/465] done=325
+[worker 6] rollout 1 [276/465] done=275
+[worker 1] rollout 1 [327/465] done=325
+[worker 5] rollout 1 [304/465] done=300
+[worker 3] rollout 1 [304/465] done=300
+[worker 7] rollout 1 [358/465] done=350
+[worker 0] rollout 1 [358/465] done=350
+[worker 4] rollout 1 [305/465] done=300
+[worker 2] rollout 1 [358/465] done=350
+[worker 6] rollout 1 [302/465] done=300
+[worker 5] rollout 1 [330/465] done=325
+[worker 1] rollout 1 [354/465] done=350
+[worker 3] rollout 1 [329/465] done=325
+[worker 7] rollout 1 [383/465] done=375
+[worker 0] rollout 1 [383/465] done=375
+[worker 2] rollout 1 [383/465] done=375
+[worker 4] rollout 1 [330/465] done=325
+[worker 5] rollout 1 [355/465] done=350
+[worker 3] rollout 1 [355/465] done=350
+[worker 6] rollout 1 [327/465] done=325
+[worker 1] rollout 1 [379/465] done=375
+[worker 7] rollout 1 [409/465] done=400
+[worker 0] rollout 1 [408/465] done=400
+[worker 4] rollout 1 [355/465] done=350
+[worker 2] rollout 1 [408/465] done=400
+[worker 6] rollout 1 [352/465] done=350
+[worker 5] rollout 1 [380/465] done=375
+[worker 3] rollout 1 [380/465] done=375
+[worker 1] rollout 1 [405/465] done=400
+[worker 7] rollout 1 [434/465] done=425
+[worker 4] rollout 1 [380/465] done=375
+[worker 0] rollout 1 [434/465] done=425
+[worker 2] rollout 1 [434/465] done=425
+[worker 6] rollout 1 [377/465] done=375
+[worker 5] rollout 1 [405/465] done=400
+[worker 7] rollout 1 [459/465] done=450
+[worker 3] rollout 1 [405/465] done=400
+[worker 1] rollout 1 [431/465] done=425
+[worker 2] rollout 1 [459/465] done=450
+[worker 7] rollout 1: saved 456 records / 456 preds -> runs/charades/qwen3vl_video/features/rollout1/shard7.pt
+[worker 4] rollout 1 [406/465] done=400
+[worker 0] rollout 1 [460/465] done=450
+[worker 2] rollout 1: saved 456 records / 456 preds -> runs/charades/qwen3vl_video/features/rollout1/shard2.pt
+[worker 0] rollout 1: saved 455 records / 455 preds -> runs/charades/qwen3vl_video/features/rollout1/shard0.pt
+[worker 6] rollout 1 [402/465] done=400
+[worker 5] rollout 1 [430/465] done=425
+[worker 3] rollout 1 [430/465] done=425
+[worker 7] rollout 2 [25/465] done=25
+[worker 1] rollout 1 [456/465] done=450
+[worker 2] rollout 2 [25/465] done=25
+[worker 0] rollout 2 [25/465] done=25
+[worker 4] rollout 1 [431/465] done=425
+[worker 1] rollout 1: saved 459 records / 459 preds -> runs/charades/qwen3vl_video/features/rollout1/shard1.pt
+[worker 6] rollout 1 [427/465] done=425
+[worker 5] rollout 1 [455/465] done=450
+[worker 7] rollout 2 [50/465] done=50
+[worker 3] rollout 1 [456/465] done=450
+[worker 5] rollout 1: saved 460 records / 460 preds -> runs/charades/qwen3vl_video/features/rollout1/shard5.pt
+[worker 2] rollout 2 [50/465] done=50
+[worker 3] rollout 1: saved 459 records / 459 preds -> runs/charades/qwen3vl_video/features/rollout1/shard3.pt
+[worker 0] rollout 2 [50/465] done=50
+[worker 1] rollout 2 [25/465] done=25
+[worker 6] rollout 1 [452/465] done=450
+[worker 7] rollout 2 [75/465] done=75
+[worker 4] rollout 1 [456/465] done=450
+[worker 3] rollout 2 [26/465] done=25
+[worker 5] rollout 2 [25/465] done=25
+[worker 4] rollout 1: saved 459 records / 459 preds -> runs/charades/qwen3vl_video/features/rollout1/shard4.pt
+[worker 6] rollout 1: saved 463 records / 463 preds -> runs/charades/qwen3vl_video/features/rollout1/shard6.pt
+[worker 2] rollout 2 [77/465] done=75
+[worker 0] rollout 2 [76/465] done=75
+[worker 1] rollout 2 [50/465] done=50
+[worker 7] rollout 2 [100/465] done=100
+[worker 3] rollout 2 [51/465] done=50
+[worker 5] rollout 2 [50/465] done=50
+[worker 4] rollout 2 [25/465] done=25
+[worker 6] rollout 2 [25/465] done=25
+[worker 2] rollout 2 [103/465] done=100
+[worker 0] rollout 2 [102/465] done=100
+[worker 1] rollout 2 [75/465] done=75
+[worker 7] rollout 2 [125/465] done=125
+[worker 3] rollout 2 [77/465] done=75
+[worker 5] rollout 2 [75/465] done=75
+[worker 4] rollout 2 [50/465] done=50
+[worker 2] rollout 2 [132/465] done=125
+[worker 6] rollout 2 [50/465] done=50
+[worker 0] rollout 2 [128/465] done=125
+[worker 7] rollout 2 [150/465] done=150
+[worker 1] rollout 2 [101/465] done=100
+[worker 3] rollout 2 [102/465] done=100
+[worker 5] rollout 2 [100/465] done=100
+[worker 4] rollout 2 [75/465] done=75
+[worker 6] rollout 2 [75/465] done=75
+[worker 2] rollout 2 [157/465] done=150
+[worker 0] rollout 2 [153/465] done=150
+[worker 7] rollout 2 [177/465] done=175
+[worker 1] rollout 2 [127/465] done=125
+[worker 3] rollout 2 [127/465] done=125
+[worker 5] rollout 2 [125/465] done=125
+[worker 6] rollout 2 [101/465] done=100
+[worker 4] rollout 2 [100/465] done=100
+[worker 2] rollout 2 [183/465] done=175
+[worker 0] rollout 2 [178/465] done=175
+[worker 7] rollout 2 [205/465] done=200
+[worker 1] rollout 2 [155/465] done=150
+[worker 4] rollout 2 [125/465] done=125
+[worker 2] rollout 2 [209/465] done=200
+[worker 6] rollout 2 [127/465] done=125
+[worker 3] rollout 2 [154/465] done=150
+[worker 5] rollout 2 [152/465] done=150
+[worker 0] rollout 2 [203/465] done=200
+[worker 7] rollout 2 [230/465] done=225
+[worker 1] rollout 2 [180/465] done=175
+[worker 6] rollout 2 [152/465] done=150
+[worker 2] rollout 2 [234/465] done=225
+[worker 5] rollout 2 [179/465] done=175
+[worker 0] rollout 2 [229/465] done=225
+[worker 3] rollout 2 [179/465] done=175
+[worker 7] rollout 2 [255/465] done=250
+[worker 4] rollout 2 [150/465] done=150
+[worker 1] rollout 2 [205/465] done=200
+[worker 6] rollout 2 [177/465] done=175
+[worker 2] rollout 2 [259/465] done=250
+[worker 0] rollout 2 [254/465] done=250
+[worker 5] rollout 2 [208/465] done=200
+[worker 3] rollout 2 [204/465] done=200
+[worker 4] rollout 2 [175/465] done=175
+[worker 7] rollout 2 [280/465] done=275
+[worker 1] rollout 2 [230/465] done=225
+[worker 0] rollout 2 [279/465] done=275
+[worker 6] rollout 2 [202/465] done=200
+[worker 2] rollout 2 [284/465] done=275
+[worker 5] rollout 2 [233/465] done=225
+[worker 4] rollout 2 [202/465] done=200
+[worker 1] rollout 2 [255/465] done=250
+[worker 7] rollout 2 [305/465] done=300
+[worker 3] rollout 2 [229/465] done=225
+[worker 0] rollout 2 [305/465] done=300
+[worker 2] rollout 2 [309/465] done=300
+[worker 6] rollout 2 [227/465] done=225
+[worker 5] rollout 2 [259/465] done=250
+[worker 4] rollout 2 [227/465] done=225
+[worker 7] rollout 2 [331/465] done=325
+[worker 1] rollout 2 [280/465] done=275
+[worker 3] rollout 2 [255/465] done=250
+[worker 0] rollout 2 [330/465] done=325
+[worker 6] rollout 2 [252/465] done=250
+[worker 2] rollout 2 [334/465] done=325
+[worker 5] rollout 2 [284/465] done=275
+[worker 4] rollout 2 [253/465] done=250
+[worker 7] rollout 2 [356/465] done=350
+[worker 1] rollout 2 [306/465] done=300
+[worker 3] rollout 2 [284/465] done=275
+[worker 0] rollout 2 [356/465] done=350
+[worker 2] rollout 2 [359/465] done=350
+[worker 5] rollout 2 [310/465] done=300
+[worker 6] rollout 2 [277/465] done=275
+[worker 7] rollout 2 [382/465] done=375
+[worker 4] rollout 2 [280/465] done=275
+[worker 1] rollout 2 [331/465] done=325
+[worker 3] rollout 2 [309/465] done=300
+[worker 0] rollout 2 [382/465] done=375
+[worker 2] rollout 2 [385/465] done=375
+[worker 5] rollout 2 [335/465] done=325
+[worker 6] rollout 2 [303/465] done=300
+[worker 7] rollout 2 [408/465] done=400
+[worker 1] rollout 2 [358/465] done=350
+[worker 4] rollout 2 [305/465] done=300
+[worker 3] rollout 2 [335/465] done=325
+[worker 0] rollout 2 [407/465] done=400
+[worker 5] rollout 2 [360/465] done=350
+[worker 2] rollout 2 [410/465] done=400
+[worker 6] rollout 2 [328/465] done=325
+[worker 3] rollout 2 [360/465] done=350
+[worker 7] rollout 2 [433/465] done=425
+[worker 4] rollout 2 [330/465] done=325
+[worker 1] rollout 2 [384/465] done=375
+[worker 0] rollout 2 [434/465] done=425
+[worker 2] rollout 2 [436/465] done=425
+[worker 5] rollout 2 [385/465] done=375
+[worker 7] rollout 2 [458/465] done=450
+[worker 6] rollout 2 [353/465] done=350
+[worker 3] rollout 2 [385/465] done=375
+[worker 4] rollout 2 [355/465] done=350
+[worker 1] rollout 2 [410/465] done=400
+[worker 7] rollout 2: saved 457 records / 457 preds -> runs/charades/qwen3vl_video/features/rollout2/shard7.pt
+[worker 2] rollout 2 [462/465] done=450
+[worker 0] rollout 2 [459/465] done=450
+[worker 2] rollout 2: saved 452 records / 452 preds -> runs/charades/qwen3vl_video/features/rollout2/shard2.pt
+[worker 0] rollout 2: saved 456 records / 456 preds -> runs/charades/qwen3vl_video/features/rollout2/shard0.pt
+[worker 5] rollout 2 [410/465] done=400
+[worker 6] rollout 2 [378/465] done=375
+[worker 4] rollout 2 [380/465] done=375
+[worker 1] rollout 2 [435/465] done=425
+[worker 7] rollout 3 [25/465] done=25
+[worker 3] rollout 2 [410/465] done=400
+[worker 2] rollout 3 [25/465] done=25
+[worker 0] rollout 3 [25/465] done=25
+[worker 5] rollout 2 [435/465] done=425
+[worker 6] rollout 2 [403/465] done=400
+[worker 4] rollout 2 [405/465] done=400
+[worker 7] rollout 3 [50/465] done=50
+[worker 1] rollout 2 [460/465] done=450
+[worker 3] rollout 2 [435/465] done=425
+[worker 2] rollout 3 [50/465] done=50
+[worker 1] rollout 2: saved 455 records / 455 preds -> runs/charades/qwen3vl_video/features/rollout2/shard1.pt
+[worker 0] rollout 3 [50/465] done=50
+[worker 5] rollout 2 [460/465] done=450
+[worker 7] rollout 3 [75/465] done=75
+[worker 6] rollout 2 [428/465] done=425
+[worker 5] rollout 2: saved 455 records / 455 preds -> runs/charades/qwen3vl_video/features/rollout2/shard5.pt
+[worker 4] rollout 2 [430/465] done=425
+[worker 3] rollout 2 [462/465] done=450
+[worker 2] rollout 3 [76/465] done=75
+[worker 0] rollout 3 [75/465] done=75
+[worker 1] rollout 3 [25/465] done=25
+[worker 3] rollout 2: saved 453 records / 453 preds -> runs/charades/qwen3vl_video/features/rollout2/shard3.pt
+[worker 7] rollout 3 [100/465] done=100
+[worker 6] rollout 2 [453/465] done=450
+[worker 5] rollout 3 [25/465] done=25
+[worker 3] rollout 3 [26/465] done=25
+[worker 1] rollout 3 [50/465] done=50
+[worker 6] rollout 2: saved 462 records / 462 preds -> runs/charades/qwen3vl_video/features/rollout2/shard6.pt
+[worker 2] rollout 3 [101/465] done=100
+[worker 0] rollout 3 [101/465] done=100
+[worker 4] rollout 2 [457/465] done=450
+[worker 7] rollout 3 [125/465] done=125
+[worker 5] rollout 3 [50/465] done=50
+[worker 4] rollout 2: saved 458 records / 458 preds -> runs/charades/qwen3vl_video/features/rollout2/shard4.pt
+[worker 3] rollout 3 [51/465] done=50
+[worker 2] rollout 3 [127/465] done=125
+[worker 6] rollout 3 [25/465] done=25
+[worker 1] rollout 3 [75/465] done=75
+[worker 0] rollout 3 [127/465] done=125
+[worker 7] rollout 3 [150/465] done=150
+[worker 5] rollout 3 [75/465] done=75
+[worker 4] rollout 3 [25/465] done=25
+[worker 3] rollout 3 [76/465] done=75
+[worker 2] rollout 3 [152/465] done=150
+[worker 6] rollout 3 [51/465] done=50
+[worker 1] rollout 3 [100/465] done=100
+[worker 0] rollout 3 [152/465] done=150
+[worker 7] rollout 3 [176/465] done=175
+[worker 5] rollout 3 [100/465] done=100
+[worker 4] rollout 3 [50/465] done=50
+[worker 2] rollout 3 [178/465] done=175
+[worker 3] rollout 3 [101/465] done=100
+[worker 6] rollout 3 [76/465] done=75
+[worker 0] rollout 3 [177/465] done=175
+[worker 1] rollout 3 [126/465] done=125
+[worker 7] rollout 3 [205/465] done=200
+[worker 4] rollout 3 [75/465] done=75
+[worker 5] rollout 3 [125/465] done=125
+[worker 2] rollout 3 [204/465] done=200
+[worker 6] rollout 3 [103/465] done=100
+[worker 3] rollout 3 [126/465] done=125
+[worker 0] rollout 3 [202/465] done=200
+[worker 1] rollout 3 [152/465] done=150
+[worker 7] rollout 3 [230/465] done=225
+[worker 4] rollout 3 [100/465] done=100
+[worker 2] rollout 3 [229/465] done=225
+[worker 5] rollout 3 [152/465] done=150
+[worker 6] rollout 3 [129/465] done=125
+[worker 0] rollout 3 [230/465] done=225
+[worker 7] rollout 3 [255/465] done=250
+[worker 3] rollout 3 [153/465] done=150
+[worker 1] rollout 3 [177/465] done=175
+[worker 4] rollout 3 [125/465] done=125
+[worker 5] rollout 3 [179/465] done=175
+[worker 2] rollout 3 [254/465] done=250
+[worker 0] rollout 3 [255/465] done=250
+[worker 6] rollout 3 [154/465] done=150
+[worker 1] rollout 3 [202/465] done=200
+[worker 3] rollout 3 [178/465] done=175
+[worker 7] rollout 3 [280/465] done=275
+[worker 0] rollout 3 [280/465] done=275
+[worker 2] rollout 3 [279/465] done=275
+[worker 4] rollout 3 [150/465] done=150
+[worker 5] rollout 3 [208/465] done=200
+[worker 6] rollout 3 [179/465] done=175
+[worker 1] rollout 3 [227/465] done=225
+[worker 7] rollout 3 [305/465] done=300
+[worker 3] rollout 3 [203/465] done=200
+[worker 2] rollout 3 [304/465] done=300
+[worker 0] rollout 3 [306/465] done=300
+[worker 4] rollout 3 [175/465] done=175
+[worker 5] rollout 3 [233/465] done=225
+[worker 6] rollout 3 [204/465] done=200
+[worker 1] rollout 3 [252/465] done=250
+[worker 7] rollout 3 [331/465] done=325
+[worker 2] rollout 3 [329/465] done=325
+[worker 3] rollout 3 [228/465] done=225
+[worker 4] rollout 3 [201/465] done=200
+[worker 0] rollout 3 [331/465] done=325
+[worker 5] rollout 3 [259/465] done=250
+[worker 6] rollout 3 [229/465] done=225
+[worker 1] rollout 3 [277/465] done=275
+[worker 7] rollout 3 [356/465] done=350
+[worker 0] rollout 3 [357/465] done=350
+[worker 2] rollout 3 [354/465] done=350
+[worker 4] rollout 3 [226/465] done=225
+[worker 3] rollout 3 [253/465] done=250
+[worker 6] rollout 3 [254/465] done=250
+[worker 5] rollout 3 [284/465] done=275
+[worker 1] rollout 3 [302/465] done=300
+[worker 7] rollout 3 [381/465] done=375
+[worker 0] rollout 3 [382/465] done=375
+[worker 4] rollout 3 [252/465] done=250
+[worker 2] rollout 3 [379/465] done=375
+[worker 3] rollout 3 [279/465] done=275
+[worker 5] rollout 3 [310/465] done=300
+[worker 1] rollout 3 [328/465] done=325
+[worker 7] rollout 3 [406/465] done=400
+[worker 6] rollout 3 [279/465] done=275
+[worker 2] rollout 3 [404/465] done=400
+[worker 0] rollout 3 [407/465] done=400
+[worker 4] rollout 3 [279/465] done=275
+[worker 3] rollout 3 [304/465] done=300
+[worker 5] rollout 3 [335/465] done=325
+[worker 1] rollout 3 [355/465] done=350
+[worker 6] rollout 3 [305/465] done=300
+[worker 7] rollout 3 [432/465] done=425
+[worker 3] rollout 3 [329/465] done=325
+[worker 5] rollout 3 [360/465] done=350
+[worker 0] rollout 3 [433/465] done=425
+[worker 4] rollout 3 [304/465] done=300
+[worker 2] rollout 3 [430/465] done=425
+[worker 1] rollout 3 [381/465] done=375
+[worker 7] rollout 3 [457/465] done=450
+[worker 6] rollout 3 [330/465] done=325
+[worker 7] rollout 3: saved 458 records / 458 preds -> runs/charades/qwen3vl_video/features/rollout3/shard7.pt
+[worker 2] rollout 3 [455/465] done=450
+[worker 3] rollout 3 [355/465] done=350
+[worker 0] rollout 3 [458/465] done=450
+[worker 5] rollout 3 [385/465] done=375
+[worker 2] rollout 3: saved 460 records / 460 preds -> runs/charades/qwen3vl_video/features/rollout3/shard2.pt
+[worker 4] rollout 3 [329/465] done=325
+[worker 0] rollout 3: saved 457 records / 457 preds -> runs/charades/qwen3vl_video/features/rollout3/shard0.pt
+[worker 1] rollout 3 [407/465] done=400
+[worker 6] rollout 3 [355/465] done=350
+[worker 7] rollout 4 [25/465] done=25
+[worker 3] rollout 3 [380/465] done=375
+[worker 5] rollout 3 [410/465] done=400
+[worker 0] rollout 4 [25/465] done=25
+[worker 2] rollout 4 [25/465] done=25
+[worker 4] rollout 3 [354/465] done=350
+[worker 1] rollout 3 [433/465] done=425
+[worker 7] rollout 4 [50/465] done=50
+[worker 6] rollout 3 [380/465] done=375
+[worker 3] rollout 3 [405/465] done=400
+[worker 4] rollout 3 [379/465] done=375
+[worker 0] rollout 4 [50/465] done=50
+[worker 5] rollout 3 [435/465] done=425
+[worker 2] rollout 4 [50/465] done=50
+[worker 7] rollout 4 [76/465] done=75
+[worker 1] rollout 3 [458/465] done=450
+[worker 6] rollout 3 [405/465] done=400
+[worker 1] rollout 3: saved 457 records / 457 preds -> runs/charades/qwen3vl_video/features/rollout3/shard1.pt
+[worker 0] rollout 4 [75/465] done=75
+[worker 2] rollout 4 [76/465] done=75
+[worker 3] rollout 3 [430/465] done=425
+[worker 4] rollout 3 [404/465] done=400
+[worker 5] rollout 3 [460/465] done=450
+[worker 7] rollout 4 [101/465] done=100
+[worker 5] rollout 3: saved 455 records / 455 preds -> runs/charades/qwen3vl_video/features/rollout3/shard5.pt
+[worker 6] rollout 3 [430/465] done=425
+[worker 1] rollout 4 [25/465] done=25
+[worker 2] rollout 4 [101/465] done=100
+[worker 0] rollout 4 [100/465] done=100
+[worker 3] rollout 3 [457/465] done=450
+[worker 7] rollout 4 [126/465] done=125
+[worker 5] rollout 4 [25/465] done=25
+[worker 3] rollout 3: saved 458 records / 458 preds -> runs/charades/qwen3vl_video/features/rollout3/shard3.pt
+[worker 4] rollout 3 [429/465] done=425
+[worker 1] rollout 4 [50/465] done=50
+[worker 6] rollout 3 [455/465] done=450
+[worker 2] rollout 4 [126/465] done=125
+[worker 7] rollout 4 [151/465] done=150
+[worker 0] rollout 4 [125/465] done=125
+[worker 6] rollout 3: saved 460 records / 460 preds -> runs/charades/qwen3vl_video/features/rollout3/shard6.pt
+[worker 5] rollout 4 [50/465] done=50
+[worker 3] rollout 4 [26/465] done=25
+[worker 1] rollout 4 [75/465] done=75
+[worker 4] rollout 3 [455/465] done=450
+[worker 2] rollout 4 [151/465] done=150
+[worker 7] rollout 4 [176/465] done=175
+[worker 6] rollout 4 [25/465] done=25
+[worker 0] rollout 4 [150/465] done=150
+[worker 3] rollout 4 [51/465] done=50
+[worker 5] rollout 4 [75/465] done=75
+[worker 4] rollout 3: saved 460 records / 460 preds -> runs/charades/qwen3vl_video/features/rollout3/shard4.pt
+[worker 1] rollout 4 [100/465] done=100
+[worker 2] rollout 4 [178/465] done=175
+[worker 7] rollout 4 [201/465] done=200
+[worker 0] rollout 4 [175/465] done=175
+[worker 6] rollout 4 [50/465] done=50
+[worker 3] rollout 4 [76/465] done=75
+[worker 5] rollout 4 [100/465] done=100
+[worker 4] rollout 4 [25/465] done=25
+[worker 1] rollout 4 [125/465] done=125
+[worker 2] rollout 4 [203/465] done=200
+[worker 7] rollout 4 [227/465] done=225
+[worker 6] rollout 4 [75/465] done=75
+[worker 0] rollout 4 [200/465] done=200
+[worker 3] rollout 4 [101/465] done=100
+[worker 5] rollout 4 [125/465] done=125
+[worker 4] rollout 4 [50/465] done=50
+[worker 2] rollout 4 [228/465] done=225
+[worker 1] rollout 4 [152/465] done=150
+[worker 7] rollout 4 [252/465] done=250
+[worker 6] rollout 4 [100/465] done=100
+[worker 0] rollout 4 [226/465] done=225
+[worker 3] rollout 4 [126/465] done=125
+[worker 4] rollout 4 [75/465] done=75
+[worker 5] rollout 4 [150/465] done=150
+[worker 2] rollout 4 [253/465] done=250
+[worker 0] rollout 4 [251/465] done=250
+[worker 1] rollout 4 [177/465] done=175
+[worker 6] rollout 4 [125/465] done=125
+[worker 7] rollout 4 [277/465] done=275
+[worker 4] rollout 4 [100/465] done=100
+[worker 3] rollout 4 [153/465] done=150
+[worker 5] rollout 4 [176/465] done=175
+[worker 0] rollout 4 [276/465] done=275
+[worker 1] rollout 4 [202/465] done=200
+[worker 2] rollout 4 [278/465] done=275
+[worker 7] rollout 4 [302/465] done=300
+[worker 6] rollout 4 [150/465] done=150
+[worker 4] rollout 4 [125/465] done=125
+[worker 3] rollout 4 [178/465] done=175
+[worker 0] rollout 4 [301/465] done=300
+[worker 2] rollout 4 [303/465] done=300
+[worker 5] rollout 4 [201/465] done=200
+[worker 1] rollout 4 [227/465] done=225
+[worker 7] rollout 4 [328/465] done=325
+[worker 6] rollout 4 [175/465] done=175
+[worker 0] rollout 4 [326/465] done=325
+[worker 1] rollout 4 [252/465] done=250
+[worker 2] rollout 4 [328/465] done=325
+[worker 3] rollout 4 [203/465] done=200
+[worker 5] rollout 4 [226/465] done=225
+[worker 7] rollout 4 [353/465] done=350
+[worker 6] rollout 4 [200/465] done=200
+[worker 4] rollout 4 [150/465] done=150
+[worker 0] rollout 4 [351/465] done=350
+[worker 2] rollout 4 [353/465] done=350
+[worker 5] rollout 4 [251/465] done=250
+[worker 1] rollout 4 [277/465] done=275
+[worker 3] rollout 4 [228/465] done=225
+[worker 7] rollout 4 [378/465] done=375
+[worker 4] rollout 4 [175/465] done=175
+[worker 6] rollout 4 [225/465] done=225
+[worker 0] rollout 4 [376/465] done=375
+[worker 2] rollout 4 [378/465] done=375
+[worker 1] rollout 4 [302/465] done=300
+[worker 5] rollout 4 [277/465] done=275
+[worker 7] rollout 4 [403/465] done=400
+[worker 4] rollout 4 [200/465] done=200
+[worker 3] rollout 4 [253/465] done=250
+[worker 6] rollout 4 [250/465] done=250
+[worker 0] rollout 4 [401/465] done=400
+[worker 1] rollout 4 [328/465] done=325
+[worker 2] rollout 4 [403/465] done=400
+[worker 5] rollout 4 [302/465] done=300
+[worker 4] rollout 4 [225/465] done=225
+[worker 3] rollout 4 [278/465] done=275
+[worker 7] rollout 4 [428/465] done=425
+[worker 6] rollout 4 [275/465] done=275
+[worker 0] rollout 4 [426/465] done=425
+[worker 1] rollout 4 [355/465] done=350
+[worker 2] rollout 4 [428/465] done=425
+[worker 5] rollout 4 [327/465] done=325
+[worker 4] rollout 4 [250/465] done=250
+[worker 3] rollout 4 [303/465] done=300
+[worker 7] rollout 4 [453/465] done=450
+[worker 6] rollout 4 [300/465] done=300
+[worker 0] rollout 4 [451/465] done=450
+[worker 2] rollout 4 [453/465] done=450
+[worker 7] rollout 4: saved 462 records / 462 preds -> runs/charades/qwen3vl_video/features/rollout4/shard7.pt
+[worker 5] rollout 4 [352/465] done=350
+[worker 1] rollout 4 [380/465] done=375
+[worker 3] rollout 4 [328/465] done=325
+[worker 2] rollout 4: saved 462 records / 462 preds -> runs/charades/qwen3vl_video/features/rollout4/shard2.pt
+[worker 0] rollout 4: saved 464 records / 464 preds -> runs/charades/qwen3vl_video/features/rollout4/shard0.pt
+[worker 4] rollout 4 [275/465] done=275
+[worker 6] rollout 4 [325/465] done=325
+[worker 5] rollout 4 [377/465] done=375
+[worker 7] rollout 5 [25/465] done=25
+[worker 1] rollout 4 [406/465] done=400
+[worker 3] rollout 4 [353/465] done=350
+[worker 2] rollout 5 [25/465] done=25
+[worker 0] rollout 5 [25/465] done=25
+[worker 4] rollout 4 [300/465] done=300
+[worker 6] rollout 4 [350/465] done=350
+[worker 7] rollout 5 [50/465] done=50
+[worker 5] rollout 4 [402/465] done=400
+[worker 1] rollout 4 [431/465] done=425
+[worker 3] rollout 4 [378/465] done=375
+[worker 2] rollout 5 [51/465] done=50
+[worker 0] rollout 5 [50/465] done=50
+[worker 6] rollout 4 [375/465] done=375
+[worker 4] rollout 4 [325/465] done=325
+[worker 7] rollout 5 [76/465] done=75
+[worker 5] rollout 4 [427/465] done=425
+[worker 1] rollout 4 [456/465] done=450
+[worker 2] rollout 5 [78/465] done=75
+[worker 0] rollout 5 [76/465] done=75
+[worker 3] rollout 4 [403/465] done=400
+[worker 1] rollout 4: saved 459 records / 459 preds -> runs/charades/qwen3vl_video/features/rollout4/shard1.pt
+[worker 6] rollout 4 [400/465] done=400
+[worker 4] rollout 4 [350/465] done=350
+[worker 7] rollout 5 [101/465] done=100
+[worker 5] rollout 4 [452/465] done=450
+[worker 2] rollout 5 [104/465] done=100
+[worker 0] rollout 5 [101/465] done=100
+[worker 3] rollout 4 [428/465] done=425
+[worker 1] rollout 5 [25/465] done=25
+[worker 4] rollout 4 [375/465] done=375
+[worker 6] rollout 4 [425/465] done=425
+[worker 5] rollout 4: saved 463 records / 463 preds -> runs/charades/qwen3vl_video/features/rollout4/shard5.pt
+[worker 7] rollout 5 [126/465] done=125
+[worker 2] rollout 5 [135/465] done=125
+[worker 0] rollout 5 [127/465] done=125
+[worker 1] rollout 5 [50/465] done=50
+[worker 3] rollout 4 [454/465] done=450
+[worker 4] rollout 4 [400/465] done=400
+[worker 5] rollout 5 [25/465] done=25
+[worker 6] rollout 4 [450/465] done=450
+[worker 7] rollout 5 [151/465] done=150
+[worker 3] rollout 4: saved 461 records / 461 preds -> runs/charades/qwen3vl_video/features/rollout4/shard3.pt
+[worker 2] rollout 5 [160/465] done=150
+[worker 6] rollout 4: saved 465 records / 465 preds -> runs/charades/qwen3vl_video/features/rollout4/shard6.pt
+[worker 0] rollout 5 [152/465] done=150
+[worker 1] rollout 5 [75/465] done=75
+[worker 5] rollout 5 [50/465] done=50
+[worker 3] rollout 5 [26/465] done=25
+[worker 7] rollout 5 [181/465] done=175
+[worker 4] rollout 4 [425/465] done=425
+[worker 2] rollout 5 [188/465] done=175
+[worker 6] rollout 5 [25/465] done=25
+[worker 0] rollout 5 [177/465] done=175
+[worker 1] rollout 5 [101/465] done=100
+[worker 5] rollout 5 [75/465] done=75
+[worker 3] rollout 5 [51/465] done=50
+[worker 7] rollout 5 [208/465] done=200
+[worker 2] rollout 5 [214/465] done=200
+[worker 6] rollout 5 [51/465] done=50
+[worker 0] rollout 5 [202/465] done=200
+[worker 4] rollout 4 [450/465] done=450
+[worker 1] rollout 5 [128/465] done=125
+[worker 5] rollout 5 [100/465] done=100
+[worker 3] rollout 5 [77/465] done=75
+[worker 2] rollout 5 [239/465] done=225
+[worker 7] rollout 5 [233/465] done=225
+[worker 4] rollout 4: saved 465 records / 465 preds -> runs/charades/qwen3vl_video/features/rollout4/shard4.pt
+[worker 6] rollout 5 [76/465] done=75
+[worker 0] rollout 5 [230/465] done=225
+[worker 1] rollout 5 [154/465] done=150
+[worker 5] rollout 5 [125/465] done=125
+[worker 3] rollout 5 [102/465] done=100
+[worker 7] rollout 5 [258/465] done=250
+[worker 2] rollout 5 [264/465] done=250
+[worker 4] rollout 5 [25/465] done=25
+[worker 6] rollout 5 [103/465] done=100
+[worker 0] rollout 5 [255/465] done=250
+[worker 1] rollout 5 [179/465] done=175
+[worker 3] rollout 5 [127/465] done=125
+[worker 0] rollout 5 [280/465] done=275
+[worker 2] rollout 5 [289/465] done=275
+[worker 5] rollout 5 [153/465] done=150
+[worker 4] rollout 5 [50/465] done=50
+[worker 7] rollout 5 [283/465] done=275
+[worker 6] rollout 5 [129/465] done=125
+[worker 1] rollout 5 [204/465] done=200
+[worker 2] rollout 5 [314/465] done=300
+[worker 0] rollout 5 [306/465] done=300
+[worker 3] rollout 5 [154/465] done=150
+[worker 4] rollout 5 [75/465] done=75
+[worker 5] rollout 5 [181/465] done=175
+[worker 7] rollout 5 [308/465] done=300
+[worker 6] rollout 5 [154/465] done=150
+[worker 1] rollout 5 [229/465] done=225
+[worker 2] rollout 5 [339/465] done=325
+[worker 0] rollout 5 [331/465] done=325
+[worker 4] rollout 5 [100/465] done=100
+[worker 3] rollout 5 [179/465] done=175
+[worker 7] rollout 5 [334/465] done=325
+[worker 5] rollout 5 [210/465] done=200
+[worker 6] rollout 5 [179/465] done=175
+[worker 1] rollout 5 [254/465] done=250
+[worker 2] rollout 5 [365/465] done=350
+[worker 0] rollout 5 [357/465] done=350
+[worker 4] rollout 5 [125/465] done=125
+[worker 3] rollout 5 [204/465] done=200
+[worker 5] rollout 5 [235/465] done=225
+[worker 6] rollout 5 [204/465] done=200
+[worker 7] rollout 5 [359/465] done=350
+[worker 1] rollout 5 [279/465] done=275
+[worker 2] rollout 5 [390/465] done=375
+[worker 0] rollout 5 [383/465] done=375
+[worker 7] rollout 5 [386/465] done=375
+[worker 6] rollout 5 [229/465] done=225
+[worker 5] rollout 5 [261/465] done=250
+[worker 3] rollout 5 [229/465] done=225
+[worker 1] rollout 5 [304/465] done=300
+[worker 4] rollout 5 [150/465] done=150
+[worker 2] rollout 5 [416/465] done=400
+[worker 0] rollout 5 [409/465] done=400
+[worker 7] rollout 5 [412/465] done=400
+[worker 6] rollout 5 [254/465] done=250
+[worker 1] rollout 5 [329/465] done=325
+[worker 5] rollout 5 [286/465] done=275
+[worker 3] rollout 5 [254/465] done=250
+[worker 4] rollout 5 [175/465] done=175
+[worker 2] rollout 5 [441/465] done=425
+[worker 0] rollout 5 [436/465] done=425
+[worker 7] rollout 5 [437/465] done=425
+[worker 1] rollout 5 [356/465] done=350
+[worker 5] rollout 5 [312/465] done=300
+[worker 6] rollout 5 [279/465] done=275
+[worker 2] rollout 5: saved 449 records / 449 preds -> runs/charades/qwen3vl_video/features/rollout5/shard2.pt
+[worker 4] rollout 5 [202/465] done=200
+[worker 3] rollout 5 [283/465] done=275
+[worker 0] rollout 5 [461/465] done=450
+[worker 0] rollout 5: saved 454 records / 454 preds -> runs/charades/qwen3vl_video/features/rollout5/shard0.pt
+[worker 7] rollout 5 [462/465] done=450
+[worker 7] rollout 5: saved 453 records / 453 preds -> runs/charades/qwen3vl_video/features/rollout5/shard7.pt
+[worker 5] rollout 5 [337/465] done=325
+[worker 1] rollout 5 [382/465] done=375
+[worker 2] rollout 6 [25/465] done=25
+[worker 3] rollout 5 [308/465] done=300
+[worker 6] rollout 5 [305/465] done=300
+[worker 4] rollout 5 [227/465] done=225
+[worker 0] rollout 6 [25/465] done=25
+[worker 7] rollout 6 [25/465] done=25
+[worker 5] rollout 5 [362/465] done=350
+[worker 1] rollout 5 [408/465] done=400
+[worker 3] rollout 5 [334/465] done=325
+[worker 2] rollout 6 [50/465] done=50
+[worker 6] rollout 5 [331/465] done=325
+[worker 4] rollout 5 [253/465] done=250
+[worker 0] rollout 6 [50/465] done=50
+[worker 7] rollout 6 [50/465] done=50
+[worker 3] rollout 5 [360/465] done=350
+[worker 1] rollout 5 [434/465] done=425
+[worker 5] rollout 5 [387/465] done=375
+[worker 2] rollout 6 [76/465] done=75
+[worker 6] rollout 5 [356/465] done=350
+[worker 4] rollout 5 [280/465] done=275
+[worker 7] rollout 6 [76/465] done=75
+[worker 0] rollout 6 [75/465] done=75
+[worker 3] rollout 5 [385/465] done=375
+[worker 2] rollout 6 [103/465] done=100
+[worker 5] rollout 5 [412/465] done=400
+[worker 1] rollout 5 [460/465] done=450
+[worker 6] rollout 5 [381/465] done=375
+[worker 1] rollout 5: saved 455 records / 455 preds -> runs/charades/qwen3vl_video/features/rollout5/shard1.pt
+[worker 4] rollout 5 [305/465] done=300
+[worker 7] rollout 6 [101/465] done=100
+[worker 0] rollout 6 [100/465] done=100
+[worker 2] rollout 6 [129/465] done=125
+[worker 6] rollout 5 [406/465] done=400
+[worker 3] rollout 5 [410/465] done=400
+[worker 5] rollout 5 [437/465] done=425
+[worker 1] rollout 6 [25/465] done=25
+[worker 4] rollout 5 [330/465] done=325
+[worker 7] rollout 6 [126/465] done=125
+[worker 0] rollout 6 [126/465] done=125
+[worker 2] rollout 6 [154/465] done=150
+[worker 6] rollout 5 [431/465] done=425
+[worker 5] rollout 5 [462/465] done=450
+[worker 3] rollout 5 [435/465] done=425
+[worker 1] rollout 6 [50/465] done=50
+[worker 5] rollout 5: saved 453 records / 453 preds -> runs/charades/qwen3vl_video/features/rollout5/shard5.pt
+[worker 7] rollout 6 [151/465] done=150
+[worker 4] rollout 5 [355/465] done=350
+[worker 0] rollout 6 [151/465] done=150
+[worker 2] rollout 6 [181/465] done=175
+[worker 6] rollout 5 [456/465] done=450
+[worker 3] rollout 5 [462/465] done=450
+[worker 1] rollout 6 [75/465] done=75
+[worker 5] rollout 6 [25/465] done=25
+[worker 3] rollout 5: saved 453 records / 453 preds -> runs/charades/qwen3vl_video/features/rollout5/shard3.pt
+[worker 4] rollout 5 [380/465] done=375
+[worker 7] rollout 6 [179/465] done=175
+[worker 0] rollout 6 [176/465] done=175
+[worker 6] rollout 5: saved 459 records / 459 preds -> runs/charades/qwen3vl_video/features/rollout5/shard6.pt
+[worker 2] rollout 6 [207/465] done=200
+[worker 3] rollout 6 [26/465] done=25
+[worker 5] rollout 6 [50/465] done=50
+[worker 1] rollout 6 [101/465] done=100
+[worker 4] rollout 5 [405/465] done=400
+[worker 6] rollout 6 [25/465] done=25
+[worker 7] rollout 6 [207/465] done=200
+[worker 0] rollout 6 [201/465] done=200
+[worker 2] rollout 6 [233/465] done=225
+[worker 3] rollout 6 [51/465] done=50
+[worker 5] rollout 6 [75/465] done=75
+[worker 1] rollout 6 [129/465] done=125
+[worker 0] rollout 6 [229/465] done=225
+[worker 7] rollout 6 [232/465] done=225
+[worker 6] rollout 6 [51/465] done=50
+[worker 2] rollout 6 [258/465] done=250
+[worker 4] rollout 5 [430/465] done=425
+[worker 3] rollout 6 [76/465] done=75
+[worker 0] rollout 6 [254/465] done=250
+[worker 5] rollout 6 [100/465] done=100
+[worker 1] rollout 6 [156/465] done=150
+[worker 7] rollout 6 [257/465] done=250
+[worker 6] rollout 6 [76/465] done=75
+[worker 2] rollout 6 [283/465] done=275
+[worker 0] rollout 6 [279/465] done=275
+[worker 3] rollout 6 [101/465] done=100
+[worker 4] rollout 5 [457/465] done=450
+[worker 6] rollout 6 [102/465] done=100
+[worker 5] rollout 6 [125/465] done=125
+[worker 1] rollout 6 [181/465] done=175
+[worker 4] rollout 5: saved 458 records / 458 preds -> runs/charades/qwen3vl_video/features/rollout5/shard4.pt
+[worker 2] rollout 6 [308/465] done=300
+[worker 7] rollout 6 [282/465] done=275
+[worker 3] rollout 6 [126/465] done=125
+[worker 0] rollout 6 [305/465] done=300
+[worker 1] rollout 6 [206/465] done=200
+[worker 4] rollout 6 [26/465] done=25
+[worker 6] rollout 6 [128/465] done=125
+[worker 2] rollout 6 [333/465] done=325
+[worker 7] rollout 6 [307/465] done=300
+[worker 5] rollout 6 [152/465] done=150
+[worker 0] rollout 6 [330/465] done=325
+[worker 3] rollout 6 [153/465] done=150
+[worker 1] rollout 6 [231/465] done=225
+[worker 6] rollout 6 [153/465] done=150
+[worker 4] rollout 6 [51/465] done=50
+[worker 2] rollout 6 [358/465] done=350
+[worker 7] rollout 6 [333/465] done=325
+[worker 5] rollout 6 [179/465] done=175
+[worker 0] rollout 6 [356/465] done=350
+[worker 1] rollout 6 [256/465] done=250
+[worker 3] rollout 6 [178/465] done=175
+[worker 4] rollout 6 [76/465] done=75
+[worker 6] rollout 6 [178/465] done=175
+[worker 2] rollout 6 [383/465] done=375
+[worker 7] rollout 6 [358/465] done=350
+[worker 0] rollout 6 [381/465] done=375
+[worker 5] rollout 6 [207/465] done=200
+[worker 1] rollout 6 [281/465] done=275
+[worker 4] rollout 6 [101/465] done=100
+[worker 6] rollout 6 [203/465] done=200
+[worker 3] rollout 6 [203/465] done=200
+[worker 7] rollout 6 [383/465] done=375
+[worker 2] rollout 6 [408/465] done=400
+[worker 5] rollout 6 [232/465] done=225
+[worker 0] rollout 6 [407/465] done=400
+[worker 1] rollout 6 [307/465] done=300
+[worker 6] rollout 6 [230/465] done=225
+[worker 7] rollout 6 [409/465] done=400
+[worker 4] rollout 6 [126/465] done=125
+[worker 2] rollout 6 [434/465] done=425
+[worker 3] rollout 6 [228/465] done=225
+[worker 5] rollout 6 [258/465] done=250
+[worker 0] rollout 6 [433/465] done=425
+[worker 1] rollout 6 [332/465] done=325
+[worker 2] rollout 6 [459/465] done=450
+[worker 6] rollout 6 [255/465] done=250
+[worker 2] rollout 6: saved 455 records / 455 preds -> runs/charades/qwen3vl_video/features/rollout6/shard2.pt
+[worker 7] rollout 6 [434/465] done=425
+[worker 3] rollout 6 [253/465] done=250
+[worker 0] rollout 6 [458/465] done=450
+[worker 5] rollout 6 [283/465] done=275
+[worker 4] rollout 6 [151/465] done=150
+[worker 1] rollout 6 [359/465] done=350
+[worker 0] rollout 6: saved 457 records / 457 preds -> runs/charades/qwen3vl_video/features/rollout6/shard0.pt
+[worker 7] rollout 6 [459/465] done=450
+[worker 2] rollout 7 [25/465] done=25
+[worker 6] rollout 6 [280/465] done=275
+[worker 7] rollout 6: saved 456 records / 456 preds -> runs/charades/qwen3vl_video/features/rollout6/shard7.pt
+[worker 3] rollout 6 [279/465] done=275
+[worker 5] rollout 6 [311/465] done=300
+[worker 4] rollout 6 [176/465] done=175
+[worker 0] rollout 7 [25/465] done=25
+[worker 1] rollout 6 [385/465] done=375
+[worker 2] rollout 7 [50/465] done=50
+[worker 7] rollout 7 [25/465] done=25
+[worker 6] rollout 6 [306/465] done=300
+[worker 3] rollout 6 [304/465] done=300
+[worker 5] rollout 6 [336/465] done=325
+[worker 4] rollout 6 [202/465] done=200
+[worker 1] rollout 6 [411/465] done=400
+[worker 0] rollout 7 [50/465] done=50
+[worker 7] rollout 7 [50/465] done=50
+[worker 2] rollout 7 [76/465] done=75
+[worker 3] rollout 6 [329/465] done=325
+[worker 6] rollout 6 [331/465] done=325
+[worker 5] rollout 6 [361/465] done=350
+[worker 4] rollout 6 [227/465] done=225
+[worker 1] rollout 6 [437/465] done=425
+[worker 0] rollout 7 [75/465] done=75
+[worker 7] rollout 7 [76/465] done=75
+[worker 2] rollout 7 [102/465] done=100
+[worker 3] rollout 6 [355/465] done=350
+[worker 6] rollout 6 [356/465] done=350
+[worker 4] rollout 6 [253/465] done=250
+[worker 5] rollout 6 [386/465] done=375
+[worker 0] rollout 7 [100/465] done=100
+[worker 1] rollout 6 [463/465] done=450
+[worker 7] rollout 7 [101/465] done=100
+[worker 1] rollout 6: saved 452 records / 452 preds -> runs/charades/qwen3vl_video/features/rollout6/shard1.pt
+[worker 2] rollout 7 [127/465] done=125
+[worker 3] rollout 6 [380/465] done=375
+[worker 6] rollout 6 [381/465] done=375
+[worker 5] rollout 6 [411/465] done=400
+[worker 4] rollout 6 [280/465] done=275
+[worker 0] rollout 7 [126/465] done=125
+[worker 1] rollout 7 [25/465] done=25
+[worker 7] rollout 7 [126/465] done=125
+[worker 2] rollout 7 [152/465] done=150
+[worker 6] rollout 6 [406/465] done=400
+[worker 3] rollout 6 [405/465] done=400
+[worker 4] rollout 6 [305/465] done=300
+[worker 5] rollout 6 [436/465] done=425
+[worker 0] rollout 7 [151/465] done=150
+[worker 1] rollout 7 [50/465] done=50
+[worker 7] rollout 7 [151/465] done=150
+[worker 2] rollout 7 [179/465] done=175
+[worker 6] rollout 6 [431/465] done=425
+[worker 3] rollout 6 [430/465] done=425
+[worker 5] rollout 6 [461/465] done=450
+[worker 4] rollout 6 [330/465] done=325
+[worker 0] rollout 7 [176/465] done=175
+[worker 7] rollout 7 [179/465] done=175
+[worker 5] rollout 6: saved 454 records / 454 preds -> runs/charades/qwen3vl_video/features/rollout6/shard5.pt
+[worker 1] rollout 7 [75/465] done=75
+[worker 2] rollout 7 [204/465] done=200
+[worker 6] rollout 6 [456/465] done=450
+[worker 3] rollout 6 [457/465] done=450
+[worker 4] rollout 6 [355/465] done=350
+[worker 0] rollout 7 [201/465] done=200

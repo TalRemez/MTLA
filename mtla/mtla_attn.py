@@ -72,13 +72,20 @@ def mtla_localized_attention(
         region_idx: indices into the ``n_mod`` axis that fall inside the proposal region M(R_p).
 
     Returns:
-        ``[L, H]`` localized attention: summed over the region (eq. 2), meaned over Q_p (eq. 3).
+        ``[L, H]`` fp32 localized attention: summed over the region (eq. 2), meaned over Q_p (eq. 3).
+        The region sum and Q_p mean accumulate in fp32 (``dtype=torch.float32``) even when ``attn`` is
+        bf16, so summing many region tokens keeps precision without upcasting the whole tensor — the
+        input can stay bf16 on GPU; only this reduced result is fp32.
     """
     x = attn.index_select(
         -1, region_idx
     )  # keep modality tokens inside M(R_p)  [L,H,Q_p,|R|]
-    x = x.sum(dim=-1)  # sum over the region   -> LA   (eq.2) [L,H,Q_p]
-    x = x.mean(dim=-1)  # mean over Q_p         -> MTLA (eq.3) [L,H]
+    x = x.sum(
+        dim=-1, dtype=torch.float32
+    )  # sum over region -> LA (eq.2) [L,H,Q_p], fp32 accum
+    x = x.mean(
+        dim=-1
+    )  # mean over Q_p -> MTLA (eq.3) [L,H]; x is already fp32 so this means in fp32
     return x
 
 
@@ -95,8 +102,9 @@ def reduce_band(
 
     The score-time tail of MTLA: ``mtla_localized_attention`` produced the ``[L, H]`` array during
     extraction (eqs. 2-3); this keeps only the band's layers, then means over heads and over those
-    layers — ``attn[band].mean(over heads).mean(over layers)``. Higher means more grounded. Pure
-    NumPy and CPU-side, so the evaluation stage calls it without loading a model.
+    layers — ``attn[band].mean(over heads).mean(over layers)`` (mean vs sum over a fixed band is a
+    constant factor, so it changes no ranking / AUROC / mAP). Higher means more grounded. Pure NumPy
+    and CPU-side, so the evaluation stage calls it without loading a model.
 
     Args:
         attn: Attention aggregate of shape ``[L, H]`` for a single prediction, or ``[N, L, H]`` for
@@ -155,17 +163,29 @@ def reduce_band(
 class _Pred:
     """One prediction as it flows through the driver, so no parallel arrays are kept aligned by hand.
 
-    ``qp`` holds its absolute Q_p positions (empty when its response tokens couldn't be located — it
-    then stays a zero-filled, ``extracted=False`` candidate); ``x1`` is its first coordinate/digit
-    position; ``la`` / ``fd`` are the ``[L, H]`` reductions, filled once the attention is captured.
+    Carries the prediction's response-token positions split into the paper's Q_p **slots** (absolute
+    positions in the teacher-forced sequence):
+      * ``qp``    — all of the prediction's tokens (label + coords); the ``all`` slot. Empty when the
+                    tokens couldn't be located, in which case it stays a zero-filled,
+                    ``extracted=False`` candidate.
+      * ``coord`` — the coordinate/digit tokens (the ``digits`` slot).
+      * ``label`` — the label tokens (the ``label`` slot; empty for video spans, which have no label).
+      * ``x1``    — the first coordinate/digit token (the ``first`` slot), or ``None``.
+    ``feats`` holds the extracted ``{"<slot>_<signal>": [L, H]}`` aggregates (slot x local/global),
+    filled once the attention is captured.
     """
 
     idx: int  # index into the parsed `predictions` list
     pred: Any  # the Prediction (region + label)
-    qp: list[int]  # absolute Q_p positions ([] if not locatable)
-    x1: int | None = None  # first coordinate/digit position, or None
-    la: "np.ndarray | None" = None  # local_attention  (over all Q_p tokens)
-    fd: "np.ndarray | None" = None  # first_digit      (over the x1 token only)
+    qp: list[int]  # all Q_p positions ([] if not locatable) -> "all" slot
+    coord: list[int] = field(
+        default_factory=list
+    )  # coord/digit positions -> "digits" slot
+    label: list[int] = field(default_factory=list)  # label positions -> "label" slot
+    x1: int | None = None  # first coordinate/digit position -> "first" slot
+    feats: dict = field(
+        default_factory=dict
+    )  # {"<slot>_<signal>": [L, H]}, filled after capture
 
 
 def _slots(
@@ -194,6 +214,8 @@ def _slots(
     slots: list[_Pred] = []
     for i, tr in enumerate(token_ranges):
         qp: list[int] = []
+        coord: list[int] = []
+        label: list[int] = []
         x1: int | None = None
         if tr is not None and tr["first_label_tok"] is not None:
             label = [
@@ -202,9 +224,12 @@ def _slots(
             coord = [
                 prompt_len + t for t in tr["coord_toks"] if prompt_len + t < total_len
             ]
+            # "all" = label + coords (fall back to the first label token if no label toks resolved).
             qp = sorted(set((label or [prompt_len + tr["first_label_tok"]]) + coord))
             x1 = coord[0] if coord else None
-        slots.append(_Pred(idx=i, pred=predictions[i], qp=qp, x1=x1))
+        slots.append(
+            _Pred(idx=i, pred=predictions[i], qp=qp, coord=coord, label=label, x1=x1)
+        )
     return slots
 
 
@@ -214,12 +239,13 @@ def compute_mtla(
     """Compute MTLA for every prediction in one item and return its feature-shard record.
 
     Build the input and parse the response into predictions (``build_extraction_inputs``),
-    teacher-force the prompt+response through one attention-capturing forward, then per
-    prediction take its Q_p rows out of the captured attention and reduce them with
-    ``mtla_localized_attention`` to an ``[L, H]`` array. Two arrays are stored per prediction:
-    ``local_attention`` (over all Q_p tokens) and ``first_digit`` (the first coordinate/digit
-    token only). This is the per-item core of the extract stage, and it is identical for image
-    detection (boxes) and video grounding (spans) — only the adapter callbacks differ.
+    teacher-force the prompt+response through one attention-capturing forward, then per prediction
+    reduce the captured attention with ``mtla_localized_attention`` to ``[L, H]`` arrays — one per
+    **slot x signal**: each Q_p slot (``all`` / ``digits`` / ``label`` / ``first``) reduced against
+    both the local region (the MTLA score) and all modality tokens (the SVAR/global baseline), stored
+    under ``<slot>_<signal>`` keys (plus the ``local_attention`` / ``first_digit`` back-compat
+    aliases). This is the per-item core of the extract stage, and it is identical for image detection
+    (boxes) and video grounding (spans) — only the adapter callbacks differ.
 
     Args:
         adapter: the resolved model adapter supplying the task-specific callbacks
@@ -274,22 +300,28 @@ def compute_mtla(
     if attn is None:  # this item ran out of GPU memory (state.n_oom bumped); skip it
         return None
 
-    def reduce_to_region(positions: list[int], region: "torch.Tensor") -> "np.ndarray":
-        """Reduce this prediction's captured attention onto its region M(R_p) -> [L,H] (eqs. 2-3);
-        ``positions`` are absolute Q_p positions, mapped back to the compressed capture rows. The
-        per-prediction slice is upcast to fp32 here (not the whole [L,H,N_q,n_mod] tensor) so the
-        reduction matches the paper's math without the memory cost of a full fp32 stack.
+    all_mod = torch.arange(
+        attn.shape[-1], device=device
+    )  # global (SVAR): all modality tokens
+
+    def reduce(positions: list[int], cols: "torch.Tensor") -> "np.ndarray":
+        """Reduce a Q_p slot onto a modality-token set -> [L, H] (eqs. 2-3).
+
+        ``positions`` are absolute Q_p positions (mapped back to the compressed capture rows via
+        ``row_of``); ``cols`` are the modality columns to sum over — the proposal region for the
+        local signal, or all tokens for the global/SVAR signal. The slice stays bf16 on GPU; the
+        reduction accumulates in fp32 (see ``mtla_localized_attention``) and only the small [L,H]
+        result is upcast, so nothing large is upcast on-device. Heads survive to the [L,H] result.
         """
         rows = torch.tensor(
             [row_of[p] for p in positions], dtype=torch.long, device=device
         )
-        sl = attn.index_select(
-            2, rows
-        ).float()  # [L,H,|Q_p|,n_mod], small -> fp32 is cheap
-        out = mtla_localized_attention(sl, region)
-        return out.to(torch.float16).cpu().numpy()
+        sl = attn.index_select(2, rows)  # [L,H,|slot|,n_mod], bf16 on GPU
+        return mtla_localized_attention(sl, cols).cpu().numpy()  # [L, H] fp32
 
-    # Reduce per prediction: local_attention over all Q_p tokens, first_digit over the x1 token only.
+    # For every prediction compute each Q_p SLOT (all / digits / label / first) against both SIGNALS:
+    # local (attention inside the proposal region M(R_p), the MTLA score) and global (attention over
+    # all modality tokens, the SVAR baseline). All come from the one captured [L,H,N_q,n_mod] tensor.
     for s in slots:
         if not s.qp:
             continue
@@ -298,19 +330,32 @@ def compute_mtla(
             dtype=torch.long,
             device=device,
         )
-        s.la = reduce_to_region(s.qp, region)
-        s.fd = reduce_to_region([s.x1], region) if s.x1 is not None else s.la
+        slot_positions = {
+            "all": s.qp,
+            "digits": s.coord,
+            "label": s.label,
+            "first": [s.x1] if s.x1 is not None else [],
+        }
+        for slot, pos in slot_positions.items():
+            if not pos:  # skip empty slots (e.g. label for video spans)
+                continue
+            s.feats[f"{slot}_local"] = reduce(pos, region)
+            s.feats[f"{slot}_global"] = reduce(pos, all_mod)
 
     # Emit an object for EVERY prediction so the shards are the complete candidate set at score time;
-    # a prediction whose Q_p couldn't be located gets a zero array and `extracted=False`.
-    zeros = np.zeros((n_layers, n_heads), dtype=np.float16)
+    # a prediction whose Q_p couldn't be located gets zero arrays and `extracted=False`. Back-compat
+    # aliases: `local_attention` = all_local (the MTLA score COCO reads), `first_digit` = first_local
+    # (the video signal); the full slot x signal set is stored alongside for the paper's tables.
+    zeros = np.zeros((n_layers, n_heads), dtype=np.float32)
     out_objs: list[PredObject] = []
     for s in slots:
         obj = adapter.prediction_record(s.pred, s.idx, meta)
         obj["is_hallucinated"] = bool(inp["hallu_flags"][s.idx])
-        obj["extracted"] = s.la is not None
-        obj["local_attention"] = s.la if s.la is not None else zeros
-        obj["first_digit"] = s.fd if s.fd is not None else zeros
+        obj["extracted"] = bool(s.feats)
+        for name, arr in s.feats.items():
+            obj[name] = arr
+        obj["local_attention"] = s.feats.get("all_local", zeros)
+        obj["first_digit"] = s.feats.get("first_local", s.feats.get("all_local", zeros))
         out_objs.append(cast(PredObject, obj))
     rec = adapter.item_record(record, meta, out_objs, n_predictions=len(predictions))
 

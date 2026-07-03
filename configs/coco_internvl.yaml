@@ -1,6 +1,7 @@
 # COCO detection with InternVL3.5-8B.
-# Reproduces: hallucination AUROC 0.873 (MTLA); single-rollout mAP 36.2.
-# For the 41.9 mAP headline, add N=16 self-consistency voting at launch: --n 16 --agg sum.
+# Reproduces: hallucination AUROC 0.873 (MTLA); single-rollout mAP 36.1.
+# For the 41.9 mAP headline: --n 16 (16 rollouts); score uses the support fusion (agg: support below),
+# scoring the coord-token inside-region signal (dataset signal=digits_local).
 model: internvl_image
 dataset: coco
 

@@ -1,0 +1,71 @@
+===== OVERNIGHT START Thu Jul  2 23:01:04 UTC 2026 =====
+########## PHASE 1: 100-example N=16 sanity ##########
+### [s100] coco_internvl  START 23:01:04  (n=16 --limit 100)
+  [s100/coco_internvl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[coco/internvl_image] results:
+  auroc_mtla = 0.9299
+  n_rollouts = 16
+  agg = sum
+  map: mAP=0.9583  mAP50=1.3537  mAP75=1.0207  AP_small=0.5061  AP_medium=1.0441  AP_large=1.2511
+  n_dets = 21243
+  [s100/coco_internvl] error-logs=0  DONE 23:08:22
+### [s100] coco_qwen3vl  START 23:08:22  (n=16 --limit 100)
+  [s100/coco_qwen3vl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[coco/qwen3vl_image] results:
+  auroc_mtla = 0.9027
+  n_rollouts = 16
+  agg = sum
+  map: mAP=0.9458  mAP50=1.3209  mAP75=0.9793  AP_small=0.4113  AP_medium=1.0308  AP_large=1.2906
+  n_dets = 6900
+  [s100/coco_qwen3vl] error-logs=0  DONE 23:13:01
+### [s100] qvh_qwen3vl  START 23:13:01  (n=16 --limit 100)
+  [s100/qvh_qwen3vl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[qvhighlights/qwen3vl_video] results:
+  auroc_mtla = 0.8979
+  n_rollouts = 16
+  agg = max
+  nms_mtla: mAP=41.0900  mAP@0.5=58.9600  mAP@0.75=43.2500  R1@0.5=65.0000  R1@0.7=50.0000
+  [s100/qvh_qwen3vl] error-logs=1  DONE 23:22:05
+### [s100] charades_qwen3vl  START 23:22:05  (n=16 --limit 100)
+  [s100/charades_qwen3vl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[charades/qwen3vl_video] results:
+  auroc_mtla = 0.7784
+  n_rollouts = 16
+  agg = max
+  mtla: R@0.3=86.0000  R@0.5=71.0000  R@0.7=41.0000  mIoU=0.5940
+  [s100/charades_qwen3vl] error-logs=0  DONE 23:28:10
+########## PHASE 2: FULL datasets N=16 ##########
+### [full] coco_internvl  START 23:28:10  (n=16 )
+  [full/coco_internvl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[coco/internvl_image] results:
+  auroc_mtla = 0.9171
+  n_rollouts = 16
+  agg = sum
+  map: mAP=33.3882  mAP50=53.0316  mAP75=33.3638  AP_small=14.9755  AP_medium=35.5718  AP_large=54.5687
+  n_dets = 1045322
+  [full/coco_internvl] error-logs=0  DONE 03:33:30
+### [full] coco_qwen3vl  START 03:33:30  (n=16 )
+  [full/coco_qwen3vl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[coco/qwen3vl_image] results:
+  auroc_mtla = 0.8898
+  n_rollouts = 16
+  agg = sum
+  map: mAP=36.8780  mAP50=58.6328  mAP75=36.4203  AP_small=14.2217  AP_medium=40.5608  AP_large=61.3157
+  n_dets = 383213
+  [full/coco_qwen3vl] error-logs=0  DONE 05:19:58
+### [full] qvh_qwen3vl  START 05:19:58  (n=16 )
+  [full/qvh_qwen3vl] RESULT:
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[qvhighlights/qwen3vl_video] results:
+  auroc_mtla = 0.8312
+  n_rollouts = 16
+  agg = max
+  nms_mtla: mAP=35.8300  mAP@0.5=54.0600  mAP@0.75=36.2700  R1@0.5=55.0300  R1@0.7=38.9000
+  [full/qvh_qwen3vl] error-logs=0  DONE 07:17:45
+### [full] charades_qwen3vl  START 07:17:45  (n=16 )

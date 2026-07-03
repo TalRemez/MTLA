@@ -1,0 +1,7 @@
+[evaluate] found 2 rollout(s) on disk: [0, 1]
+[coco/qwen3vl_image] results:
+  auroc_mtla = 0.8572
+  n_rollouts = 2
+  agg = sum
+  map: mAP=0.2142  mAP50=0.3023  mAP75=0.2244  AP_small=0.0573  AP_medium=0.2938  AP_large=0.1349
+  n_dets = 528

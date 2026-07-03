@@ -1,0 +1,1051 @@
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 194518.45it/s]
+[extract] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.08s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.13s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.17s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.29s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.31s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:04,  1.36s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.25s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.27s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:01<00:01,  1.02it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:01,  1.02it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.00s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.08s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.06s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.15s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.26s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.33s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.03it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.03it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.03it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.00it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.02it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.12s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.18it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]
+[worker 0] model=qwen3vl_video dataset=qvhighlights gpu=0 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.17s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.19it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.11it/s]
+qwen-vl-utils using decord to read video.
+[worker 5] model=qwen3vl_video dataset=qvhighlights gpu=5 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.09it/s]
+[worker 6] model=qwen3vl_video dataset=qvhighlights gpu=6 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.18it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.07it/s]
+[worker 4] model=qwen3vl_video dataset=qvhighlights gpu=4 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.15it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.06it/s]
+[worker 3] model=qwen3vl_video dataset=qvhighlights gpu=3 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.29s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.08it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.03s/it]
+[worker 1] model=qwen3vl_video dataset=qvhighlights gpu=1 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.02it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.06s/it]
+[worker 2] model=qwen3vl_video dataset=qvhighlights gpu=2 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.01s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.11s/it]
+[worker 7] model=qwen3vl_video dataset=qvhighlights gpu=7 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+qwen-vl-utils using decord to read video.
+[worker 2] rollout 0 [27/194] done=25
+[worker 5] rollout 0 [25/194] done=25
+[worker 6] rollout 0 [26/193] done=25
+[worker 4] rollout 0 [27/194] done=25
+[worker 0] rollout 0 [26/194] done=25
+[worker 7] rollout 0 [25/193] done=25
+[worker 1] rollout 0 [25/194] done=25
+[worker 3] rollout 0 [25/194] done=25
+[worker 5] rollout 0 [50/194] done=50
+[worker 7] rollout 0 [51/193] done=50
+[worker 2] rollout 0 [53/194] done=50
+[worker 4] rollout 0 [53/194] done=50
+[worker 6] rollout 0 [51/193] done=50
+[worker 0] rollout 0 [54/194] done=50
+[worker 3] rollout 0 [54/194] done=50
+[worker 1] rollout 0 [50/194] done=50
+[worker 5] rollout 0 [76/194] done=75
+[worker 7] rollout 0 [77/193] done=75
+[worker 2] rollout 0 [78/194] done=75
+[worker 6] rollout 0 [76/193] done=75
+[worker 4] rollout 0 [79/194] done=75
+[worker 3] rollout 0 [81/194] done=75
+[worker 0] rollout 0 [81/194] done=75
+[worker 1] rollout 0 [75/194] done=75
+[worker 2] rollout 0 [103/194] done=100
+[worker 7] rollout 0 [102/193] done=100
+[worker 5] rollout 0 [102/194] done=100
+[worker 6] rollout 0 [102/193] done=100
+[worker 4] rollout 0 [108/194] done=100
+[worker 3] rollout 0 [107/194] done=100
+[worker 0] rollout 0 [106/194] done=100
+[worker 1] rollout 0 [101/194] done=100
+[worker 2] rollout 0 [130/194] done=125
+[worker 7] rollout 0 [128/193] done=125
+[worker 5] rollout 0 [127/194] done=125
+[worker 6] rollout 0 [127/193] done=125
+[worker 4] rollout 0 [134/194] done=125
+[worker 3] rollout 0 [133/194] done=125
+[worker 0] rollout 0 [131/194] done=125
+[worker 1] rollout 0 [127/194] done=125
+[worker 5] rollout 0 [152/194] done=150
+[worker 2] rollout 0 [155/194] done=150
+[worker 7] rollout 0 [156/193] done=150
+[worker 6] rollout 0 [152/193] done=150
+[worker 3] rollout 0 [159/194] done=150
+[worker 4] rollout 0 [159/194] done=150
+[worker 0] rollout 0 [158/194] done=150
+[worker 1] rollout 0 [152/194] done=150
+[worker 5] rollout 0 [179/194] done=175
+[worker 2] rollout 0 [181/194] done=175
+[worker 7] rollout 0 [182/193] done=175
+[worker 6] rollout 0 [177/193] done=175
+[worker 3] rollout 0 [184/194] done=175
+[worker 4] rollout 0 [187/194] done=175
+[worker 0] rollout 0 [183/194] done=175
+[worker 1] rollout 0 [179/194] done=175
+[worker 4] rollout 0: saved 182 records / 276 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard4.pt
+[worker 7] rollout 0: saved 185 records / 205 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard7.pt
+[worker 2] rollout 0: saved 187 records / 265 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard2.pt
+[worker 3] rollout 0: saved 185 records / 245 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard3.pt
+[worker 5] rollout 0: saved 190 records / 232 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard5.pt
+[worker 0] rollout 0: saved 185 records / 286 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard0.pt
+[worker 6] rollout 0: saved 191 records / 246 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard6.pt
+[worker 1] rollout 0: saved 190 records / 266 preds -> runs/qvh/qwen3vl_video/features/rollout0/shard1.pt
+[worker 4] rollout 1 [26/194] done=25
+[worker 2] rollout 1 [25/194] done=25
+[worker 7] rollout 1 [26/193] done=25
+[worker 3] rollout 1 [26/194] done=25
+[worker 5] rollout 1 [25/194] done=25
+[worker 0] rollout 1 [26/194] done=25
+[worker 6] rollout 1 [27/193] done=25
+[worker 1] rollout 1 [25/194] done=25
+[worker 4] rollout 1 [51/194] done=50
+[worker 2] rollout 1 [50/194] done=50
+[worker 7] rollout 1 [52/193] done=50
+[worker 3] rollout 1 [54/194] done=50
+[worker 5] rollout 1 [50/194] done=50
+[worker 6] rollout 1 [52/193] done=50
+[worker 0] rollout 1 [53/194] done=50
+[worker 1] rollout 1 [50/194] done=50
+[worker 2] rollout 1 [75/194] done=75
+[worker 4] rollout 1 [76/194] done=75
+[worker 7] rollout 1 [78/193] done=75
+[worker 3] rollout 1 [79/194] done=75
+[worker 5] rollout 1 [77/194] done=75
+[worker 6] rollout 1 [77/193] done=75
+[worker 0] rollout 1 [81/194] done=75
+[worker 1] rollout 1 [75/194] done=75
+[worker 2] rollout 1 [101/194] done=100
+[worker 4] rollout 1 [103/194] done=100
+[worker 7] rollout 1 [104/193] done=100
+[worker 3] rollout 1 [105/194] done=100
+[worker 5] rollout 1 [102/194] done=100
+[worker 6] rollout 1 [102/193] done=100
+[worker 0] rollout 1 [108/194] done=100
+[worker 1] rollout 1 [100/194] done=100
+[worker 2] rollout 1 [128/194] done=125
+[worker 4] rollout 1 [129/194] done=125
+[worker 7] rollout 1 [129/193] done=125
+[worker 3] rollout 1 [131/194] done=125
+[worker 5] rollout 1 [128/194] done=125
+[worker 6] rollout 1 [127/193] done=125
+[worker 0] rollout 1 [133/194] done=125
+[worker 1] rollout 1 [126/194] done=125
+[worker 2] rollout 1 [154/194] done=150
+[worker 4] rollout 1 [154/194] done=150
+[worker 7] rollout 1 [157/193] done=150
+[worker 3] rollout 1 [157/194] done=150
+[worker 5] rollout 1 [154/194] done=150
+[worker 6] rollout 1 [153/193] done=150
+[worker 0] rollout 1 [159/194] done=150
+[worker 1] rollout 1 [151/194] done=150
+[worker 2] rollout 1 [179/194] done=175
+[worker 4] rollout 1 [179/194] done=175
+[worker 7] rollout 1 [183/193] done=175
+[worker 3] rollout 1 [182/194] done=175
+[worker 5] rollout 1 [183/194] done=175
+[worker 6] rollout 1 [178/193] done=175
+[worker 7] rollout 1: saved 184 records / 229 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard7.pt
+[worker 2] rollout 1: saved 189 records / 264 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard2.pt
+[worker 0] rollout 1 [184/194] done=175
+[worker 1] rollout 1 [177/194] done=175
+[worker 5] rollout 1: saved 186 records / 236 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard5.pt
+[worker 3] rollout 1: saved 187 records / 232 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard3.pt
+[worker 4] rollout 1: saved 190 records / 315 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard4.pt
+[worker 6] rollout 1: saved 190 records / 257 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard6.pt
+[worker 0] rollout 1: saved 185 records / 287 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard0.pt
+[worker 1] rollout 1: saved 192 records / 255 preds -> runs/qvh/qwen3vl_video/features/rollout1/shard1.pt
+[worker 7] rollout 2 [25/193] done=25
+[worker 2] rollout 2 [25/194] done=25
+[worker 5] rollout 2 [25/194] done=25
+[worker 4] rollout 2 [25/194] done=25
+[worker 3] rollout 2 [25/194] done=25
+[worker 6] rollout 2 [25/193] done=25
+[worker 0] rollout 2 [25/194] done=25
+[worker 1] rollout 2 [25/194] done=25
+[worker 7] rollout 2 [50/193] done=50
+[worker 2] rollout 2 [50/194] done=50
+[worker 5] rollout 2 [50/194] done=50
+[worker 4] rollout 2 [50/194] done=50
+[worker 3] rollout 2 [50/194] done=50
+[worker 6] rollout 2 [50/193] done=50
+[worker 0] rollout 2 [50/194] done=50
+[worker 1] rollout 2 [50/194] done=50
+[worker 7] rollout 2 [75/193] done=75
+[worker 2] rollout 2 [75/194] done=75
+[worker 5] rollout 2 [75/194] done=75
+[worker 4] rollout 2 [76/194] done=75
+[worker 3] rollout 2 [75/194] done=75
+[worker 6] rollout 2 [75/193] done=75
+[worker 0] rollout 2 [75/194] done=75
+[worker 1] rollout 2 [75/194] done=75
+[worker 7] rollout 2 [100/193] done=100
+[worker 2] rollout 2 [100/194] done=100
+[worker 5] rollout 2 [100/194] done=100
+[worker 4] rollout 2 [101/194] done=100
+[worker 3] rollout 2 [100/194] done=100
+[worker 6] rollout 2 [100/193] done=100
+[worker 0] rollout 2 [100/194] done=100
+[worker 1] rollout 2 [100/194] done=100
+[worker 7] rollout 2 [125/193] done=125
+[worker 2] rollout 2 [125/194] done=125
+[worker 5] rollout 2 [125/194] done=125
+[worker 4] rollout 2 [126/194] done=125
+[worker 3] rollout 2 [125/194] done=125
+[worker 6] rollout 2 [125/193] done=125
+[worker 0] rollout 2 [125/194] done=125
+[worker 1] rollout 2 [125/194] done=125
+[worker 7] rollout 2 [151/193] done=150
+[worker 2] rollout 2 [150/194] done=150
+[worker 5] rollout 2 [150/194] done=150
+[worker 4] rollout 2 [152/194] done=150
+[worker 3] rollout 2 [150/194] done=150
+[worker 6] rollout 2 [150/193] done=150
+[worker 0] rollout 2 [150/194] done=150
+[worker 1] rollout 2 [150/194] done=150
+[worker 2] rollout 2 [175/194] done=175
+[worker 7] rollout 2 [176/193] done=175
+[worker 5] rollout 2 [175/194] done=175
+[worker 4] rollout 2 [177/194] done=175
+[worker 3] rollout 2 [175/194] done=175
+[worker 6] rollout 2 [175/193] done=175
+[worker 7] rollout 2: saved 192 records / 233 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard7.pt
+[worker 2] rollout 2: saved 194 records / 257 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard2.pt
+[worker 1] rollout 2 [175/194] done=175
+[worker 0] rollout 2 [175/194] done=175
+[worker 5] rollout 2: saved 194 records / 249 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard5.pt
+[worker 4] rollout 2: saved 192 records / 294 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard4.pt
+[worker 3] rollout 2: saved 194 records / 233 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard3.pt
+[worker 6] rollout 2: saved 193 records / 268 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard6.pt
+[worker 1] rollout 2: saved 194 records / 275 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard1.pt
+[worker 0] rollout 2: saved 194 records / 273 preds -> runs/qvh/qwen3vl_video/features/rollout2/shard0.pt
+[worker 2] rollout 3 [26/194] done=25
+[worker 7] rollout 3 [25/193] done=25
+[worker 5] rollout 3 [25/194] done=25
+[worker 4] rollout 3 [25/194] done=25
+[worker 3] rollout 3 [25/194] done=25
+[worker 6] rollout 3 [26/193] done=25
+[worker 1] rollout 3 [25/194] done=25
+[worker 0] rollout 3 [26/194] done=25
+[worker 7] rollout 3 [50/193] done=50
+[worker 2] rollout 3 [51/194] done=50
+[worker 5] rollout 3 [50/194] done=50
+[worker 4] rollout 3 [50/194] done=50
+[worker 3] rollout 3 [50/194] done=50
+[worker 6] rollout 3 [51/193] done=50
+[worker 1] rollout 3 [50/194] done=50
+[worker 0] rollout 3 [52/194] done=50
+[worker 7] rollout 3 [77/193] done=75
+[worker 2] rollout 3 [76/194] done=75
+[worker 5] rollout 3 [76/194] done=75
+[worker 4] rollout 3 [75/194] done=75
+[worker 3] rollout 3 [75/194] done=75
+[worker 6] rollout 3 [76/193] done=75
+[worker 1] rollout 3 [76/194] done=75
+[worker 2] rollout 3 [101/194] done=100
+[worker 7] rollout 3 [102/193] done=100
+[worker 0] rollout 3 [77/194] done=75
+[worker 5] rollout 3 [101/194] done=100
+[worker 4] rollout 3 [102/194] done=100
+[worker 3] rollout 3 [102/194] done=100
+[worker 6] rollout 3 [101/193] done=100
+[worker 1] rollout 3 [102/194] done=100
+[worker 2] rollout 3 [126/194] done=125
+[worker 7] rollout 3 [127/193] done=125
+[worker 0] rollout 3 [102/194] done=100
+[worker 5] rollout 3 [126/194] done=125
+[worker 4] rollout 3 [128/194] done=125
+[worker 3] rollout 3 [127/194] done=125
+[worker 6] rollout 3 [126/193] done=125
+[worker 1] rollout 3 [127/194] done=125
+[worker 2] rollout 3 [152/194] done=150
+[worker 7] rollout 3 [154/193] done=150
+[worker 0] rollout 3 [127/194] done=125
+[worker 5] rollout 3 [151/194] done=150
+[worker 4] rollout 3 [154/194] done=150
+[worker 3] rollout 3 [152/194] done=150
+[worker 6] rollout 3 [151/193] done=150
+[worker 1] rollout 3 [152/194] done=150
+[worker 2] rollout 3 [177/194] done=175
+[worker 7] rollout 3 [179/193] done=175
+[worker 0] rollout 3 [152/194] done=150
+[worker 5] rollout 3 [177/194] done=175
+[worker 4] rollout 3 [179/194] done=175
+[worker 3] rollout 3 [177/194] done=175
+[worker 6] rollout 3 [176/193] done=175
+[worker 2] rollout 3: saved 191 records / 266 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard2.pt
+[worker 7] rollout 3: saved 189 records / 248 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard7.pt
+[worker 1] rollout 3 [178/194] done=175
+[worker 5] rollout 3: saved 192 records / 288 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard5.pt
+[worker 4] rollout 3: saved 189 records / 315 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard4.pt
+[worker 3] rollout 3: saved 192 records / 274 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard3.pt
+[worker 6] rollout 3: saved 192 records / 297 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard6.pt
+[worker 0] rollout 3 [177/194] done=175
+[worker 1] rollout 3: saved 191 records / 293 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard1.pt
+[worker 2] rollout 4 [25/194] done=25
+[worker 7] rollout 4 [25/193] done=25
+[worker 0] rollout 3: saved 192 records / 275 preds -> runs/qvh/qwen3vl_video/features/rollout3/shard0.pt
+[worker 5] rollout 4 [25/194] done=25
+[worker 4] rollout 4 [25/194] done=25
+[worker 3] rollout 4 [25/194] done=25
+[worker 6] rollout 4 [25/193] done=25
+[worker 1] rollout 4 [25/194] done=25
+[worker 2] rollout 4 [50/194] done=50
+[worker 7] rollout 4 [51/193] done=50
+[worker 5] rollout 4 [50/194] done=50
+[worker 0] rollout 4 [26/194] done=25
+[worker 4] rollout 4 [50/194] done=50
+[worker 3] rollout 4 [51/194] done=50
+[worker 6] rollout 4 [50/193] done=50
+[worker 1] rollout 4 [50/194] done=50
+[worker 2] rollout 4 [75/194] done=75
+[worker 7] rollout 4 [77/193] done=75
+[worker 5] rollout 4 [76/194] done=75
+[worker 4] rollout 4 [75/194] done=75
+[worker 0] rollout 4 [53/194] done=50
+[worker 3] rollout 4 [76/194] done=75
+[worker 6] rollout 4 [75/193] done=75
+[worker 2] rollout 4 [100/194] done=100
+[worker 1] rollout 4 [75/194] done=75
+[worker 7] rollout 4 [102/193] done=100
+[worker 5] rollout 4 [102/194] done=100
+[worker 4] rollout 4 [102/194] done=100
+[worker 0] rollout 4 [78/194] done=75
+[worker 3] rollout 4 [102/194] done=100
+[worker 6] rollout 4 [100/193] done=100
+[worker 2] rollout 4 [127/194] done=125
+[worker 1] rollout 4 [100/194] done=100
+[worker 7] rollout 4 [127/193] done=125
+[worker 5] rollout 4 [127/194] done=125
+[worker 4] rollout 4 [129/194] done=125
+[worker 0] rollout 4 [105/194] done=100
+[worker 3] rollout 4 [127/194] done=125
+[worker 6] rollout 4 [125/193] done=125
+[worker 2] rollout 4 [152/194] done=150
+[worker 1] rollout 4 [126/194] done=125
+[worker 7] rollout 4 [154/193] done=150
+[worker 5] rollout 4 [153/194] done=150
+[worker 4] rollout 4 [155/194] done=150
+[worker 0] rollout 4 [130/194] done=125
+[worker 3] rollout 4 [152/194] done=150
+[worker 6] rollout 4 [151/193] done=150
+[worker 2] rollout 4 [177/194] done=175
+[worker 1] rollout 4 [151/194] done=150
+[worker 7] rollout 4 [179/193] done=175
+[worker 5] rollout 4 [179/194] done=175
+[worker 4] rollout 4 [180/194] done=175
+[worker 0] rollout 4 [156/194] done=150
+[worker 3] rollout 4 [178/194] done=175
+[worker 2] rollout 4: saved 191 records / 287 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard2.pt
+[worker 7] rollout 4: saved 188 records / 248 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard7.pt
+[worker 5] rollout 4: saved 190 records / 260 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard5.pt
+[worker 6] rollout 4 [176/193] done=175
+[worker 4] rollout 4: saved 189 records / 333 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard4.pt
+[worker 1] rollout 4 [177/194] done=175
+[worker 3] rollout 4: saved 191 records / 246 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard3.pt
+[worker 0] rollout 4 [181/194] done=175
+[worker 2] rollout 5 [25/194] done=25
+[worker 7] rollout 5 [25/193] done=25
+[worker 6] rollout 4: saved 192 records / 277 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard6.pt
+[worker 1] rollout 4: saved 192 records / 317 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard1.pt
+[worker 5] rollout 5 [26/194] done=25
+[worker 4] rollout 5 [25/194] done=25
+[worker 0] rollout 4: saved 188 records / 304 preds -> runs/qvh/qwen3vl_video/features/rollout4/shard0.pt
+[worker 3] rollout 5 [25/194] done=25
+[worker 2] rollout 5 [50/194] done=50
+[worker 7] rollout 5 [51/193] done=50
+[worker 6] rollout 5 [25/193] done=25
+[worker 1] rollout 5 [25/194] done=25
+[worker 5] rollout 5 [51/194] done=50
+[worker 4] rollout 5 [50/194] done=50
+[worker 0] rollout 5 [26/194] done=25
+[worker 3] rollout 5 [50/194] done=50
+[worker 2] rollout 5 [75/194] done=75
+[worker 7] rollout 5 [77/193] done=75
+[worker 1] rollout 5 [51/194] done=50
+[worker 6] rollout 5 [50/193] done=50
+[worker 5] rollout 5 [76/194] done=75
+[worker 4] rollout 5 [76/194] done=75
+[worker 0] rollout 5 [54/194] done=50
+[worker 3] rollout 5 [75/194] done=75
+[worker 2] rollout 5 [100/194] done=100
+[worker 7] rollout 5 [102/193] done=100
+[worker 1] rollout 5 [76/194] done=75
+[worker 5] rollout 5 [101/194] done=100
+[worker 6] rollout 5 [75/193] done=75
+[worker 4] rollout 5 [102/194] done=100
+[worker 0] rollout 5 [79/194] done=75
+[worker 3] rollout 5 [102/194] done=100
+[worker 2] rollout 5 [125/194] done=125
+[worker 7] rollout 5 [127/193] done=125
+[worker 1] rollout 5 [101/194] done=100
+[worker 5] rollout 5 [126/194] done=125
+[worker 6] rollout 5 [100/193] done=100
+[worker 4] rollout 5 [128/194] done=125
+[worker 0] rollout 5 [105/194] done=100
+[worker 3] rollout 5 [128/194] done=125
+[worker 2] rollout 5 [150/194] done=150
+[worker 7] rollout 5 [154/193] done=150
+[worker 1] rollout 5 [126/194] done=125
+[worker 5] rollout 5 [151/194] done=150
+[worker 6] rollout 5 [125/193] done=125
+[worker 4] rollout 5 [153/194] done=150
+[worker 0] rollout 5 [130/194] done=125
+[worker 3] rollout 5 [153/194] done=150
+[worker 2] rollout 5 [175/194] done=175
+[worker 7] rollout 5 [179/193] done=175
+[worker 1] rollout 5 [151/194] done=150
+[worker 5] rollout 5 [178/194] done=175
+[worker 6] rollout 5 [150/193] done=150
+[worker 4] rollout 5 [178/194] done=175
+[worker 7] rollout 5: saved 188 records / 231 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard7.pt
+[worker 0] rollout 5 [156/194] done=150
+[worker 3] rollout 5 [178/194] done=175
+[worker 2] rollout 5: saved 194 records / 263 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard2.pt
+[worker 5] rollout 5: saved 191 records / 234 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard5.pt
+[worker 4] rollout 5: saved 191 records / 306 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard4.pt
+[worker 1] rollout 5 [178/194] done=175
+[worker 6] rollout 5 [175/193] done=175
+[worker 3] rollout 5: saved 191 records / 246 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard3.pt
+[worker 7] rollout 6 [25/193] done=25
+[worker 1] rollout 5: saved 190 records / 240 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard1.pt
+[worker 2] rollout 6 [25/194] done=25
+[worker 0] rollout 5 [181/194] done=175
+[worker 5] rollout 6 [25/194] done=25
+[worker 4] rollout 6 [25/194] done=25
+[worker 6] rollout 5: saved 193 records / 279 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard6.pt
+[worker 0] rollout 5: saved 187 records / 272 preds -> runs/qvh/qwen3vl_video/features/rollout5/shard0.pt
+[worker 3] rollout 6 [25/194] done=25
+[worker 7] rollout 6 [50/193] done=50
+[worker 1] rollout 6 [25/194] done=25
+[worker 2] rollout 6 [50/194] done=50
+[worker 5] rollout 6 [50/194] done=50
+[worker 4] rollout 6 [50/194] done=50
+[worker 6] rollout 6 [26/193] done=25
+[worker 0] rollout 6 [26/194] done=25
+[worker 3] rollout 6 [50/194] done=50
+[worker 7] rollout 6 [75/193] done=75
+[worker 2] rollout 6 [75/194] done=75
+[worker 1] rollout 6 [50/194] done=50
+[worker 5] rollout 6 [75/194] done=75
+[worker 4] rollout 6 [76/194] done=75
+[worker 6] rollout 6 [51/193] done=50
+[worker 0] rollout 6 [51/194] done=50
+[worker 3] rollout 6 [75/194] done=75
+[worker 7] rollout 6 [100/193] done=100
+[worker 2] rollout 6 [100/194] done=100
+[worker 1] rollout 6 [75/194] done=75
+[worker 5] rollout 6 [100/194] done=100
+[worker 4] rollout 6 [101/194] done=100
+[worker 6] rollout 6 [76/193] done=75
+[worker 0] rollout 6 [76/194] done=75
+[worker 3] rollout 6 [100/194] done=100
+[worker 7] rollout 6 [125/193] done=125
+[worker 2] rollout 6 [125/194] done=125
+[worker 1] rollout 6 [100/194] done=100
+[worker 5] rollout 6 [125/194] done=125
+[worker 4] rollout 6 [126/194] done=125
+[worker 0] rollout 6 [101/194] done=100
+[worker 6] rollout 6 [101/193] done=100
+[worker 3] rollout 6 [125/194] done=125
+[worker 7] rollout 6 [150/193] done=150
+[worker 2] rollout 6 [150/194] done=150
+[worker 1] rollout 6 [125/194] done=125
+[worker 5] rollout 6 [150/194] done=150
+[worker 4] rollout 6 [151/194] done=150
+[worker 0] rollout 6 [126/194] done=125
+[worker 6] rollout 6 [126/193] done=125
+[worker 3] rollout 6 [150/194] done=150
+[worker 7] rollout 6 [175/193] done=175
+[worker 2] rollout 6 [175/194] done=175
+[worker 1] rollout 6 [150/194] done=150
+[worker 5] rollout 6 [175/194] done=175
+[worker 4] rollout 6 [177/194] done=175
+[worker 0] rollout 6 [151/194] done=150
+[worker 7] rollout 6: saved 193 records / 263 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard7.pt
+[worker 6] rollout 6 [151/193] done=150
+[worker 2] rollout 6: saved 194 records / 277 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard2.pt
+[worker 5] rollout 6: saved 194 records / 231 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard5.pt
+[worker 3] rollout 6 [175/194] done=175
+[worker 1] rollout 6 [175/194] done=175
+[worker 4] rollout 6: saved 192 records / 289 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard4.pt
+[worker 3] rollout 6: saved 194 records / 243 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard3.pt
+[worker 0] rollout 6 [176/194] done=175
+[worker 2] rollout 7 [26/194] done=25
+[worker 1] rollout 6: saved 194 records / 286 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard1.pt
+[worker 7] rollout 7 [25/193] done=25
+[worker 6] rollout 6 [176/193] done=175
+[worker 5] rollout 7 [27/194] done=25
+[worker 4] rollout 7 [25/194] done=25
+[worker 0] rollout 6: saved 193 records / 278 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard0.pt
+[worker 6] rollout 6: saved 192 records / 282 preds -> runs/qvh/qwen3vl_video/features/rollout6/shard6.pt
+[worker 3] rollout 7 [25/194] done=25
+[worker 2] rollout 7 [52/194] done=50
+[worker 7] rollout 7 [51/193] done=50
+[worker 1] rollout 7 [25/194] done=25
+[worker 5] rollout 7 [52/194] done=50
+[worker 4] rollout 7 [51/194] done=50
+[worker 0] rollout 7 [28/194] done=25
+[worker 6] rollout 7 [25/193] done=25
+[worker 3] rollout 7 [54/194] done=50
+[worker 2] rollout 7 [77/194] done=75
+[worker 7] rollout 7 [77/193] done=75
+[worker 5] rollout 7 [78/194] done=75
+[worker 1] rollout 7 [50/194] done=50
+[worker 4] rollout 7 [77/194] done=75
+[worker 0] rollout 7 [55/194] done=50
+[worker 6] rollout 7 [50/193] done=50
+[worker 3] rollout 7 [79/194] done=75
+[worker 2] rollout 7 [103/194] done=100
+[worker 7] rollout 7 [102/193] done=100
+[worker 5] rollout 7 [103/194] done=100
+[worker 1] rollout 7 [75/194] done=75
+[worker 4] rollout 7 [104/194] done=100
+[worker 0] rollout 7 [81/194] done=75
+[worker 6] rollout 7 [75/193] done=75
+[worker 2] rollout 7 [129/194] done=125
+[worker 3] rollout 7 [104/194] done=100
+[worker 7] rollout 7 [127/193] done=125
+[worker 5] rollout 7 [128/194] done=125
+[worker 1] rollout 7 [100/194] done=100
+[worker 4] rollout 7 [130/194] done=125
+[worker 0] rollout 7 [106/194] done=100
+[worker 2] rollout 7 [154/194] done=150
+[worker 6] rollout 7 [100/193] done=100
+[worker 3] rollout 7 [129/194] done=125
+[worker 7] rollout 7 [155/193] done=150
+[worker 5] rollout 7 [153/194] done=150
+[worker 1] rollout 7 [125/194] done=125
+[worker 4] rollout 7 [155/194] done=150
+[worker 0] rollout 7 [131/194] done=125
+[worker 2] rollout 7 [179/194] done=175
+[worker 6] rollout 7 [125/193] done=125
+[worker 3] rollout 7 [154/194] done=150
+[worker 5] rollout 7 [179/194] done=175
+[worker 7] rollout 7 [180/193] done=175
+[worker 1] rollout 7 [150/194] done=150
+[worker 4] rollout 7 [180/194] done=175
+[worker 2] rollout 7: saved 189 records / 220 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard2.pt
+[worker 7] rollout 7: saved 188 records / 235 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard7.pt
+[worker 5] rollout 7: saved 190 records / 249 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard5.pt
+[worker 0] rollout 7 [157/194] done=150
+[worker 4] rollout 7: saved 189 records / 261 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard4.pt
+[worker 3] rollout 7 [179/194] done=175
+[worker 6] rollout 7 [151/193] done=150
+[worker 1] rollout 7 [177/194] done=175
+[worker 2] rollout 8 [25/194] done=25
+[worker 7] rollout 8 [25/193] done=25
+[worker 5] rollout 8 [25/194] done=25
+[worker 3] rollout 7: saved 190 records / 230 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard3.pt
+[worker 1] rollout 7: saved 191 records / 217 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard1.pt
+[worker 0] rollout 7 [182/194] done=175
+[worker 4] rollout 8 [25/194] done=25
+[worker 6] rollout 7 [176/193] done=175
+[worker 0] rollout 7: saved 186 records / 240 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard0.pt
+[worker 2] rollout 8 [50/194] done=50
+[worker 7] rollout 8 [50/193] done=50
+[worker 5] rollout 8 [50/194] done=50
+[worker 3] rollout 8 [25/194] done=25
+[worker 1] rollout 8 [25/194] done=25
+[worker 6] rollout 7: saved 192 records / 251 preds -> runs/qvh/qwen3vl_video/features/rollout7/shard6.pt
+[worker 4] rollout 8 [50/194] done=50
+[worker 0] rollout 8 [26/194] done=25
+[worker 2] rollout 8 [75/194] done=75
+[worker 7] rollout 8 [75/193] done=75
+[worker 5] rollout 8 [76/194] done=75
+[worker 3] rollout 8 [50/194] done=50
+[worker 1] rollout 8 [50/194] done=50
+[worker 6] rollout 8 [25/193] done=25
+[worker 4] rollout 8 [75/194] done=75
+[worker 0] rollout 8 [52/194] done=50
+[worker 2] rollout 8 [100/194] done=100
+[worker 7] rollout 8 [100/193] done=100
+[worker 5] rollout 8 [101/194] done=100
+[worker 3] rollout 8 [75/194] done=75
+[worker 1] rollout 8 [75/194] done=75
+[worker 6] rollout 8 [50/193] done=50
+[worker 4] rollout 8 [102/194] done=100
+[worker 0] rollout 8 [77/194] done=75
+[worker 2] rollout 8 [126/194] done=125
+[worker 5] rollout 8 [126/194] done=125
+[worker 7] rollout 8 [125/193] done=125
+[worker 3] rollout 8 [100/194] done=100
+[worker 1] rollout 8 [100/194] done=100
+[worker 6] rollout 8 [75/193] done=75
+[worker 4] rollout 8 [127/194] done=125
+[worker 2] rollout 8 [152/194] done=150
+[worker 0] rollout 8 [103/194] done=100
+[worker 5] rollout 8 [151/194] done=150
+[worker 7] rollout 8 [152/193] done=150
+[worker 3] rollout 8 [125/194] done=125
+[worker 1] rollout 8 [125/194] done=125
+[worker 6] rollout 8 [100/193] done=100
+[worker 4] rollout 8 [153/194] done=150
+[worker 2] rollout 8 [177/194] done=175
+[worker 0] rollout 8 [128/194] done=125
+[worker 5] rollout 8 [177/194] done=175
+[worker 7] rollout 8 [177/193] done=175
+[worker 3] rollout 8 [150/194] done=150
+[worker 1] rollout 8 [150/194] done=150
+[worker 6] rollout 8 [125/193] done=125
+[worker 4] rollout 8 [178/194] done=175
+[worker 2] rollout 8: saved 191 records / 284 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard2.pt
+[worker 5] rollout 8: saved 192 records / 283 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard5.pt
+[worker 7] rollout 8: saved 191 records / 233 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard7.pt
+[worker 0] rollout 8 [153/194] done=150
+[worker 4] rollout 8: saved 191 records / 300 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard4.pt
+[worker 3] rollout 8 [175/194] done=175
+[worker 1] rollout 8 [176/194] done=175
+[worker 6] rollout 8 [150/193] done=150
+[worker 2] rollout 9 [27/194] done=25
+[worker 5] rollout 9 [27/194] done=25
+[worker 7] rollout 9 [26/193] done=25
+[worker 1] rollout 8: saved 193 records / 275 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard1.pt
+[worker 3] rollout 8: saved 194 records / 272 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard3.pt
+[worker 0] rollout 8 [178/194] done=175
+[worker 4] rollout 9 [25/194] done=25
+[worker 2] rollout 9 [53/194] done=50
+[worker 6] rollout 8 [175/193] done=175
+[worker 0] rollout 8: saved 191 records / 283 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard0.pt
+[worker 5] rollout 9 [52/194] done=50
+[worker 7] rollout 9 [53/193] done=50
+[worker 1] rollout 9 [26/194] done=25
+[worker 3] rollout 9 [25/194] done=25
+[worker 4] rollout 9 [50/194] done=50
+[worker 6] rollout 8: saved 193 records / 296 preds -> runs/qvh/qwen3vl_video/features/rollout8/shard6.pt
+[worker 2] rollout 9 [79/194] done=75
+[worker 5] rollout 9 [78/194] done=75
+[worker 0] rollout 9 [27/194] done=25
+[worker 7] rollout 9 [81/193] done=75
+[worker 1] rollout 9 [52/194] done=50
+[worker 3] rollout 9 [53/194] done=50
+[worker 4] rollout 9 [75/194] done=75
+[worker 6] rollout 9 [26/193] done=25
+[worker 2] rollout 9 [105/194] done=100
+[worker 5] rollout 9 [103/194] done=100
+[worker 0] rollout 9 [55/194] done=50
+[worker 7] rollout 9 [106/193] done=100
+[worker 1] rollout 9 [77/194] done=75
+[worker 3] rollout 9 [81/194] done=75
+[worker 4] rollout 9 [102/194] done=100
+[worker 6] rollout 9 [51/193] done=50
+[worker 2] rollout 9 [131/194] done=125
+[worker 5] rollout 9 [128/194] done=125
+[worker 0] rollout 9 [81/194] done=75
+[worker 7] rollout 9 [133/193] done=125
+[worker 1] rollout 9 [104/194] done=100
+[worker 3] rollout 9 [109/194] done=100
+[worker 4] rollout 9 [128/194] done=125
+[worker 6] rollout 9 [76/193] done=75
+[worker 2] rollout 9 [157/194] done=150
+[worker 5] rollout 9 [154/194] done=150
+[worker 0] rollout 9 [106/194] done=100
+[worker 7] rollout 9 [160/193] done=150
+[worker 1] rollout 9 [129/194] done=125
+[worker 3] rollout 9 [135/194] done=125
+[worker 4] rollout 9 [155/194] done=150
+[worker 6] rollout 9 [102/193] done=100
+[worker 2] rollout 9 [183/194] done=175
+[worker 5] rollout 9 [180/194] done=175
+[worker 0] rollout 9 [131/194] done=125
+[worker 2] rollout 9: saved 185 records / 223 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard2.pt
+[worker 7] rollout 9 [185/193] done=175
+[worker 1] rollout 9 [154/194] done=150
+[worker 3] rollout 9 [162/194] done=150
+[worker 5] rollout 9: saved 189 records / 226 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard5.pt
+[worker 4] rollout 9 [181/194] done=175
+[worker 7] rollout 9: saved 182 records / 223 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard7.pt
+[worker 6] rollout 9 [127/193] done=125
+[worker 4] rollout 9: saved 188 records / 270 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard4.pt
+[worker 0] rollout 9 [157/194] done=150
+[worker 2] rollout 10 [26/194] done=25
+[worker 1] rollout 9 [182/194] done=175
+[worker 3] rollout 9 [189/194] done=175
+[worker 5] rollout 10 [25/194] done=25
+[worker 7] rollout 10 [25/193] done=25
+[worker 3] rollout 9: saved 180 records / 224 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard3.pt
+[worker 1] rollout 9: saved 186 records / 209 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard1.pt
+[worker 6] rollout 9 [153/193] done=150
+[worker 4] rollout 10 [25/194] done=25
+[worker 0] rollout 9 [182/194] done=175
+[worker 2] rollout 10 [52/194] done=50
+[worker 5] rollout 10 [50/194] done=50
+[worker 7] rollout 10 [51/193] done=50
+[worker 0] rollout 9: saved 186 records / 267 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard0.pt
+[worker 3] rollout 10 [25/194] done=25
+[worker 1] rollout 10 [25/194] done=25
+[worker 6] rollout 9 [178/193] done=175
+[worker 4] rollout 10 [50/194] done=50
+[worker 2] rollout 10 [77/194] done=75
+[worker 5] rollout 10 [76/194] done=75
+[worker 6] rollout 9: saved 190 records / 237 preds -> runs/qvh/qwen3vl_video/features/rollout9/shard6.pt
+[worker 7] rollout 10 [79/193] done=75
+[worker 0] rollout 10 [26/194] done=25
+[worker 3] rollout 10 [53/194] done=50
+[worker 1] rollout 10 [50/194] done=50
+[worker 4] rollout 10 [75/194] done=75
+[worker 2] rollout 10 [102/194] done=100
+[worker 5] rollout 10 [102/194] done=100
+[worker 6] rollout 10 [25/193] done=25
+[worker 7] rollout 10 [104/193] done=100
+[worker 0] rollout 10 [53/194] done=50
+[worker 3] rollout 10 [80/194] done=75
+[worker 1] rollout 10 [75/194] done=75
+[worker 4] rollout 10 [103/194] done=100
+[worker 2] rollout 10 [129/194] done=125
+[worker 5] rollout 10 [127/194] done=125
+[worker 6] rollout 10 [50/193] done=50
+[worker 7] rollout 10 [129/193] done=125
+[worker 0] rollout 10 [81/194] done=75
+[worker 3] rollout 10 [105/194] done=100
+[worker 1] rollout 10 [101/194] done=100
+[worker 4] rollout 10 [129/194] done=125
+[worker 2] rollout 10 [154/194] done=150
+[worker 5] rollout 10 [152/194] done=150
+[worker 6] rollout 10 [75/193] done=75
+[worker 7] rollout 10 [156/193] done=150
+[worker 0] rollout 10 [106/194] done=100
+[worker 3] rollout 10 [130/194] done=125
+[worker 1] rollout 10 [126/194] done=125
+[worker 4] rollout 10 [155/194] done=150
+[worker 2] rollout 10 [179/194] done=175
+[worker 5] rollout 10 [181/194] done=175
+[worker 6] rollout 10 [100/193] done=100
+[worker 7] rollout 10 [181/193] done=175
+[worker 0] rollout 10 [131/194] done=125
+[worker 3] rollout 10 [155/194] done=150
+[worker 1] rollout 10 [151/194] done=150
+[worker 2] rollout 10: saved 189 records / 221 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard2.pt
+[worker 5] rollout 10: saved 188 records / 237 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard5.pt
+[worker 7] rollout 10: saved 186 records / 221 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard7.pt
+[worker 4] rollout 10 [180/194] done=175
+[worker 6] rollout 10 [125/193] done=125
+[worker 4] rollout 10: saved 189 records / 253 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard4.pt
+[worker 1] rollout 10 [177/194] done=175
+[worker 0] rollout 10 [158/194] done=150
+[worker 3] rollout 10 [181/194] done=175
+[worker 2] rollout 11 [25/194] done=25
+[worker 5] rollout 11 [25/194] done=25
+[worker 7] rollout 11 [25/193] done=25
+[worker 3] rollout 10: saved 188 records / 222 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard3.pt
+[worker 1] rollout 10: saved 192 records / 215 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard1.pt
+[worker 6] rollout 10 [150/193] done=150
+[worker 4] rollout 11 [25/194] done=25
+[worker 0] rollout 10 [183/194] done=175
+[worker 2] rollout 11 [50/194] done=50
+[worker 5] rollout 11 [50/194] done=50
+[worker 7] rollout 11 [51/193] done=50
+[worker 0] rollout 10: saved 186 records / 281 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard0.pt
+[worker 3] rollout 11 [25/194] done=25
+[worker 1] rollout 11 [25/194] done=25
+[worker 6] rollout 10 [175/193] done=175
+[worker 4] rollout 11 [50/194] done=50
+[worker 2] rollout 11 [75/194] done=75
+[worker 5] rollout 11 [75/194] done=75
+[worker 7] rollout 11 [78/193] done=75
+[worker 0] rollout 11 [26/194] done=25
+[worker 3] rollout 11 [50/194] done=50
+[worker 6] rollout 10: saved 193 records / 251 preds -> runs/qvh/qwen3vl_video/features/rollout10/shard6.pt
+[worker 1] rollout 11 [50/194] done=50
+[worker 4] rollout 11 [76/194] done=75
+[worker 2] rollout 11 [100/194] done=100
+[worker 5] rollout 11 [100/194] done=100
+[worker 7] rollout 11 [103/193] done=100
+[worker 0] rollout 11 [51/194] done=50
+[worker 3] rollout 11 [75/194] done=75
+[worker 6] rollout 11 [25/193] done=25
+[worker 1] rollout 11 [75/194] done=75
+[worker 4] rollout 11 [103/194] done=100
+[worker 2] rollout 11 [125/194] done=125
+[worker 5] rollout 11 [125/194] done=125
+[worker 7] rollout 11 [128/193] done=125
+[worker 0] rollout 11 [76/194] done=75
+[worker 3] rollout 11 [101/194] done=100
+[worker 6] rollout 11 [50/193] done=50
+[worker 1] rollout 11 [101/194] done=100
+[worker 4] rollout 11 [129/194] done=125
+[worker 2] rollout 11 [150/194] done=150
+[worker 5] rollout 11 [150/194] done=150
+[worker 7] rollout 11 [155/193] done=150
+[worker 0] rollout 11 [101/194] done=100
+[worker 3] rollout 11 [126/194] done=125
+[worker 6] rollout 11 [75/193] done=75
+[worker 1] rollout 11 [126/194] done=125
+[worker 4] rollout 11 [154/194] done=150
+[worker 2] rollout 11 [175/194] done=175
+[worker 5] rollout 11 [175/194] done=175
+[worker 7] rollout 11 [180/193] done=175
+[worker 0] rollout 11 [126/194] done=125
+[worker 3] rollout 11 [151/194] done=150
+[worker 6] rollout 11 [100/193] done=100
+[worker 1] rollout 11 [151/194] done=150
+[worker 2] rollout 11: saved 194 records / 232 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard2.pt
+[worker 5] rollout 11: saved 193 records / 229 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard5.pt
+[worker 4] rollout 11 [179/194] done=175
+[worker 7] rollout 11: saved 188 records / 201 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard7.pt
+[worker 0] rollout 11 [151/194] done=150
+[worker 6] rollout 11 [125/193] done=125
+[worker 3] rollout 11 [176/194] done=175
+[worker 1] rollout 11 [176/194] done=175
+[worker 4] rollout 11: saved 190 records / 246 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard4.pt
+[worker 2] rollout 12 [26/194] done=25
+[worker 5] rollout 12 [25/194] done=25
+[worker 7] rollout 12 [25/193] done=25
+[worker 3] rollout 11: saved 193 records / 234 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard3.pt
+[worker 1] rollout 11: saved 193 records / 246 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard1.pt
+[worker 0] rollout 11 [176/194] done=175
+[worker 6] rollout 11 [150/193] done=150
+[worker 4] rollout 12 [26/194] done=25
+[worker 2] rollout 12 [51/194] done=50
+[worker 5] rollout 12 [50/194] done=50
+[worker 7] rollout 12 [51/193] done=50
+[worker 0] rollout 11: saved 193 records / 251 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard0.pt
+[worker 1] rollout 12 [25/194] done=25
+[worker 3] rollout 12 [25/194] done=25
+[worker 6] rollout 11 [175/193] done=175
+[worker 4] rollout 12 [52/194] done=50
+[worker 2] rollout 12 [76/194] done=75
+[worker 5] rollout 12 [76/194] done=75
+[worker 7] rollout 12 [77/193] done=75
+[worker 0] rollout 12 [26/194] done=25
+[worker 6] rollout 11: saved 193 records / 260 preds -> runs/qvh/qwen3vl_video/features/rollout11/shard6.pt
+[worker 1] rollout 12 [50/194] done=50
+[worker 3] rollout 12 [53/194] done=50
+[worker 4] rollout 12 [78/194] done=75
+[worker 2] rollout 12 [101/194] done=100
+[worker 5] rollout 12 [101/194] done=100
+[worker 7] rollout 12 [102/193] done=100
+[worker 0] rollout 12 [52/194] done=50
+[worker 1] rollout 12 [75/194] done=75
+[worker 6] rollout 12 [25/193] done=25
+[worker 3] rollout 12 [81/194] done=75
+[worker 4] rollout 12 [105/194] done=100
+[worker 2] rollout 12 [128/194] done=125
+[worker 5] rollout 12 [126/194] done=125
+[worker 7] rollout 12 [128/193] done=125
+[worker 1] rollout 12 [100/194] done=100
+[worker 0] rollout 12 [79/194] done=75
+[worker 6] rollout 12 [50/193] done=50
+[worker 3] rollout 12 [107/194] done=100
+[worker 4] rollout 12 [132/194] done=125
+[worker 2] rollout 12 [153/194] done=150
+[worker 5] rollout 12 [152/194] done=150
+[worker 7] rollout 12 [156/193] done=150
+[worker 1] rollout 12 [126/194] done=125
+[worker 0] rollout 12 [107/194] done=100
+[worker 6] rollout 12 [75/193] done=75
+[worker 3] rollout 12 [132/194] done=125
+[worker 4] rollout 12 [158/194] done=150
+[worker 2] rollout 12 [178/194] done=175
+[worker 5] rollout 12 [179/194] done=175
+[worker 7] rollout 12 [182/193] done=175
+[worker 2] rollout 12: saved 190 records / 236 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard2.pt
+[worker 1] rollout 12 [152/194] done=150
+[worker 5] rollout 12: saved 190 records / 234 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard5.pt
+[worker 0] rollout 12 [132/194] done=125
+[worker 6] rollout 12 [100/193] done=100
+[worker 3] rollout 12 [157/194] done=150
+[worker 7] rollout 12: saved 185 records / 229 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard7.pt
+[worker 4] rollout 12 [183/194] done=175
+[worker 4] rollout 12: saved 186 records / 296 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard4.pt
+[worker 2] rollout 13 [25/194] done=25
+[worker 1] rollout 12 [178/194] done=175
+[worker 5] rollout 13 [25/194] done=25
+[worker 0] rollout 12 [158/194] done=150
+[worker 6] rollout 12 [125/193] done=125
+[worker 3] rollout 12 [183/194] done=175
+[worker 7] rollout 13 [25/193] done=25
+[worker 1] rollout 12: saved 191 records / 277 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard1.pt
+[worker 3] rollout 12: saved 186 records / 249 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard3.pt
+[worker 4] rollout 13 [26/194] done=25
+[worker 2] rollout 13 [50/194] done=50
+[worker 5] rollout 13 [50/194] done=50
+[worker 0] rollout 12 [183/194] done=175
+[worker 6] rollout 12 [151/193] done=150
+[worker 7] rollout 13 [51/193] done=50
+[worker 0] rollout 12: saved 186 records / 288 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard0.pt
+[worker 1] rollout 13 [26/194] done=25
+[worker 3] rollout 13 [25/194] done=25
+[worker 4] rollout 13 [52/194] done=50
+[worker 5] rollout 13 [76/194] done=75
+[worker 2] rollout 13 [76/194] done=75
+[worker 6] rollout 12 [176/193] done=175
+[worker 7] rollout 13 [77/193] done=75
+[worker 0] rollout 13 [26/194] done=25
+[worker 1] rollout 13 [51/194] done=50
+[worker 3] rollout 13 [55/194] done=50
+[worker 6] rollout 12: saved 192 records / 263 preds -> runs/qvh/qwen3vl_video/features/rollout12/shard6.pt
+[worker 4] rollout 13 [77/194] done=75
+[worker 2] rollout 13 [101/194] done=100
+[worker 5] rollout 13 [102/194] done=100
+[worker 7] rollout 13 [102/193] done=100
+[worker 0] rollout 13 [54/194] done=50
+[worker 1] rollout 13 [76/194] done=75
+[worker 3] rollout 13 [84/194] done=75
+[worker 6] rollout 13 [25/193] done=25
+[worker 4] rollout 13 [104/194] done=100
+[worker 2] rollout 13 [128/194] done=125
+[worker 5] rollout 13 [128/194] done=125
+[worker 7] rollout 13 [129/193] done=125
+[worker 0] rollout 13 [82/194] done=75
+[worker 1] rollout 13 [101/194] done=100
+[worker 3] rollout 13 [111/194] done=100
+[worker 6] rollout 13 [50/193] done=50
+[worker 4] rollout 13 [132/194] done=125
+[worker 5] rollout 13 [155/194] done=150
+[worker 2] rollout 13 [154/194] done=150
+[worker 7] rollout 13 [158/193] done=150
+[worker 0] rollout 13 [110/194] done=100
+[worker 1] rollout 13 [128/194] done=125
+[worker 3] rollout 13 [137/194] done=125
+[worker 6] rollout 13 [75/193] done=75
+[worker 4] rollout 13 [159/194] done=150
+[worker 5] rollout 13 [183/194] done=175
+[worker 2] rollout 13 [179/194] done=175
+[worker 5] rollout 13: saved 186 records / 228 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard5.pt
+[worker 7] rollout 13 [185/193] done=175
+[worker 2] rollout 13: saved 189 records / 284 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard2.pt
+[worker 0] rollout 13 [136/194] done=125
+[worker 1] rollout 13 [153/194] done=150
+[worker 3] rollout 13 [163/194] done=150
+[worker 6] rollout 13 [101/193] done=100
+[worker 7] rollout 13: saved 182 records / 261 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard7.pt
+[worker 4] rollout 13 [186/194] done=175
+[worker 4] rollout 13: saved 183 records / 319 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard4.pt
+[worker 5] rollout 14 [25/194] done=25
+[worker 2] rollout 14 [26/194] done=25
+[worker 1] rollout 13 [180/194] done=175
+[worker 0] rollout 13 [162/194] done=150
+[worker 3] rollout 13 [188/194] done=175
+[worker 6] rollout 13 [126/193] done=125
+[worker 7] rollout 14 [25/193] done=25
+[worker 3] rollout 13: saved 181 records / 267 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard3.pt
+[worker 1] rollout 13: saved 189 records / 287 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard1.pt
+[worker 4] rollout 14 [26/194] done=25
+[worker 5] rollout 14 [50/194] done=50
+[worker 2] rollout 14 [51/194] done=50
+[worker 0] rollout 13 [187/194] done=175
+[worker 6] rollout 13 [153/193] done=150
+[worker 7] rollout 14 [51/193] done=50
+[worker 0] rollout 13: saved 182 records / 278 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard0.pt
+[worker 3] rollout 14 [25/194] done=25
+[worker 1] rollout 14 [25/194] done=25
+[worker 4] rollout 14 [51/194] done=50
+[worker 5] rollout 14 [76/194] done=75
+[worker 2] rollout 14 [77/194] done=75
+[worker 7] rollout 14 [78/193] done=75
+[worker 6] rollout 13 [178/193] done=175
+[worker 0] rollout 14 [26/194] done=25
+[worker 3] rollout 14 [52/194] done=50
+[worker 1] rollout 14 [50/194] done=50
+[worker 4] rollout 14 [76/194] done=75
+[worker 6] rollout 13: saved 190 records / 308 preds -> runs/qvh/qwen3vl_video/features/rollout13/shard6.pt
+[worker 2] rollout 14 [102/194] done=100
+[worker 5] rollout 14 [102/194] done=100
+[worker 7] rollout 14 [103/193] done=100
+[worker 0] rollout 14 [53/194] done=50
+[worker 3] rollout 14 [77/194] done=75
+[worker 1] rollout 14 [75/194] done=75
+[worker 4] rollout 14 [103/194] done=100
+[worker 6] rollout 14 [25/193] done=25
+[worker 2] rollout 14 [129/194] done=125
+[worker 5] rollout 14 [127/194] done=125
+[worker 7] rollout 14 [128/193] done=125
+[worker 0] rollout 14 [79/194] done=75
+[worker 3] rollout 14 [104/194] done=100
+[worker 1] rollout 14 [100/194] done=100
+[worker 4] rollout 14 [129/194] done=125
+[worker 6] rollout 14 [50/193] done=50
+[worker 5] rollout 14 [153/194] done=150
+[worker 2] rollout 14 [154/194] done=150
+[worker 7] rollout 14 [155/193] done=150
+[worker 0] rollout 14 [104/194] done=100
+[worker 3] rollout 14 [129/194] done=125
+[worker 1] rollout 14 [125/194] done=125
+[worker 4] rollout 14 [155/194] done=150
+[worker 6] rollout 14 [75/193] done=75
+[worker 5] rollout 14 [180/194] done=175
+[worker 2] rollout 14 [179/194] done=175
+[worker 0] rollout 14 [129/194] done=125
+[worker 7] rollout 14 [180/193] done=175
+[worker 3] rollout 14 [154/194] done=150
+[worker 5] rollout 14: saved 189 records / 225 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard5.pt
+[worker 2] rollout 14: saved 189 records / 219 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard2.pt
+[worker 1] rollout 14 [150/194] done=150
+[worker 4] rollout 14 [180/194] done=175
+[worker 7] rollout 14: saved 187 records / 217 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard7.pt
+[worker 6] rollout 14 [101/193] done=100
+[worker 4] rollout 14: saved 188 records / 248 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard4.pt
+[worker 0] rollout 14 [157/194] done=150
+[worker 3] rollout 14 [180/194] done=175
+[worker 5] rollout 15 [25/194] done=25
+[worker 2] rollout 15 [27/194] done=25
+[worker 1] rollout 14 [176/194] done=175
+[worker 6] rollout 14 [126/193] done=125
+[worker 7] rollout 15 [25/193] done=25
+[worker 3] rollout 14: saved 189 records / 206 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard3.pt
+[worker 4] rollout 15 [26/194] done=25
+[worker 1] rollout 14: saved 193 records / 257 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard1.pt
+[worker 0] rollout 14 [182/194] done=175
+[worker 5] rollout 15 [51/194] done=50
+[worker 2] rollout 15 [52/194] done=50
+[worker 7] rollout 15 [51/193] done=50
+[worker 0] rollout 14: saved 187 records / 244 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard0.pt
+[worker 6] rollout 14 [151/193] done=150
+[worker 3] rollout 15 [26/194] done=25
+[worker 4] rollout 15 [51/194] done=50
+[worker 1] rollout 15 [25/194] done=25
+[worker 5] rollout 15 [77/194] done=75
+[worker 2] rollout 15 [78/194] done=75
+[worker 7] rollout 15 [78/193] done=75
+[worker 0] rollout 15 [26/194] done=25
+[worker 6] rollout 14 [176/193] done=175
+[worker 3] rollout 15 [54/194] done=50
+[worker 1] rollout 15 [50/194] done=50
+[worker 4] rollout 15 [77/194] done=75
+[worker 5] rollout 15 [102/194] done=100
+[worker 2] rollout 15 [103/194] done=100
+[worker 6] rollout 14: saved 192 records / 256 preds -> runs/qvh/qwen3vl_video/features/rollout14/shard6.pt
+[worker 7] rollout 15 [103/193] done=100
+[worker 0] rollout 15 [54/194] done=50
+[worker 3] rollout 15 [79/194] done=75
+[worker 1] rollout 15 [75/194] done=75
+[worker 4] rollout 15 [103/194] done=100
+[worker 5] rollout 15 [128/194] done=125
+[worker 2] rollout 15 [129/194] done=125
+[worker 6] rollout 15 [25/193] done=25
+[worker 7] rollout 15 [128/193] done=125
+[worker 0] rollout 15 [82/194] done=75
+[worker 3] rollout 15 [107/194] done=100
+[worker 1] rollout 15 [101/194] done=100
+[worker 4] rollout 15 [130/194] done=125
+[worker 5] rollout 15 [154/194] done=150
+[worker 2] rollout 15 [154/194] done=150
+[worker 6] rollout 15 [50/193] done=50
+[worker 7] rollout 15 [155/193] done=150
+[worker 0] rollout 15 [107/194] done=100
+[worker 3] rollout 15 [132/194] done=125
+[worker 1] rollout 15 [126/194] done=125
+[worker 4] rollout 15 [155/194] done=150
+[worker 5] rollout 15 [182/194] done=175
+[worker 2] rollout 15 [180/194] done=175
+[worker 6] rollout 15 [75/193] done=75
+[worker 7] rollout 15 [180/193] done=175
+[worker 0] rollout 15 [132/194] done=125
+[worker 5] rollout 15: saved 187 records / 247 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard5.pt
+[worker 3] rollout 15 [157/194] done=150
+[worker 2] rollout 15: saved 188 records / 224 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard2.pt
+[worker 1] rollout 15 [151/194] done=150
+[worker 4] rollout 15 [180/194] done=175
+[worker 7] rollout 15: saved 187 records / 217 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard7.pt
+[worker 6] rollout 15 [100/193] done=100
+[worker 0] rollout 15 [157/194] done=150
+[worker 4] rollout 15: saved 189 records / 307 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard4.pt
+[worker 3] rollout 15 [182/194] done=175
+[worker 1] rollout 15 [176/194] done=175
+[worker 3] rollout 15: saved 187 records / 232 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard3.pt
+[worker 6] rollout 15 [125/193] done=125
+[worker 0] rollout 15 [182/194] done=175
+[worker 1] rollout 15: saved 193 records / 235 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard1.pt
+[worker 0] rollout 15: saved 186 records / 257 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard0.pt
+[worker 6] rollout 15 [150/193] done=150
+[worker 6] rollout 15 [175/193] done=175
+[worker 6] rollout 15: saved 193 records / 259 preds -> runs/qvh/qwen3vl_video/features/rollout15/shard6.pt
+[extract] done: extracted 16 rollout(s) -> runs/qvh/qwen3vl_video/features

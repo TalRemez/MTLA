@@ -1,0 +1,147 @@
+Fetching 16 files:   0%|          | 0/16 [00:00<?, ?it/s]Fetching 16 files: 100%|██████████| 16/16 [00:00<00:00, 116105.30it/s]
+[extract] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.10s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.17s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.17s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.22s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.24s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.32s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.28s/it]Loading checkpoint shards:  25%|██▌       | 1/4 [00:01<00:03,  1.17s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:01,  1.01it/s]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.01s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.02s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.05s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.06s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.19s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.25s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:02<00:02,  1.24s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:02<00:00,  1.02it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.02it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.03it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:00,  1.01it/s]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.00s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.07s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.10s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.10it/s]
+[worker 3] model=qwen3vl_image dataset=coco gpu=3 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.09it/s]
+[worker 1] model=qwen3vl_image dataset=coco gpu=1 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.18it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.09it/s]
+[worker 4] model=qwen3vl_image dataset=coco gpu=4 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.16it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.07it/s]
+[worker 7] model=qwen3vl_image dataset=coco gpu=7 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:03<00:01,  1.15s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.15it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.06it/s]
+[worker 5] model=qwen3vl_image dataset=coco gpu=5 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:03<00:00,  1.03it/s]
+[worker 6] model=qwen3vl_image dataset=coco gpu=6 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.09it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.02s/it]
+[worker 2] model=qwen3vl_image dataset=coco gpu=2 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.11it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:04<00:00,  1.01s/it]
+[worker 0] model=qwen3vl_image dataset=coco gpu=0 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 7] rollout 0: saved 12 records / 66 preds -> runs/coco/qwen3vl_image/features/rollout0/shard7.pt
+[worker 4] rollout 0: saved 12 records / 80 preds -> runs/coco/qwen3vl_image/features/rollout0/shard4.pt
+[worker 5] rollout 0: saved 12 records / 42 preds -> runs/coco/qwen3vl_image/features/rollout0/shard5.pt
+[worker 6] rollout 0: saved 12 records / 94 preds -> runs/coco/qwen3vl_image/features/rollout0/shard6.pt
+[worker 2] rollout 0: saved 12 records / 38 preds -> runs/coco/qwen3vl_image/features/rollout0/shard2.pt
+[worker 3] rollout 0: saved 13 records / 113 preds -> runs/coco/qwen3vl_image/features/rollout0/shard3.pt
+[worker 1] rollout 0: saved 13 records / 357 preds -> runs/coco/qwen3vl_image/features/rollout0/shard1.pt
+[worker 0] rollout 0: saved 13 records / 375 preds -> runs/coco/qwen3vl_image/features/rollout0/shard0.pt
+[worker 7] rollout 1: saved 12 records / 72 preds -> runs/coco/qwen3vl_image/features/rollout1/shard7.pt
+[worker 5] rollout 1: saved 12 records / 58 preds -> runs/coco/qwen3vl_image/features/rollout1/shard5.pt
+[worker 4] rollout 1: saved 12 records / 112 preds -> runs/coco/qwen3vl_image/features/rollout1/shard4.pt
+[worker 2] rollout 1: saved 12 records / 35 preds -> runs/coco/qwen3vl_image/features/rollout1/shard2.pt
+[worker 6] rollout 1: saved 12 records / 76 preds -> runs/coco/qwen3vl_image/features/rollout1/shard6.pt
+[worker 3] rollout 1: saved 13 records / 198 preds -> runs/coco/qwen3vl_image/features/rollout1/shard3.pt
+[worker 1] rollout 1: saved 13 records / 212 preds -> runs/coco/qwen3vl_image/features/rollout1/shard1.pt
+[worker 7] rollout 2: saved 12 records / 67 preds -> runs/coco/qwen3vl_image/features/rollout2/shard7.pt
+[worker 4] rollout 2: saved 12 records / 101 preds -> runs/coco/qwen3vl_image/features/rollout2/shard4.pt
+[worker 5] rollout 2: saved 12 records / 44 preds -> runs/coco/qwen3vl_image/features/rollout2/shard5.pt
+[worker 2] rollout 2: saved 13 records / 43 preds -> runs/coco/qwen3vl_image/features/rollout2/shard2.pt
+[worker 6] rollout 2: saved 12 records / 82 preds -> runs/coco/qwen3vl_image/features/rollout2/shard6.pt
+[worker 0] rollout 1: saved 13 records / 334 preds -> runs/coco/qwen3vl_image/features/rollout1/shard0.pt
+[worker 3] rollout 2: saved 13 records / 97 preds -> runs/coco/qwen3vl_image/features/rollout2/shard3.pt
+[worker 7] rollout 3: saved 12 records / 82 preds -> runs/coco/qwen3vl_image/features/rollout3/shard7.pt
+[worker 4] rollout 3: saved 12 records / 79 preds -> runs/coco/qwen3vl_image/features/rollout3/shard4.pt
+[worker 2] rollout 3: saved 12 records / 37 preds -> runs/coco/qwen3vl_image/features/rollout3/shard2.pt
+[worker 1] rollout 2: saved 13 records / 253 preds -> runs/coco/qwen3vl_image/features/rollout2/shard1.pt
+[worker 5] rollout 3: saved 12 records / 179 preds -> runs/coco/qwen3vl_image/features/rollout3/shard5.pt
+[worker 6] rollout 3: saved 12 records / 120 preds -> runs/coco/qwen3vl_image/features/rollout3/shard6.pt
+[worker 3] rollout 3: saved 13 records / 127 preds -> runs/coco/qwen3vl_image/features/rollout3/shard3.pt
+[worker 7] rollout 4: saved 12 records / 69 preds -> runs/coco/qwen3vl_image/features/rollout4/shard7.pt
+[worker 0] rollout 2: saved 13 records / 404 preds -> runs/coco/qwen3vl_image/features/rollout2/shard0.pt
+[worker 4] rollout 4: saved 12 records / 163 preds -> runs/coco/qwen3vl_image/features/rollout4/shard4.pt
+[worker 5] rollout 4: saved 12 records / 41 preds -> runs/coco/qwen3vl_image/features/rollout4/shard5.pt
+[worker 6] rollout 4: saved 12 records / 106 preds -> runs/coco/qwen3vl_image/features/rollout4/shard6.pt
+[worker 2] rollout 4: saved 13 records / 38 preds -> runs/coco/qwen3vl_image/features/rollout4/shard2.pt
+[worker 7] rollout 5: saved 12 records / 80 preds -> runs/coco/qwen3vl_image/features/rollout5/shard7.pt
+[worker 1] rollout 3: saved 13 records / 365 preds -> runs/coco/qwen3vl_image/features/rollout3/shard1.pt
+[worker 3] rollout 4: saved 13 records / 236 preds -> runs/coco/qwen3vl_image/features/rollout4/shard3.pt
+[worker 5] rollout 5: saved 12 records / 41 preds -> runs/coco/qwen3vl_image/features/rollout5/shard5.pt
+[worker 4] rollout 5: saved 12 records / 90 preds -> runs/coco/qwen3vl_image/features/rollout5/shard4.pt
+[worker 2] rollout 5: saved 13 records / 39 preds -> runs/coco/qwen3vl_image/features/rollout5/shard2.pt
+[worker 7] rollout 6: saved 12 records / 71 preds -> runs/coco/qwen3vl_image/features/rollout6/shard7.pt
+[worker 0] rollout 3: saved 13 records / 471 preds -> runs/coco/qwen3vl_image/features/rollout3/shard0.pt
+[worker 6] rollout 5: saved 12 records / 343 preds -> runs/coco/qwen3vl_image/features/rollout5/shard6.pt
+[worker 5] rollout 6: saved 12 records / 40 preds -> runs/coco/qwen3vl_image/features/rollout6/shard5.pt
+[worker 1] rollout 4: saved 13 records / 208 preds -> runs/coco/qwen3vl_image/features/rollout4/shard1.pt
+[worker 4] rollout 6: saved 12 records / 100 preds -> runs/coco/qwen3vl_image/features/rollout6/shard4.pt
+[worker 3] rollout 5: saved 13 records / 233 preds -> runs/coco/qwen3vl_image/features/rollout5/shard3.pt
+[worker 2] rollout 6: saved 13 records / 39 preds -> runs/coco/qwen3vl_image/features/rollout6/shard2.pt
+[worker 7] rollout 7: saved 12 records / 78 preds -> runs/coco/qwen3vl_image/features/rollout7/shard7.pt
+[worker 6] rollout 6: saved 12 records / 103 preds -> runs/coco/qwen3vl_image/features/rollout6/shard6.pt
+[worker 5] rollout 7: saved 12 records / 51 preds -> runs/coco/qwen3vl_image/features/rollout7/shard5.pt
+[worker 4] rollout 7: saved 12 records / 123 preds -> runs/coco/qwen3vl_image/features/rollout7/shard4.pt
+[worker 1] rollout 5: saved 13 records / 295 preds -> runs/coco/qwen3vl_image/features/rollout5/shard1.pt
+[worker 0] rollout 4: saved 13 records / 380 preds -> runs/coco/qwen3vl_image/features/rollout4/shard0.pt
+[worker 3] rollout 6: saved 13 records / 268 preds -> runs/coco/qwen3vl_image/features/rollout6/shard3.pt
+[worker 2] rollout 7: saved 12 records / 37 preds -> runs/coco/qwen3vl_image/features/rollout7/shard2.pt
+[worker 7] rollout 8: saved 12 records / 70 preds -> runs/coco/qwen3vl_image/features/rollout8/shard7.pt
+[worker 6] rollout 7: saved 12 records / 55 preds -> runs/coco/qwen3vl_image/features/rollout7/shard6.pt
+[worker 5] rollout 8: saved 12 records / 40 preds -> runs/coco/qwen3vl_image/features/rollout8/shard5.pt
+[worker 4] rollout 8: saved 12 records / 89 preds -> runs/coco/qwen3vl_image/features/rollout8/shard4.pt
+[worker 2] rollout 8: saved 12 records / 35 preds -> runs/coco/qwen3vl_image/features/rollout8/shard2.pt
+[worker 7] rollout 9: saved 12 records / 77 preds -> runs/coco/qwen3vl_image/features/rollout9/shard7.pt
+[worker 3] rollout 7: saved 13 records / 112 preds -> runs/coco/qwen3vl_image/features/rollout7/shard3.pt
+[worker 1] rollout 6: saved 13 records / 222 preds -> runs/coco/qwen3vl_image/features/rollout6/shard1.pt
+[worker 6] rollout 8: saved 12 records / 113 preds -> runs/coco/qwen3vl_image/features/rollout8/shard6.pt
+[worker 0] rollout 5: saved 13 records / 354 preds -> runs/coco/qwen3vl_image/features/rollout5/shard0.pt
+[worker 5] rollout 9: saved 12 records / 38 preds -> runs/coco/qwen3vl_image/features/rollout9/shard5.pt
+[worker 4] rollout 9: saved 12 records / 98 preds -> runs/coco/qwen3vl_image/features/rollout9/shard4.pt
+[worker 7] rollout 10: saved 12 records / 80 preds -> runs/coco/qwen3vl_image/features/rollout10/shard7.pt
+[worker 2] rollout 9: saved 12 records / 37 preds -> runs/coco/qwen3vl_image/features/rollout9/shard2.pt
+[worker 3] rollout 8: saved 13 records / 160 preds -> runs/coco/qwen3vl_image/features/rollout8/shard3.pt
+[worker 1] rollout 7: saved 13 records / 217 preds -> runs/coco/qwen3vl_image/features/rollout7/shard1.pt
+[worker 6] rollout 9: saved 12 records / 111 preds -> runs/coco/qwen3vl_image/features/rollout9/shard6.pt
+[worker 5] rollout 10: saved 12 records / 62 preds -> runs/coco/qwen3vl_image/features/rollout10/shard5.pt
+[worker 4] rollout 10: saved 12 records / 170 preds -> runs/coco/qwen3vl_image/features/rollout10/shard4.pt
+[worker 7] rollout 11: saved 12 records / 87 preds -> runs/coco/qwen3vl_image/features/rollout11/shard7.pt
+[worker 2] rollout 10: saved 12 records / 38 preds -> runs/coco/qwen3vl_image/features/rollout10/shard2.pt
+[worker 0] rollout 6: saved 13 records / 495 preds -> runs/coco/qwen3vl_image/features/rollout6/shard0.pt
+[worker 6] rollout 10: saved 12 records / 108 preds -> runs/coco/qwen3vl_image/features/rollout10/shard6.pt
+[worker 5] rollout 11: saved 12 records / 60 preds -> runs/coco/qwen3vl_image/features/rollout11/shard5.pt
+[worker 3] rollout 9: saved 13 records / 198 preds -> runs/coco/qwen3vl_image/features/rollout9/shard3.pt
+[worker 4] rollout 11: saved 12 records / 92 preds -> runs/coco/qwen3vl_image/features/rollout11/shard4.pt
+[worker 7] rollout 12: saved 12 records / 74 preds -> runs/coco/qwen3vl_image/features/rollout12/shard7.pt
+[worker 1] rollout 8: saved 13 records / 330 preds -> runs/coco/qwen3vl_image/features/rollout8/shard1.pt
+[worker 2] rollout 11: saved 12 records / 35 preds -> runs/coco/qwen3vl_image/features/rollout11/shard2.pt
+[worker 5] rollout 12: saved 12 records / 46 preds -> runs/coco/qwen3vl_image/features/rollout12/shard5.pt
+[worker 6] rollout 11: saved 12 records / 207 preds -> runs/coco/qwen3vl_image/features/rollout11/shard6.pt
+[worker 7] rollout 13: saved 12 records / 81 preds -> runs/coco/qwen3vl_image/features/rollout13/shard7.pt
+[worker 3] rollout 10: saved 13 records / 96 preds -> runs/coco/qwen3vl_image/features/rollout10/shard3.pt
+[worker 0] rollout 7: saved 13 records / 374 preds -> runs/coco/qwen3vl_image/features/rollout7/shard0.pt
+[worker 4] rollout 12: saved 12 records / 163 preds -> runs/coco/qwen3vl_image/features/rollout12/shard4.pt
+[worker 1] rollout 9: saved 13 records / 314 preds -> runs/coco/qwen3vl_image/features/rollout9/shard1.pt
+[worker 5] rollout 13: saved 12 records / 42 preds -> runs/coco/qwen3vl_image/features/rollout13/shard5.pt
+[worker 2] rollout 12: saved 13 records / 38 preds -> runs/coco/qwen3vl_image/features/rollout12/shard2.pt
+[worker 7] rollout 14: saved 12 records / 77 preds -> runs/coco/qwen3vl_image/features/rollout14/shard7.pt
+[worker 4] rollout 13: saved 12 records / 95 preds -> runs/coco/qwen3vl_image/features/rollout13/shard4.pt
+[worker 6] rollout 12: saved 12 records / 210 preds -> runs/coco/qwen3vl_image/features/rollout12/shard6.pt
+[worker 1] rollout 10: saved 13 records / 210 preds -> runs/coco/qwen3vl_image/features/rollout10/shard1.pt
+[worker 0] rollout 8: saved 13 records / 308 preds -> runs/coco/qwen3vl_image/features/rollout8/shard0.pt
+[worker 5] rollout 14: saved 12 records / 41 preds -> runs/coco/qwen3vl_image/features/rollout14/shard5.pt
+[worker 2] rollout 13: saved 12 records / 35 preds -> runs/coco/qwen3vl_image/features/rollout13/shard2.pt
+[worker 3] rollout 11: saved 13 records / 267 preds -> runs/coco/qwen3vl_image/features/rollout11/shard3.pt
+[worker 7] rollout 15: saved 12 records / 63 preds -> runs/coco/qwen3vl_image/features/rollout15/shard7.pt
+[worker 6] rollout 13: saved 12 records / 105 preds -> runs/coco/qwen3vl_image/features/rollout13/shard6.pt
+[worker 4] rollout 14: saved 12 records / 88 preds -> runs/coco/qwen3vl_image/features/rollout14/shard4.pt
+[worker 5] rollout 15: saved 12 records / 40 preds -> runs/coco/qwen3vl_image/features/rollout15/shard5.pt
+[worker 2] rollout 14: saved 12 records / 40 preds -> runs/coco/qwen3vl_image/features/rollout14/shard2.pt
+[worker 1] rollout 11: saved 13 records / 403 preds -> runs/coco/qwen3vl_image/features/rollout11/shard1.pt
+[worker 0] rollout 9: saved 13 records / 394 preds -> runs/coco/qwen3vl_image/features/rollout9/shard0.pt
+[worker 3] rollout 12: saved 13 records / 188 preds -> runs/coco/qwen3vl_image/features/rollout12/shard3.pt
+[worker 4] rollout 15: saved 12 records / 107 preds -> runs/coco/qwen3vl_image/features/rollout15/shard4.pt
+[worker 2] rollout 15: saved 12 records / 34 preds -> runs/coco/qwen3vl_image/features/rollout15/shard2.pt
+[worker 6] rollout 14: saved 12 records / 274 preds -> runs/coco/qwen3vl_image/features/rollout14/shard6.pt
+[worker 1] rollout 12: saved 13 records / 296 preds -> runs/coco/qwen3vl_image/features/rollout12/shard1.pt
+[worker 3] rollout 13: saved 13 records / 218 preds -> runs/coco/qwen3vl_image/features/rollout13/shard3.pt
+[worker 6] rollout 15: saved 12 records / 102 preds -> runs/coco/qwen3vl_image/features/rollout15/shard6.pt
+[worker 0] rollout 10: saved 13 records / 415 preds -> runs/coco/qwen3vl_image/features/rollout10/shard0.pt
+[worker 3] rollout 14: saved 13 records / 121 preds -> runs/coco/qwen3vl_image/features/rollout14/shard3.pt
+[worker 1] rollout 13: saved 13 records / 481 preds -> runs/coco/qwen3vl_image/features/rollout13/shard1.pt
+[worker 0] rollout 11: saved 13 records / 392 preds -> runs/coco/qwen3vl_image/features/rollout11/shard0.pt
+[worker 3] rollout 15: saved 13 records / 141 preds -> runs/coco/qwen3vl_image/features/rollout15/shard3.pt
+[worker 1] rollout 14: saved 13 records / 356 preds -> runs/coco/qwen3vl_image/features/rollout14/shard1.pt
+[worker 0] rollout 12: saved 13 records / 469 preds -> runs/coco/qwen3vl_image/features/rollout12/shard0.pt
+[worker 1] rollout 15: saved 13 records / 420 preds -> runs/coco/qwen3vl_image/features/rollout15/shard1.pt
+[worker 0] rollout 13: saved 13 records / 348 preds -> runs/coco/qwen3vl_image/features/rollout13/shard0.pt
+[worker 0] rollout 14: saved 13 records / 354 preds -> runs/coco/qwen3vl_image/features/rollout14/shard0.pt
+[worker 0] rollout 15: saved 13 records / 281 preds -> runs/coco/qwen3vl_image/features/rollout15/shard0.pt
+[extract] done: extracted 16 rollout(s) -> runs/coco/qwen3vl_image/features

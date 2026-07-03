@@ -1,0 +1,147 @@
+Fetching 22 files:   0%|          | 0/22 [00:00<?, ?it/s]Fetching 22 files: 100%|██████████| 22/22 [00:00<00:00, 152268.46it/s]
+[extract] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 39.81it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 39.75it/s]
+Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 40.63it/s]
+Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 40.94it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 41.68it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 40.71it/s]
+Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 40.53it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 41.34it/s]
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:00<00:00, 28.53it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 36.70it/s]
+[worker 4] model=internvl_image dataset=coco gpu=4 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 7] model=internvl_image dataset=coco gpu=7 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 3] model=internvl_image dataset=coco gpu=3 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 6] model=internvl_image dataset=coco gpu=6 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 1] model=internvl_image dataset=coco gpu=1 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 5] model=internvl_image dataset=coco gpu=5 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 2] model=internvl_image dataset=coco gpu=2 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 0] model=internvl_image dataset=coco gpu=0 rollouts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] L=36 H=32
+[worker 6] rollout 0: saved 12 records / 353 preds -> runs/coco/internvl_image/features/rollout0/shard6.pt
+[worker 5] rollout 0: saved 12 records / 309 preds -> runs/coco/internvl_image/features/rollout0/shard5.pt
+[worker 7] rollout 0: saved 12 records / 438 preds -> runs/coco/internvl_image/features/rollout0/shard7.pt
+[worker 4] rollout 0: saved 12 records / 287 preds -> runs/coco/internvl_image/features/rollout0/shard4.pt
+[worker 3] rollout 0: saved 13 records / 181 preds -> runs/coco/internvl_image/features/rollout0/shard3.pt
+[worker 2] rollout 0: saved 13 records / 131 preds -> runs/coco/internvl_image/features/rollout0/shard2.pt
+[worker 0] rollout 0: saved 13 records / 764 preds -> runs/coco/internvl_image/features/rollout0/shard0.pt
+[worker 1] rollout 0: saved 13 records / 730 preds -> runs/coco/internvl_image/features/rollout0/shard1.pt
+[worker 6] rollout 1: saved 12 records / 259 preds -> runs/coco/internvl_image/features/rollout1/shard6.pt
+[worker 7] rollout 1: saved 12 records / 239 preds -> runs/coco/internvl_image/features/rollout1/shard7.pt
+[worker 4] rollout 1: saved 12 records / 187 preds -> runs/coco/internvl_image/features/rollout1/shard4.pt
+[worker 5] rollout 1: saved 12 records / 498 preds -> runs/coco/internvl_image/features/rollout1/shard5.pt
+[worker 3] rollout 1: saved 13 records / 474 preds -> runs/coco/internvl_image/features/rollout1/shard3.pt
+[worker 2] rollout 1: saved 13 records / 447 preds -> runs/coco/internvl_image/features/rollout1/shard2.pt
+[worker 6] rollout 2: saved 11 records / 444 preds -> runs/coco/internvl_image/features/rollout2/shard6.pt
+[worker 7] rollout 2: saved 12 records / 215 preds -> runs/coco/internvl_image/features/rollout2/shard7.pt
+[worker 0] rollout 1: saved 13 records / 489 preds -> runs/coco/internvl_image/features/rollout1/shard0.pt
+[worker 4] rollout 2: saved 12 records / 208 preds -> runs/coco/internvl_image/features/rollout2/shard4.pt
+[worker 5] rollout 2: saved 12 records / 225 preds -> runs/coco/internvl_image/features/rollout2/shard5.pt
+[worker 1] rollout 1: saved 13 records / 519 preds -> runs/coco/internvl_image/features/rollout1/shard1.pt
+[worker 3] rollout 2: saved 13 records / 326 preds -> runs/coco/internvl_image/features/rollout2/shard3.pt
+[worker 2] rollout 2: saved 13 records / 363 preds -> runs/coco/internvl_image/features/rollout2/shard2.pt
+[worker 6] rollout 3: saved 12 records / 392 preds -> runs/coco/internvl_image/features/rollout3/shard6.pt
+[worker 7] rollout 3: saved 12 records / 387 preds -> runs/coco/internvl_image/features/rollout3/shard7.pt
+[worker 5] rollout 3: saved 12 records / 291 preds -> runs/coco/internvl_image/features/rollout3/shard5.pt
+[worker 4] rollout 3: saved 12 records / 388 preds -> runs/coco/internvl_image/features/rollout3/shard4.pt
+[worker 1] rollout 2: saved 13 records / 399 preds -> runs/coco/internvl_image/features/rollout2/shard1.pt
+[worker 2] rollout 3: saved 13 records / 323 preds -> runs/coco/internvl_image/features/rollout3/shard2.pt
+[worker 3] rollout 3: saved 13 records / 297 preds -> runs/coco/internvl_image/features/rollout3/shard3.pt
+[worker 0] rollout 2: saved 13 records / 961 preds -> runs/coco/internvl_image/features/rollout2/shard0.pt
+[worker 6] rollout 4: saved 12 records / 469 preds -> runs/coco/internvl_image/features/rollout4/shard6.pt
+[worker 5] rollout 4: saved 12 records / 203 preds -> runs/coco/internvl_image/features/rollout4/shard5.pt
+[worker 7] rollout 4: saved 12 records / 260 preds -> runs/coco/internvl_image/features/rollout4/shard7.pt
+[worker 4] rollout 4: saved 12 records / 471 preds -> runs/coco/internvl_image/features/rollout4/shard4.pt
+[worker 2] rollout 4: saved 13 records / 322 preds -> runs/coco/internvl_image/features/rollout4/shard2.pt
+[worker 5] rollout 5: saved 12 records / 316 preds -> runs/coco/internvl_image/features/rollout5/shard5.pt
+[worker 3] rollout 4: saved 13 records / 270 preds -> runs/coco/internvl_image/features/rollout4/shard3.pt
+[worker 0] rollout 3: saved 12 records / 450 preds -> runs/coco/internvl_image/features/rollout3/shard0.pt
+[worker 1] rollout 3: saved 13 records / 646 preds -> runs/coco/internvl_image/features/rollout3/shard1.pt
+[worker 6] rollout 5: saved 12 records / 570 preds -> runs/coco/internvl_image/features/rollout5/shard6.pt
+[worker 7] rollout 5: saved 12 records / 240 preds -> runs/coco/internvl_image/features/rollout5/shard7.pt
+[worker 4] rollout 5: saved 12 records / 431 preds -> runs/coco/internvl_image/features/rollout5/shard4.pt
+[worker 5] rollout 6: saved 12 records / 283 preds -> runs/coco/internvl_image/features/rollout6/shard5.pt
+[worker 2] rollout 5: saved 13 records / 256 preds -> runs/coco/internvl_image/features/rollout5/shard2.pt
+[worker 3] rollout 5: saved 13 records / 494 preds -> runs/coco/internvl_image/features/rollout5/shard3.pt
+[worker 7] rollout 6: saved 12 records / 209 preds -> runs/coco/internvl_image/features/rollout6/shard7.pt
+[worker 6] rollout 6: saved 12 records / 412 preds -> runs/coco/internvl_image/features/rollout6/shard6.pt
+[worker 4] rollout 6: saved 12 records / 117 preds -> runs/coco/internvl_image/features/rollout6/shard4.pt
+[worker 1] rollout 4: saved 13 records / 587 preds -> runs/coco/internvl_image/features/rollout4/shard1.pt
+[worker 5] rollout 7: saved 12 records / 199 preds -> runs/coco/internvl_image/features/rollout7/shard5.pt
+[worker 0] rollout 4: saved 13 records / 868 preds -> runs/coco/internvl_image/features/rollout4/shard0.pt
+[worker 2] rollout 6: saved 13 records / 135 preds -> runs/coco/internvl_image/features/rollout6/shard2.pt
+[worker 7] rollout 7: saved 12 records / 185 preds -> runs/coco/internvl_image/features/rollout7/shard7.pt
+[worker 3] rollout 6: saved 13 records / 380 preds -> runs/coco/internvl_image/features/rollout6/shard3.pt
+[worker 6] rollout 7: saved 12 records / 566 preds -> runs/coco/internvl_image/features/rollout7/shard6.pt
+[worker 5] rollout 8: saved 12 records / 176 preds -> runs/coco/internvl_image/features/rollout8/shard5.pt
+[worker 4] rollout 7: saved 12 records / 272 preds -> runs/coco/internvl_image/features/rollout7/shard4.pt
+[worker 2] rollout 7: saved 13 records / 90 preds -> runs/coco/internvl_image/features/rollout7/shard2.pt
+[worker 7] rollout 8: saved 12 records / 229 preds -> runs/coco/internvl_image/features/rollout8/shard7.pt
+[worker 1] rollout 5: saved 13 records / 744 preds -> runs/coco/internvl_image/features/rollout5/shard1.pt
+[worker 3] rollout 7: saved 13 records / 342 preds -> runs/coco/internvl_image/features/rollout7/shard3.pt
+[worker 0] rollout 5: saved 13 records / 786 preds -> runs/coco/internvl_image/features/rollout5/shard0.pt
+[worker 5] rollout 9: saved 12 records / 277 preds -> runs/coco/internvl_image/features/rollout9/shard5.pt
+[worker 6] rollout 8: saved 12 records / 457 preds -> runs/coco/internvl_image/features/rollout8/shard6.pt
+[worker 2] rollout 8: saved 13 records / 192 preds -> runs/coco/internvl_image/features/rollout8/shard2.pt
+[worker 4] rollout 8: saved 12 records / 315 preds -> runs/coco/internvl_image/features/rollout8/shard4.pt
+[worker 7] rollout 9: saved 12 records / 419 preds -> runs/coco/internvl_image/features/rollout9/shard7.pt
+[worker 3] rollout 8: saved 13 records / 216 preds -> runs/coco/internvl_image/features/rollout8/shard3.pt
+[worker 5] rollout 10: saved 12 records / 318 preds -> runs/coco/internvl_image/features/rollout10/shard5.pt
+[worker 2] rollout 9: saved 13 records / 101 preds -> runs/coco/internvl_image/features/rollout9/shard2.pt
+[worker 1] rollout 6: saved 13 records / 451 preds -> runs/coco/internvl_image/features/rollout6/shard1.pt
+[worker 4] rollout 9: saved 12 records / 286 preds -> runs/coco/internvl_image/features/rollout9/shard4.pt
+[worker 6] rollout 9: saved 12 records / 799 preds -> runs/coco/internvl_image/features/rollout9/shard6.pt
+[worker 0] rollout 6: saved 13 records / 791 preds -> runs/coco/internvl_image/features/rollout6/shard0.pt
+[worker 3] rollout 9: saved 13 records / 298 preds -> runs/coco/internvl_image/features/rollout9/shard3.pt
+[worker 7] rollout 10: saved 12 records / 343 preds -> runs/coco/internvl_image/features/rollout10/shard7.pt
+[worker 5] rollout 11: saved 12 records / 299 preds -> runs/coco/internvl_image/features/rollout11/shard5.pt
+[worker 2] rollout 10: saved 13 records / 328 preds -> runs/coco/internvl_image/features/rollout10/shard2.pt
+[worker 1] rollout 7: saved 13 records / 676 preds -> runs/coco/internvl_image/features/rollout7/shard1.pt
+[worker 6] rollout 10: saved 12 records / 296 preds -> runs/coco/internvl_image/features/rollout10/shard6.pt
+[worker 4] rollout 10: saved 12 records / 439 preds -> runs/coco/internvl_image/features/rollout10/shard4.pt
+[worker 3] rollout 10: saved 13 records / 316 preds -> runs/coco/internvl_image/features/rollout10/shard3.pt
+[worker 7] rollout 11: saved 12 records / 344 preds -> runs/coco/internvl_image/features/rollout11/shard7.pt
+[worker 5] rollout 12: saved 12 records / 290 preds -> runs/coco/internvl_image/features/rollout12/shard5.pt
+[worker 2] rollout 11: saved 13 records / 316 preds -> runs/coco/internvl_image/features/rollout11/shard2.pt
+[worker 0] rollout 7: saved 13 records / 857 preds -> runs/coco/internvl_image/features/rollout7/shard0.pt
+[worker 6] rollout 11: saved 12 records / 432 preds -> runs/coco/internvl_image/features/rollout11/shard6.pt
+[worker 4] rollout 11: saved 12 records / 228 preds -> runs/coco/internvl_image/features/rollout11/shard4.pt
+[worker 3] rollout 11: saved 13 records / 219 preds -> runs/coco/internvl_image/features/rollout11/shard3.pt
+[worker 5] rollout 13: saved 12 records / 333 preds -> runs/coco/internvl_image/features/rollout13/shard5.pt
+[worker 7] rollout 12: saved 12 records / 385 preds -> runs/coco/internvl_image/features/rollout12/shard7.pt
+[worker 2] rollout 12: saved 13 records / 103 preds -> runs/coco/internvl_image/features/rollout12/shard2.pt
+[worker 1] rollout 8: saved 13 records / 863 preds -> runs/coco/internvl_image/features/rollout8/shard1.pt
+[worker 6] rollout 12: saved 12 records / 589 preds -> runs/coco/internvl_image/features/rollout12/shard6.pt
+[worker 0] rollout 8: saved 13 records / 793 preds -> runs/coco/internvl_image/features/rollout8/shard0.pt
+[worker 2] rollout 13: saved 13 records / 129 preds -> runs/coco/internvl_image/features/rollout13/shard2.pt
+[worker 4] rollout 12: saved 12 records / 499 preds -> runs/coco/internvl_image/features/rollout12/shard4.pt
+[worker 3] rollout 12: saved 13 records / 375 preds -> runs/coco/internvl_image/features/rollout12/shard3.pt
+[worker 7] rollout 13: saved 12 records / 257 preds -> runs/coco/internvl_image/features/rollout13/shard7.pt
+[worker 5] rollout 14: saved 12 records / 439 preds -> runs/coco/internvl_image/features/rollout14/shard5.pt
+[worker 1] rollout 9: saved 13 records / 426 preds -> runs/coco/internvl_image/features/rollout9/shard1.pt
+[worker 6] rollout 13: saved 12 records / 460 preds -> runs/coco/internvl_image/features/rollout13/shard6.pt
+[worker 2] rollout 14: saved 13 records / 237 preds -> runs/coco/internvl_image/features/rollout14/shard2.pt
+[worker 4] rollout 13: saved 12 records / 136 preds -> runs/coco/internvl_image/features/rollout13/shard4.pt
+[worker 3] rollout 13: saved 13 records / 479 preds -> runs/coco/internvl_image/features/rollout13/shard3.pt
+[worker 5] rollout 15: saved 12 records / 275 preds -> runs/coco/internvl_image/features/rollout15/shard5.pt
+[worker 7] rollout 14: saved 12 records / 581 preds -> runs/coco/internvl_image/features/rollout14/shard7.pt
+[worker 0] rollout 9: saved 13 records / 877 preds -> runs/coco/internvl_image/features/rollout9/shard0.pt
+[worker 2] rollout 15: saved 13 records / 114 preds -> runs/coco/internvl_image/features/rollout15/shard2.pt
+[worker 6] rollout 14: saved 12 records / 555 preds -> runs/coco/internvl_image/features/rollout14/shard6.pt
+[worker 4] rollout 14: saved 12 records / 173 preds -> runs/coco/internvl_image/features/rollout14/shard4.pt
+[worker 3] rollout 14: saved 13 records / 572 preds -> runs/coco/internvl_image/features/rollout14/shard3.pt
+[worker 7] rollout 15: saved 12 records / 473 preds -> runs/coco/internvl_image/features/rollout15/shard7.pt
+[worker 1] rollout 10: saved 13 records / 994 preds -> runs/coco/internvl_image/features/rollout10/shard1.pt
+[worker 4] rollout 15: saved 12 records / 173 preds -> runs/coco/internvl_image/features/rollout15/shard4.pt
+[worker 6] rollout 15: saved 12 records / 489 preds -> runs/coco/internvl_image/features/rollout15/shard6.pt
+[worker 0] rollout 10: saved 13 records / 840 preds -> runs/coco/internvl_image/features/rollout10/shard0.pt
+[worker 3] rollout 15: saved 13 records / 480 preds -> runs/coco/internvl_image/features/rollout15/shard3.pt
+[worker 1] rollout 11: saved 13 records / 535 preds -> runs/coco/internvl_image/features/rollout11/shard1.pt
+[worker 0] rollout 11: saved 13 records / 686 preds -> runs/coco/internvl_image/features/rollout11/shard0.pt
+[worker 1] rollout 12: saved 13 records / 812 preds -> runs/coco/internvl_image/features/rollout12/shard1.pt
+[worker 0] rollout 12: saved 13 records / 958 preds -> runs/coco/internvl_image/features/rollout12/shard0.pt
+[worker 1] rollout 13: saved 13 records / 436 preds -> runs/coco/internvl_image/features/rollout13/shard1.pt
+[worker 0] rollout 13: saved 12 records / 824 preds -> runs/coco/internvl_image/features/rollout13/shard0.pt
+[worker 1] rollout 14: saved 13 records / 585 preds -> runs/coco/internvl_image/features/rollout14/shard1.pt
+[worker 0] rollout 14: saved 13 records / 777 preds -> runs/coco/internvl_image/features/rollout14/shard0.pt
+[worker 1] rollout 15: saved 13 records / 514 preds -> runs/coco/internvl_image/features/rollout15/shard1.pt
+[worker 0] rollout 15: saved 13 records / 670 preds -> runs/coco/internvl_image/features/rollout15/shard0.pt
+[extract] done: extracted 16 rollout(s) -> runs/coco/internvl_image/features

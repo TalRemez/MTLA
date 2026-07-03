@@ -76,16 +76,25 @@ class TokenRange(TypedDict):
     coord_toks: list[int]
 
 
-class PredObject(TypedDict):
+class PredObject(TypedDict, total=False):
     """One prediction's saved MTLA features inside a feature shard.
 
-    The atom the score stage reduces and votes over: written by ``compute_mtla`` and
-    read by the ``evaluate.py`` stage. ``region`` and ``label`` are the predicted grounding,
-    ``is_hallucinated`` is the detection label for AUROC, and ``extracted`` flags
-    whether attention was actually captured for this prediction (``False`` predictions
-    are skipped when computing AUROC). ``local_attention`` and ``first_digit`` are the
-    two ``[L, H]`` reductions (over all Q_p tokens, and over the first coordinate token
-    respectively) that the score stage collapses to a scalar over the layer band.
+    The atom the score stage reduces and votes over: written by ``compute_mtla`` and read by the
+    ``evaluate.py`` stage. ``region`` and ``label`` are the predicted grounding, ``is_hallucinated``
+    is the detection label for AUROC, and ``extracted`` flags whether attention was actually captured
+    (``False`` predictions are skipped when computing AUROC).
+
+    The attention features are ``[L, H]`` fp32 arrays (layers x heads; the score stage means over
+    heads and a layer band). One per **slot x signal**: slot in {``all``, ``digits``, ``label``,
+    ``first``} (which of the prediction's response tokens Q_p to aggregate over — all tokens,
+    coord/digit tokens, label tokens, first coord token) x signal in {``local``, ``global``}
+    (attention inside the proposal region M(R_p) — the MTLA score — vs. over all modality tokens —
+    the SVAR baseline), stored under keys ``<slot>_<signal>`` (e.g. ``all_local``, ``digits_global``).
+    A slot with no tokens for this prediction (e.g. ``label`` for a video span) is omitted.
+    ``local_attention`` and ``first_digit`` are back-compat aliases for ``all_local`` and
+    ``first_local``.
+
+    ``total=False``: the exact key set varies by prediction (missing slots) and model.
     """
 
     pred_idx: int
@@ -93,8 +102,8 @@ class PredObject(TypedDict):
     label: str
     is_hallucinated: bool
     extracted: bool
-    local_attention: np.ndarray
-    first_digit: np.ndarray
+    local_attention: np.ndarray  # alias of all_local
+    first_digit: np.ndarray  # alias of first_local
 
 
 class ItemRecord(TypedDict):

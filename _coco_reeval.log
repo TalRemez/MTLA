@@ -1,0 +1,7 @@
+[evaluate] found 16 rollout(s) on disk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+[coco/internvl_image] results:
+  auroc_mtla = 0.9155
+  n_rollouts = 16
+  agg = support
+  map: mAP=35.9384  mAP50=56.4442  mAP75=35.9204  AP_small=16.8723  AP_medium=39.7918  AP_large=56.6058
+  n_dets = 1045238
