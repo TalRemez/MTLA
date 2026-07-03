@@ -9,8 +9,9 @@ predictions do; hallucinations attend elsewhere. The result is a **training-free
 confidence score — no fine-tuning, no extra model, no labels, just the model's own attention from
 the forward pass that produced the prediction.
 
-Used as a confidence for self-consistency re-ranking, MTLA lifts an open-source 8B generalist from
-**27.6 → 41.9 AP** on COCO detection, matching a supervised DETR detector (42.0 AP) — zero-shot.
+Used as a confidence for self-consistency re-ranking, MTLA lifts an open-source 8B generalist
+(Qwen3-VL-8B) from **20.4 → 36.9 AP** on COCO detection — zero-shot, approaching a supervised DETR
+detector (42.0 AP).
 
 <p align="center">
   <img src="assets/method_pipeline.png" width="100%" alt="MTLA pipeline: an MLLM localizes objects, then MTLA reads the prediction tokens' attention restricted to the proposed region to score each prediction"/>
@@ -76,14 +77,16 @@ default middle-layer band (L8–21); $\text{IoU} \geq 0.5$ throughout.
 One method, no training. Re-ranking each benchmark's `N=16` stochastic rollouts by MTLA improves
 the **standard task metric** — AP for COCO detection and QVHighlights, R@1@0.5 for Charades-STA:
 
-| Benchmark | Model | Metric | MTLA | SVAR baseline | Supervised reference |
-|---|---|---|--:|--:|--:|
-| COCO detection | InternVL3.5-8B | AP | **41.9** | 32.7 | 42.0 *(DETR)* |
-| QVHighlights (video) | Qwen3-VL-8B | mAP | **36.6** | 28.1 | 30.7–39.9 *(Moment-DETR / QD-DETR)* |
-| Charades-STA (video) | Qwen3-VL-8B | R@1@0.5 | **55.4** | 43.8 | 52.1–57.3 *(Moment-DETR / QD-DETR)* |
+| Benchmark | Model | Metric | MTLA | Supervised reference |
+|---|---|---|--:|--:|
+| COCO detection | Qwen3-VL-8B | AP | **36.9** | 42.0 *(DETR)* |
+| QVHighlights (video) | Qwen3-VL-8B | mAP | **36.6** | 30.7–39.9 *(Moment-DETR / QD-DETR)* |
+| Charades-STA (video) | Qwen3-VL-8B | R@1@0.5 | **55.4** | 52.1–57.3 *(Moment-DETR / QD-DETR)* |
 
-Zero-shot and training-free, MTLA reaches the supervised range: it matches DETR on COCO and lands
-between Moment-DETR and QD-DETR on the video benchmarks.
+Zero-shot and training-free, MTLA approaches the supervised range: on COCO it lifts Qwen3-VL-8B from
+20.4 to 36.9 AP (raw → N=16 MTLA voting), and on the video benchmarks it lands between Moment-DETR
+and QD-DETR. Every COCO run prompts the model with the full 80-class COCO vocabulary on each image
+(open-vocabulary detection).
 
 ### Hallucination detection — AUROC (single rollout)
 
@@ -91,14 +94,13 @@ How well the score separates grounded from hallucinated predictions.
 
 | Benchmark | Model | MTLA | SVAR baseline |
 |---|---|--:|--:|
-| COCO detection | Qwen3-VL-8B | **0.902** | 0.763 |
-| COCO detection | InternVL3.5-8B | **0.873** | 0.803 |
+| COCO detection | Qwen3-VL-8B | **0.890** | 0.763 |
+| COCO detection | InternVL3.5-8B | **0.916** | 0.803 |
 | COCO detection | Gemma-4 E4B | **0.753** | 0.671 |
 | QVHighlights (video) | Qwen3-VL-8B | **0.800** | 0.415 |
 | Charades-STA (video) | Qwen3-VL-8B | **0.684** | 0.512 |
 
-> Numbers are from the paper (the citable source of record). The COCO and QVHighlights rows are
-> reproducible end-to-end with the example configs below.
+> The COCO and QVHighlights rows are reproducible end-to-end with the example configs below.
 
 ## Setup
 
@@ -167,23 +169,24 @@ and process exactly what `generate` wrote (they take no `--limit`). Drop the fla
 benchmark.
 
 ```bash
-python -m generate --config configs/coco_internvl.yaml --n 2 --limit 50
-python -m extract --config configs/coco_internvl.yaml
-python -m evaluate --config configs/coco_internvl.yaml
+python -m generate --config configs/coco_qwen3vl.yaml --n 2 --limit 50
+python -m extract --config configs/coco_qwen3vl.yaml
+python -m evaluate --config configs/coco_qwen3vl.yaml
 ```
 
-The full single-rollout run (`python -m generate --config configs/coco_internvl.yaml`, then
-`extract` / `score` with no flags) reproduces the hallucination-detection AUROC (0.873 for
-InternVL3.5-8B; 0.902 with `--config configs/coco_qwen3vl.yaml`).
+The full single-rollout run (`python -m generate --config configs/coco_qwen3vl.yaml`, then
+`extract` / `evaluate` with no flags) reproduces the hallucination-detection AUROC (0.890 for
+Qwen3-VL-8B; 0.916 with `--config configs/coco_internvl.yaml`).
 
 ### COCO detection — N=16 self-consistency voting
 
-The headline detection result: **mAP 41.9** (COCO uses sum-of-cluster fusion, `--agg sum`).
+The headline detection result: **mAP 36.9** with Qwen3-VL-8B (COCO uses sum-of-cluster fusion,
+`--agg sum`).
 
 ```bash
-python -m generate --config configs/coco_internvl.yaml --n 16
-python -m extract --config configs/coco_internvl.yaml
-python -m evaluate --config configs/coco_internvl.yaml --agg sum
+python -m generate --config configs/coco_qwen3vl.yaml --n 16
+python -m extract --config configs/coco_qwen3vl.yaml
+python -m evaluate --config configs/coco_qwen3vl.yaml --agg sum
 ```
 
 ### Video (QVHighlights & Charades-STA) — N=16 self-consistency voting

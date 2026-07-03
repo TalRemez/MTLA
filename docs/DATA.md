@@ -33,10 +33,11 @@ https://cocodataset.org/#download and builds the open-vocabulary dataset JSON fr
   }
   ```
 
-  `categories` is the per-image set of class names present in the GT; `gt` is the ground-truth
-  boxes used to label hallucinations (scaled to `[0,1000]`, in COCO annotation order, `iscrowd`
-  regions excluded). No prompt is stored — the prompt lives in the `coco` adapter
-  (`mtla.data.coco.PROMPT`, filled from `categories`).
+  `gt` is the ground-truth boxes used to label hallucinations (scaled to `[0,1000]`, in COCO
+  annotation order, `iscrowd` regions excluded). No prompt is stored — the prompt lives in the
+  `coco` adapter (`mtla.data.coco.PROMPT`) and lists the full 80-class COCO vocabulary on every
+  image (open-vocabulary detection). `categories` records the per-image GT class set for reference
+  and is not used to build the prompt.
 
 ## QVHighlights (video example)
 

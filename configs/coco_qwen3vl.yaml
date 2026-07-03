@@ -1,6 +1,7 @@
-# COCO detection with Qwen3-VL-8B  (single rollout).
-# Reproduces: hallucination AUROC 0.902 (MTLA).
-# Demonstrates COCO running on a second model: same dataset adapter, different model:.
+# COCO detection with Qwen3-VL-8B — the primary/headline COCO detector.
+# Single rollout: hallucination AUROC 0.890 (MTLA); raw mAP 20.4.
+# Headline: mAP 36.9 with N=16 self-consistency voting (--n 16, --agg sum).
+# Prompts the full 80-class COCO vocabulary on every image (open-vocabulary).
 model: qwen3vl_image
 dataset: coco
 

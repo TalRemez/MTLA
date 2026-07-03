@@ -1,6 +1,8 @@
-# COCO detection with InternVL3.5-8B.
-# For the mAP headline: --n 16 (16 rollouts); score uses the support fusion (--agg support),
-# scoring the coord-token inside-region signal (score.slot=digits, score.attn_scope=local).
+# COCO detection with InternVL3.5-8B — the second COCO model (Qwen3-VL is the headline; see
+# configs/coco_qwen3vl.yaml). Same CocoDataset, different model:.
+# Single rollout: hallucination AUROC 0.916 (MTLA), under the full 80-class open-vocab prompt.
+# For N=16 voting mAP: --n 16 with --agg support (scores the coord-token inside-region signal,
+# score.slot=digits, score.attn_scope=local).
 model: internvl_image
 dataset: coco
 

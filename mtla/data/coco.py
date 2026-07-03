@@ -2,10 +2,10 @@
 
 Declarative: it loads items, builds the prompt + ground truth, and emits the uniform generation
 record. All scoring (band reduction, NMS voting, mAP) is done by the ``evaluate.py`` stage
-(+ ``mtla.voting`` / ``mtla.metrics``) /
-``mtla.metrics`` per the descriptors below.
+(+ ``mtla.voting`` / ``mtla.metrics``) per the descriptors below.
 
-Reproduces (InternVL3.5-8B): hallucination AUROC 0.873 (MTLA); detection mAP 41.9 at N=16.
+Every image is prompted with the full 80-class COCO vocabulary (open-vocabulary detection).
+Headline (Qwen3-VL-8B): hallucination AUROC 0.890 (MTLA); detection mAP 36.9 at N=16.
 """
 
 from __future__ import annotations
@@ -116,8 +116,8 @@ PROMPT = "Locate all instances of {cats} in this image"
 class CocoDataset(DatasetAdapter):
     """COCO open-vocabulary detection adapter (val2017, task ``image_det``).
 
-    One item per image; the prompt asks for boxes over the 80 COCO classes (or an
-    item-supplied subset). Scoring uses the ``digits`` slot inside the region
+    One item per image; the prompt asks for boxes over the full 80 COCO classes
+    (open-vocabulary). Scoring uses the ``digits`` slot inside the region
     (``digits_local``) with box IoU, pools candidates across rollouts with NMS
     (``select="fuse"``), and reports COCO mAP; generation runs on the ``"pooled"``
     vLLM strategy for throughput over the ~5000 small image requests.

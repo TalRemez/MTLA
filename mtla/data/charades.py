@@ -2,9 +2,9 @@
 
 Declarative: loads items, builds the prompt + ground truth, emits the uniform generation record.
 Scoring (hallucination AUROC + R@1 @ IoU{0.3,0.5,0.7} + mIoU) is done by the ``evaluate.py`` stage
-(+ ``mtla.voting`` / ``mtla.metrics``) /
-``mtla.metrics``. Charades emits ONE span per query, so voting is span SELECTION across rollouts
-(``select="argmax"``: keep the single highest-MTLA span — the headline rule).
+(+ ``mtla.voting`` / ``mtla.metrics``). Charades emits ONE span per query, so voting is span
+SELECTION across rollouts (``select="argmax"``: keep the single highest-MTLA span — the headline
+rule).
 
 Reproduces: R@1@0.3 76.3, R@1@0.5 55.4, R@1@0.7 29.4, mIoU 0.508 (N=16 self-consistency).
 """
