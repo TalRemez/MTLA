@@ -1,0 +1,40 @@
+# MTLA dependencies. Install into a fresh Python 3.10 env, then run the scripts from the
+# repo root (generate.py / extract.py / score.py) — there is no package to install.
+#
+#   pip install -r requirements.txt
+#
+# CUDA is required for the generate/extract stages; score is CPU-only but still needs this
+# full set, because the adapter registry imports every model adapter on discovery.
+
+# --- core scoring + data handling ---
+numpy>=1.24
+scikit-learn>=1.2
+pyyaml>=6.0
+pandas>=2.0            # Charades adapter reads its parquet split
+pyarrow>=14.0          # parquet engine for pandas.read_parquet
+pycocotools>=2.0       # COCO detection mAP
+pillow>=9.0
+
+# --- model stack (extract stage: HF eager-attention forward; imported at registry discovery) ---
+torch>=2.1
+transformers==4.57.6
+accelerate==1.13.0
+torchvision==0.25.0
+qwen-vl-utils==0.0.14  # Qwen3-VL vision preprocessing (image + video)
+decord>=0.6.0          # video frame decoding
+
+# --- visualization (mtla.viz, scripts/figure_pertoken.py) ---
+matplotlib>=3.6
+scipy>=1.10
+
+# --- data prep: gated HF dataset download (scripts/prepare_charades.py --hf) ---
+# Range required by transformers==4.57.6 (an unpinned install pulls hub 1.x, which breaks it).
+huggingface_hub>=0.34.0,<1.0
+
+# --- generation stage: fast batched vLLM decoding (GPU only, large install) ---
+# Only needed to run generate.py; extract/score do not use it.
+vllm==0.19.0
+
+# --- dev: static type checking + formatting (run `mypy mtla` / `black .` from the repo root) ---
+mypy>=1.8
+black>=24.0

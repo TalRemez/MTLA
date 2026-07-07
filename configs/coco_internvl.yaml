@@ -1,0 +1,23 @@
+# COCO detection with InternVL3.5-8B — the second COCO model (Qwen3-VL is the headline; see
+# configs/coco_qwen3vl.yaml). Same CocoDataset, different model:.
+# Single rollout: hallucination AUROC 0.916 (MTLA), under the full 80-class open-vocab prompt.
+# For N=16 voting mAP: --n 16 with --agg support (scores the coord-token inside-region signal,
+# score.slot=digits, score.attn_scope=local).
+model: internvl_image
+dataset: coco
+
+paths:
+  data: data/coco/coco_val_openvocab_80.json                  # open-vocab dataset json (scripts/prepare_coco.py)
+  coco_gt: data/coco/annotations/instances_val2017.json       # COCO annotations (for mAP)
+  predictions: runs/coco/internvl_image/predictions           # rollout{K}/predictions.json
+  features: runs/coco/internvl_image/features                 # rollout{K}/shard*.pt
+
+generate:
+  temperature: 0.7
+
+score:
+  agg: max
+  slot: digits          # InternVL: coordinate tokens (paper coord_mean slot); MTLA headline
+  attn_scope: local     # local = inside the proposal region (MTLA); global = SVAR baseline
+
+band: [8, 21]                                      # middle-layer band (null = all layers)

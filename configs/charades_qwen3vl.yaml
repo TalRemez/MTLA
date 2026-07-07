@@ -1,0 +1,29 @@
+# Charades-STA single-span temporal grounding with Qwen3-VL-8B  (single rollout).
+# Single-rollout R@1@0.5 ~44; the headline R@1@0.3 76.3 / R@1@0.5 55.4 / R@1@0.7 29.4 comes
+# from N=16 self-consistency selection (pass --n 16 at launch).
+model: qwen3vl_video
+dataset: charades
+
+paths:
+  data: data/charades/charades_sta_test.parquet              # Charades-STA test split (scripts/prepare_charades.py)
+  video_dir: data/charades/Charades_v1_480                   # {video_id}.mp4 clips
+  predictions: runs/charades/qwen3vl_video/predictions       # rollout{K}/predictions.json
+  features: runs/charades/qwen3vl_video/features             # rollout{K}/shard*.pt
+
+generate:
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 128
+  max_model_len: 32768
+
+extract:
+
+score:
+  agg: max                                          # single-span: max-MTLA selection
+
+band: [8, 21]
+
+preprocess:                                         # video sampling (feeds generate AND extract)
+  fps: 2.0
+  min_pixels: 4096                                  # 4 * 32 * 32
+  max_pixels: 131072                                # 128 * 32 * 32

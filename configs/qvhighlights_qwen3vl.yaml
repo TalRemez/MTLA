@@ -1,0 +1,29 @@
+# QVHighlights temporal grounding with Qwen3-VL-8B  (single rollout).
+# Single-rollout MTLA mAP ~24.5; the headline NMS-MTLA mAP 36.6 / R@1@0.5 55.1 comes from
+# N=16 self-consistency voting (pass --n 16 at launch).
+model: qwen3vl_video
+dataset: qvhighlights
+
+paths:
+  ann: data/qvhighlights/highlight_val_release.jsonl          # QVHighlights val annotations (scripts/prepare_qvhighlights.py)
+  video_dir: data/qvhighlights/videos                         # {video_id}.mp4 clips
+  predictions: runs/qvh/qwen3vl_video/predictions             # rollout{K}/predictions.json
+  features: runs/qvh/qwen3vl_video/features                   # rollout{K}/shard*.pt
+
+generate:
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 128
+  max_model_len: 32768
+
+extract:
+
+score:
+  agg: max                                          # video: max-of-cluster fusion
+
+band: [8, 21]
+
+preprocess:                                         # video sampling (feeds generate AND extract)
+  fps: 1.0
+  min_pixels: 4096                                  # 4 * 32 * 32
+  max_pixels: 65536                                 # 64 * 32 * 32

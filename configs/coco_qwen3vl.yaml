@@ -1,0 +1,22 @@
+# COCO detection with Qwen3-VL-8B — the primary/headline COCO detector.
+# Single rollout: hallucination AUROC 0.890 (MTLA); raw mAP 20.4.
+# Headline: mAP 36.9 with N=16 self-consistency voting (--n 16, --agg sum).
+# Prompts the full 80-class COCO vocabulary on every image (open-vocabulary).
+model: qwen3vl_image
+dataset: coco
+
+paths:
+  data: data/coco/coco_val_openvocab_80.json                  # open-vocab dataset json (scripts/prepare_coco.py)
+  coco_gt: data/coco/annotations/instances_val2017.json       # COCO annotations (for mAP)
+  predictions: runs/coco/qwen3vl_image/predictions            # rollout{K}/predictions.json
+  features: runs/coco/qwen3vl_image/features                  # rollout{K}/shard*.pt
+
+generate:
+  temperature: 0.7
+
+score:
+  agg: max
+  slot: all             # Qwen3-VL: all response tokens Q_p (best slot for this model)
+  attn_scope: local     # local = inside the proposal region (MTLA); global = SVAR baseline
+
+band: [8, 21]
