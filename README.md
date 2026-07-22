@@ -1,5 +1,9 @@
 # Propose and Attend: Training-free MLLM Grounding Confidence via Multi-Token Localized Attention
 
+[![arXiv](https://img.shields.io/badge/arXiv-2607.05978-b31b1b.svg)](https://arxiv.org/abs/2607.05978)
+
+📄 **Paper:** [arxiv.org/abs/2607.05978](https://arxiv.org/abs/2607.05978)
+
 **Does a multimodal LLM actually look where it says it's looking?**
 
 When a vision, video, or audio LLM grounds a prediction (a bounding box, a time span) it also
@@ -319,7 +323,8 @@ third_party/           vendored Moment-DETR evaluation (MIT)
 
 ## Citation
 
-A paper describing MTLA is in preparation; citation and link will be added here on release. See
+MTLA is described in our paper: [**Propose and Attend: Training-free MLLM Grounding Confidence
+via Multi-Token Localized Attention**](https://arxiv.org/abs/2607.05978) (arXiv:2607.05978). See
 [`CITATION.cff`](CITATION.cff).
 
 ## Acknowledgements
